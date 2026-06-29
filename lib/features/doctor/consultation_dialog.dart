@@ -286,7 +286,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                     children: [
                       Text(
                         'Consultation Workspace',
-                        style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                        style: GoogleFonts.roboto(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -297,7 +297,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                             child: Text(
                               widget.appointment.fullName,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white60, fontSize: 12),
+                              style: GoogleFonts.roboto(color: Colors.white60, fontSize: 12),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -305,7 +305,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                           const SizedBox(width: 4),
                           Text(
                             widget.appointment.preferredTime,
-                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                            style: GoogleFonts.roboto(color: Colors.white38, fontSize: 11),
                           ),
                         ],
                       ),
@@ -332,8 +332,8 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
               indicatorColor: const Color(0xFF00D2C4),
               indicatorWeight: 2,
               labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-              labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              unselectedLabelStyle: TextStyle(fontSize: 12),
+              labelStyle: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
+              unselectedLabelStyle: GoogleFonts.roboto(fontSize: 12),
               tabs: [
                 const Tab(
                   icon: Icon(Icons.monitor_heart_outlined, size: 16),
@@ -359,7 +359,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                             color: const Color(0xFF00D2C4).withOpacity(0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text('${_labs.length}', style: const TextStyle(fontSize: 9, color: Color(0xFF00D2C4), fontWeight: FontWeight.bold)),
+                          child: Text('${_labs.length}', style: GoogleFonts.roboto(fontSize: 9, color: Color(0xFF00D2C4), fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ],
@@ -380,7 +380,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                             color: const Color(0xFF8B5CF6).withOpacity(0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text('${_scans.length}', style: const TextStyle(fontSize: 9, color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold)),
+                          child: Text('${_scans.length}', style: GoogleFonts.roboto(fontSize: 9, color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ],
@@ -401,7 +401,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                             color: const Color(0xFFF59E0B).withOpacity(0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text('${_prescriptions.length}', style: const TextStyle(fontSize: 9, color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
+                          child: Text('${_prescriptions.length}', style: GoogleFonts.roboto(fontSize: 9, color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ],
@@ -504,9 +504,9 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Patient Health Vitals',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
             ),
             const SizedBox(height: 15),
             if (isMobile) ...[
@@ -560,40 +560,40 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Clinical Diagnosis Details',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
             ),
             const SizedBox(height: 15),
             TextFormField(
               controller: _chiefComplaint,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
               decoration: _inputDeco('Chief Complaint (e.g. Headache for 3 days)'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _symptoms,
               maxLines: 2,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
               decoration: _inputDeco('Observed Symptoms'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _diagnosis,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
               decoration: _inputDeco('Final Medical Diagnosis'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _clinicalNotes,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
               decoration: _inputDeco('Clinical Notes & Advice'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _followUpDate,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
               decoration: _inputDeco('Follow-up Date (YYYY-MM-DD)'),
               keyboardType: TextInputType.datetime,
             ),
@@ -611,7 +611,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Ordered Laboratory Tests', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('Ordered Laboratory Tests', style: GoogleFonts.roboto(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
               ElevatedButton.icon(
                 onPressed: _openAddLabDialog,
                 icon: const Icon(Icons.add, size: 14),
@@ -620,7 +620,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   backgroundColor: const Color(0xFF00D2C4),
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  textStyle: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -628,7 +628,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         ),
         Expanded(
           child: _labs.isEmpty
-              ? const Center(child: Text('No laboratory requests issued.', style: TextStyle(color: Colors.white30, fontSize: 12)))
+              ? Center(child: Text('No laboratory requests issued.', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 12)))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _labs.length,
@@ -648,18 +648,18 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(lab['test_name']?.toString() ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(lab['test_name']?.toString() ?? '', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                               Text(
                                 lab['status']?.toString().toUpperCase() ?? 'PENDING',
-                                style: TextStyle(color: isDone ? const Color(0xFF00D2C4) : Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                style: GoogleFonts.roboto(color: isDone ? const Color(0xFF00D2C4) : Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
-                          Text('Urgency: ${lab['urgency']}  |  Type: ${lab['test_type']}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                          Text('Urgency: ${lab['urgency']}  |  Type: ${lab['test_type']}', style: GoogleFonts.roboto(color: Colors.white38, fontSize: 10)),
                           if (lab['results'] != null) ...[
                             const SizedBox(height: 6),
-                            Text('Findings: ${lab['results']}', style: const TextStyle(color: Color(0xFF00D2C4), fontSize: 11)),
+                            Text('Findings: ${lab['results']}', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11)),
                           ]
                         ],
                       ),
@@ -679,7 +679,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Ordered Imaging Scans', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('Ordered Imaging Scans', style: GoogleFonts.roboto(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
               ElevatedButton.icon(
                 onPressed: _openAddScanDialog,
                 icon: const Icon(Icons.add, size: 14),
@@ -688,7 +688,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   backgroundColor: const Color(0xFF00D2C4),
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  textStyle: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -696,7 +696,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         ),
         Expanded(
           child: _scans.isEmpty
-              ? const Center(child: Text('No scan requests issued.', style: TextStyle(color: Colors.white30, fontSize: 12)))
+              ? Center(child: Text('No scan requests issued.', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 12)))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _scans.length,
@@ -720,20 +720,20 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                                 child: Text(
                                   '${scan['scan_type']?.toString().toUpperCase() ?? ''} — ${scan['body_part'] ?? ""}',
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                               Text(
                                 scan['status']?.toString().toUpperCase() ?? 'PENDING',
-                                style: TextStyle(color: isDone ? const Color(0xFF00D2C4) : Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                style: GoogleFonts.roboto(color: isDone ? const Color(0xFF00D2C4) : Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
-                          Text('Indication: ${scan['clinical_indication'] ?? "N/A"}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                          Text('Indication: ${scan['clinical_indication'] ?? "N/A"}', style: GoogleFonts.roboto(color: Colors.white38, fontSize: 10)),
                           if (scan['results'] != null) ...[
                             const SizedBox(height: 6),
-                            Text('Findings: ${scan['results']}', style: const TextStyle(color: Color(0xFF00D2C4), fontSize: 11)),
+                            Text('Findings: ${scan['results']}', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11)),
                           ]
                         ],
                       ),
@@ -753,7 +753,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Prescribed Medications', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('Prescribed Medications', style: GoogleFonts.roboto(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
               ElevatedButton.icon(
                 onPressed: _openAddRxDialog,
                 icon: const Icon(Icons.add, size: 14),
@@ -762,7 +762,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   backgroundColor: const Color(0xFF00D2C4),
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  textStyle: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -770,7 +770,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         ),
         Expanded(
           child: _prescriptions.isEmpty
-              ? const Center(child: Text('No medications prescribed yet.', style: TextStyle(color: Colors.white30, fontSize: 12)))
+              ? Center(child: Text('No medications prescribed yet.', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 12)))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _prescriptions.length,
@@ -786,12 +786,12 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(rx['medication_name']?.toString() ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(rx['medication_name']?.toString() ?? '', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                           const SizedBox(height: 4),
-                          Text('Dosage: ${rx['dosage']}  |  Freq: ${rx['frequency']}  |  Duration: ${rx['duration']}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                          Text('Dosage: ${rx['dosage']}  |  Freq: ${rx['frequency']}  |  Duration: ${rx['duration']}', style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11)),
                           if (rx['instructions'] != null && rx['instructions'].toString().isNotEmpty) ...[
                             const SizedBox(height: 4),
-                            Text('Advise: ${rx['instructions']}', style: const TextStyle(color: Color(0xFF8B5CF6), fontSize: 10, fontStyle: FontStyle.italic)),
+                            Text('Advise: ${rx['instructions']}', style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 10, fontStyle: FontStyle.italic)),
                           ]
                         ],
                       ),
@@ -806,14 +806,14 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
   Widget _vitalsField(TextEditingController controller, String label, String hint, String suffix) {
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Colors.white, fontSize: 12),
+      style: GoogleFonts.roboto(color: Colors.white, fontSize: 12),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54, fontSize: 11),
+        labelStyle: GoogleFonts.roboto(color: Colors.white54, fontSize: 11),
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24, fontSize: 11),
+        hintStyle: GoogleFonts.roboto(color: Colors.white24, fontSize: 11),
         suffixText: suffix,
-        suffixStyle: const TextStyle(color: Colors.white24, fontSize: 11),
+        suffixStyle: GoogleFonts.roboto(color: Colors.white24, fontSize: 11),
         filled: true,
         fillColor: Colors.white.withOpacity(0.02),
         contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -832,7 +832,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
   InputDecoration _inputDeco(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+      hintStyle: GoogleFonts.roboto(color: Colors.white30, fontSize: 12),
       filled: true,
       fillColor: Colors.white.withOpacity(0.02),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -859,28 +859,28 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
           return AlertDialog(
             backgroundColor: const Color(0xFF0F172A),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text('Order Laboratory Test', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            title: Text('Order Laboratory Test', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextFormField(
                     controller: nameC,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     decoration: _inputDeco('Test Name (e.g. FBC, Lipid Profile)'),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: type,
                     dropdownColor: const Color(0xFF0F172A),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     iconEnabledColor: const Color(0xFF00D2C4),
                     decoration: _inputDeco('Sample Type'),
-                    items: const [
-                      DropdownMenuItem(value: 'blood', child: Text('Blood Sample', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'urine', child: Text('Urine Sample', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'stool', child: Text('Stool Sample', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'other', child: Text('Other Sample', style: TextStyle(color: Colors.white, fontSize: 13))),
+                    items: [
+                      DropdownMenuItem(value: 'blood', child: Text('Blood Sample', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'urine', child: Text('Urine Sample', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'stool', child: Text('Stool Sample', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'other', child: Text('Other Sample', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
                     ],
                     onChanged: (v) {
                       if (v != null) setDialogState(() => type = v);
@@ -890,13 +890,13 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   DropdownButtonFormField<String>(
                     value: urgency,
                     dropdownColor: const Color(0xFF0F172A),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     iconEnabledColor: const Color(0xFF00D2C4),
                     decoration: _inputDeco('Urgency Level'),
-                    items: const [
-                      DropdownMenuItem(value: 'routine', child: Text('Routine Urgency', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'urgent', child: Text('Urgent Urgency', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'stat', child: Text('STAT / Immediate', style: TextStyle(color: Colors.white, fontSize: 13))),
+                    items: [
+                      DropdownMenuItem(value: 'routine', child: Text('Routine Urgency', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'urgent', child: Text('Urgent Urgency', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'stat', child: Text('STAT / Immediate', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
                     ],
                     onChanged: (v) {
                       if (v != null) setDialogState(() => urgency = v);
@@ -908,7 +908,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('CANCEL', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                child: Text('CANCEL', style: GoogleFonts.roboto(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -922,7 +922,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  textStyle: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
                 child: const Text('ORDER TEST'),
               )
@@ -946,7 +946,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
           return AlertDialog(
             backgroundColor: const Color(0xFF0F172A),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text('Request Imaging Scan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            title: Text('Request Imaging Scan', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -954,16 +954,16 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   DropdownButtonFormField<String>(
                     value: type,
                     dropdownColor: const Color(0xFF0F172A),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     iconEnabledColor: const Color(0xFF00D2C4),
                     decoration: _inputDeco('Scan Type'),
-                    items: const [
-                      DropdownMenuItem(value: 'x-ray', child: Text('X-Ray', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'mri', child: Text('MRI Scan', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'ct', child: Text('CT Scan', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'ultrasound', child: Text('Ultrasound', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'ecg', child: Text('ECG / EKG', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'other', child: Text('Other Imaging', style: TextStyle(color: Colors.white, fontSize: 13))),
+                    items: [
+                      DropdownMenuItem(value: 'x-ray', child: Text('X-Ray', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'mri', child: Text('MRI Scan', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'ct', child: Text('CT Scan', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'ultrasound', child: Text('Ultrasound', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'ecg', child: Text('ECG / EKG', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'other', child: Text('Other Imaging', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
                     ],
                     onChanged: (v) {
                       if (v != null) setDialogState(() => type = v);
@@ -972,26 +972,26 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: partC,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     decoration: _inputDeco('Body Part / Region (e.g. Chest)'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: indC,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     decoration: _inputDeco('Clinical Indication (Reason)'),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: urgency,
                     dropdownColor: const Color(0xFF0F172A),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                     iconEnabledColor: const Color(0xFF00D2C4),
                     decoration: _inputDeco('Urgency Level'),
-                    items: const [
-                      DropdownMenuItem(value: 'routine', child: Text('Routine Urgency', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'urgent', child: Text('Urgent Urgency', style: TextStyle(color: Colors.white, fontSize: 13))),
-                      DropdownMenuItem(value: 'stat', child: Text('STAT / Immediate', style: TextStyle(color: Colors.white, fontSize: 13))),
+                    items: [
+                      DropdownMenuItem(value: 'routine', child: Text('Routine Urgency', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'urgent', child: Text('Urgent Urgency', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
+                      DropdownMenuItem(value: 'stat', child: Text('STAT / Immediate', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13))),
                     ],
                     onChanged: (v) {
                       if (v != null) setDialogState(() => urgency = v);
@@ -1003,7 +1003,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('CANCEL', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                child: Text('CANCEL', style: GoogleFonts.roboto(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -1017,7 +1017,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  textStyle: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
                 child: const Text('REQUEST SCAN'),
               )
@@ -1041,27 +1041,27 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         return AlertDialog(
           backgroundColor: const Color(0xFF0F172A),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Prescribe Medication', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          title: Text('Prescribe Medication', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextFormField(controller: nameC, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDeco('Medication Name')),
+                TextFormField(controller: nameC, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13), decoration: _inputDeco('Medication Name')),
                 const SizedBox(height: 10),
-                TextFormField(controller: doseC, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDeco('Dosage (e.g. 500mg)')),
+                TextFormField(controller: doseC, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13), decoration: _inputDeco('Dosage (e.g. 500mg)')),
                 const SizedBox(height: 10),
-                TextFormField(controller: freqC, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDeco('Frequency (e.g. 3x Daily)')),
+                TextFormField(controller: freqC, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13), decoration: _inputDeco('Frequency (e.g. 3x Daily)')),
                 const SizedBox(height: 10),
-                TextFormField(controller: durC, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDeco('Duration (e.g. 7 Days)')),
+                TextFormField(controller: durC, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13), decoration: _inputDeco('Duration (e.g. 7 Days)')),
                 const SizedBox(height: 10),
-                TextFormField(controller: instC, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDeco('Special Instructions (Optional)')),
+                TextFormField(controller: instC, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13), decoration: _inputDeco('Special Instructions (Optional)')),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: Text('CANCEL', style: GoogleFonts.roboto(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -1075,7 +1075,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                textStyle: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
               ),
               child: const Text('ADD DRUG'),
             )

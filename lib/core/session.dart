@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/auth_user.dart';
 import 'api_client.dart';
 
+import 'notification_service.dart';
+
 const _kToken = 'graprime_token';
 const _kUser = 'graprime_user';
 
@@ -26,15 +28,24 @@ class Session extends ChangeNotifier {
     try {
       final token = await _storage.read(key: _kToken);
       final userJson = await _storage.read(key: _kUser);
+      debugPrint('[SESSION] Token from storage: ${token != null ? 'Present (${token.substring(0, 10)}...)' : 'Missing'}');
+      debugPrint('[SESSION] User from storage: ${userJson != null ? 'Present' : 'Missing'}');
+      
       if (token != null && userJson != null) {
         _token = token;
         _user = AuthUser.fromJson(
           jsonDecode(userJson) as Map<String, dynamic>,
         );
         _api.setToken(token);
+        debugPrint('[SESSION] Session restored successfully');
+        
+        // Register FCM Token on restore
+        NotificationService().registerTokenWithBackend(_api);
+      } else {
+        debugPrint('[SESSION] No session data found');
       }
     } catch (e) {
-      debugPrint('Session restore failed: $e');
+      debugPrint('[SESSION] Session restore failed: $e');
       await clear();
     } finally {
       _restoring = false;
@@ -46,12 +57,22 @@ class Session extends ChangeNotifier {
     required String token,
     required AuthUser user,
   }) async {
+    debugPrint('[SESSION] Setting session with token: ${token.substring(0, 10)}...');
+    debugPrint('[SESSION] User: ${user.username}, role: ${user.role.name}');
+    
     _token = token;
     _user = user;
     _restoring = false;
     _api.setToken(token);
+    
     await _storage.write(key: _kToken, value: token);
     await _storage.write(key: _kUser, value: jsonEncode(user.toJson()));
+    
+    debugPrint('[SESSION] Session saved to storage');
+    
+    // Register FCM Token on login
+    NotificationService().registerTokenWithBackend(_api);
+    
     notifyListeners();
   }
 

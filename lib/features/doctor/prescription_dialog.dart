@@ -100,7 +100,7 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
                   children: [
                     Text(
                       'Write Prescription',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -115,28 +115,28 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
                 const SizedBox(height: 15),
                 TextFormField(
                   controller: _medicationName,
-                  style: const TextStyle(color: Colors.white),
+                  style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Medication Name', Icons.medication_outlined),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Medication name required' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _dosage,
-                  style: const TextStyle(color: Colors.white),
+                  style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Dosage (e.g. 500mg, 1 tablet)', Icons.healing_outlined),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Dosage required' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _frequency,
-                  style: const TextStyle(color: Colors.white),
+                  style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Frequency (e.g. 3 times daily)', Icons.repeat_rounded),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Frequency required' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _duration,
-                  style: const TextStyle(color: Colors.white),
+                  style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Duration (e.g. 7 days)', Icons.calendar_today_outlined),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Duration required' : null,
                 ),
@@ -144,7 +144,7 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
                 TextFormField(
                   controller: _instructions,
                   maxLines: 2,
-                  style: const TextStyle(color: Colors.white),
+                  style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Special Instructions (e.g. Take after meals)', Icons.info_outline),
                 ),
                 const SizedBox(height: 25),
@@ -164,7 +164,7 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
                         )
                       : Text(
                           'Issue Prescription',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                 ),
               ],
@@ -178,7 +178,7 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
   InputDecoration _inputDeco(String hintText, IconData prefixIcon) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+      hintStyle: GoogleFonts.roboto(color: Colors.white30, fontSize: 13),
       prefixIcon: Icon(prefixIcon, color: const Color(0xFF00D2C4), size: 18),
       filled: true,
       fillColor: Colors.white.withOpacity(0.04),

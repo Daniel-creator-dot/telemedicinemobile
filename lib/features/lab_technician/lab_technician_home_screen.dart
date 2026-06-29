@@ -146,7 +146,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                             ),
                             Text(
                               _currentTab == 0 ? 'Review and record blood, urine, or stool samples' : 'Upload scan, MRI, CT, or ECG details',
-                              style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                              style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 13),
                             ),
                           ],
                         ),
@@ -227,7 +227,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                     child: _loading
                         ? const Center(child: CircularProgressIndicator(color: Color(0xFF00D2C4)))
                         : _error != null
-                            ? Center(child: Text(_error!, style: const TextStyle(color: Colors.white70)))
+                            ? Center(child: Text(_error!, style: GoogleFonts.roboto(color: Colors.white70)))
                             : filteredList.isEmpty
                                 ? Center(
                                     child: Column(
@@ -237,7 +237,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                                         const SizedBox(height: 10),
                                         Text(
                                           'No $_filter requests found.',
-                                          style: const TextStyle(color: Colors.white38, fontSize: 13),
+                                          style: GoogleFonts.roboto(color: Colors.white38, fontSize: 13),
                                         ),
                                       ],
                                     ),
@@ -290,15 +290,15 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                     children: [
                       Text(
                         'Digi Health',
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const Text(
+                      Text(
                         'LAB PORTAL',
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           color: Colors.white38,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -331,7 +331,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                     backgroundColor: theme.colorScheme.secondary.withOpacity(0.12),
                     child: Text(
                       session.user?.name.substring(0, 1).toUpperCase() ?? 'L',
-                      style: TextStyle(color: theme.colorScheme.secondary, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.roboto(color: theme.colorScheme.secondary, fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -341,12 +341,12 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                       children: [
                         Text(
                           session.user?.name ?? 'Lab Technician',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const Text(
+                        Text(
                           'Technician',
-                          style: TextStyle(color: Colors.white30, fontSize: 11),
+                          style: GoogleFonts.roboto(color: Colors.white30, fontSize: 11),
                         ),
                       ],
                     ),
@@ -387,7 +387,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     color: active ? const Color(0xFF00D2C4) : Colors.white60,
                     fontWeight: active ? FontWeight.bold : FontWeight.normal,
                     fontSize: 14,
@@ -403,7 +403,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                   ),
                   child: Text(
                     '$badgeCount',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 )
             ],
@@ -426,7 +426,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               const SizedBox(width: 8),
               Text(
                 'CSAA LAB PORTAL',
-                style: TextStyle(
+                style: GoogleFonts.roboto(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
@@ -441,7 +441,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                 backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
                 child: Text(
                   session.user?.name.substring(0, 1).toUpperCase() ?? 'L',
-                  style: TextStyle(color: theme.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(color: theme.colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(width: 10),
@@ -471,7 +471,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
             const SizedBox(width: 6),
             Text(
               label,
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 color: active ? const Color(0xFF00D2C4) : Colors.white60,
                 fontWeight: active ? FontWeight.bold : FontWeight.normal,
                 fontSize: 13,
@@ -484,7 +484,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                 decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
                 child: Text(
                   '$badgeCount',
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -508,12 +508,12 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
+            style: GoogleFonts.roboto(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
           ),
           const SizedBox(height: 4),
           Text(
             '$count',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: color,
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -534,7 +534,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
       },
       selectedColor: const Color(0xFF00D2C4).withOpacity(0.2),
       backgroundColor: const Color(0xFF0F172A),
-      labelStyle: TextStyle(
+      labelStyle: GoogleFonts.roboto(
         color: active ? const Color(0xFF00D2C4) : Colors.white54,
         fontWeight: active ? FontWeight.bold : FontWeight.normal,
         fontSize: 12,
@@ -596,7 +596,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
             children: [
               Text(
                 item['patient_name']?.toString() ?? 'Walk-in Patient',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                style: GoogleFonts.roboto(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -606,7 +606,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                 ),
                 child: Text(
                   status.toUpperCase().replaceAll('_', ' '),
-                  style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(color: statusColor, fontSize: 9, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -621,7 +621,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                   _currentTab == 0
                       ? (item['test_name']?.toString() ?? 'Lab Test')
                       : '${item['scan_type']?.toString().toUpperCase() ?? "SCAN"} — ${item['body_part']?.toString() ?? "General"}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -632,7 +632,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               padding: const EdgeInsets.only(left: 22),
               child: Text(
                 'Type: ${item['test_type']}',
-                style: const TextStyle(color: Colors.white30, fontSize: 11),
+                style: GoogleFonts.roboto(color: Colors.white30, fontSize: 11),
               ),
             ),
           ] else if (_currentTab == 1 && item['clinical_indication'] != null) ...[
@@ -641,7 +641,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               padding: const EdgeInsets.only(left: 22),
               child: Text(
                 'Indication: ${item['clinical_indication']}',
-                style: const TextStyle(color: Colors.white30, fontSize: 11),
+                style: GoogleFonts.roboto(color: Colors.white30, fontSize: 11),
               ),
             ),
           ],
@@ -661,7 +661,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                     ),
                     child: Text(
                       urgency.toUpperCase(),
-                      style: TextStyle(color: urgencyColor, fontSize: 9, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.roboto(color: urgencyColor, fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -669,7 +669,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                   const SizedBox(width: 4),
                   Text(
                     item['requested_by']?.toString() ?? item['doctor_name']?.toString() ?? 'Requested by MD',
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    style: GoogleFonts.roboto(color: Colors.white38, fontSize: 11),
                   ),
                 ],
               ),
@@ -684,7 +684,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                 ),
                 child: Text(
                   isCompleted ? 'View Results' : 'Enter Results',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -779,7 +779,7 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                   children: [
                     Text(
                       widget.isCompleted ? 'View Diagnostic Results' : 'Submit Lab Findings',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -804,20 +804,20 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'PATIENT NAME',
-                        style: TextStyle(color: Colors.white30, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        style: GoogleFonts.roboto(color: Colors.white30, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1),
                       ),
                       Text(
                         widget.item['patient_name']?.toString() ?? 'Walk-in Patient',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         widget.currentTab == 0
                             ? 'Test Required: ${widget.item['test_name']}'
                             : 'Scan Required: ${widget.item['scan_type']?.toString().toUpperCase()} - ${widget.item['body_part']}',
-                        style: const TextStyle(color: Color(0xFF00D2C4), fontSize: 12, fontWeight: FontWeight.bold),
+                        style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -826,9 +826,9 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
 
                 if (widget.isCompleted) ...[
                   // Read-only Results View
-                  const Text(
+                  Text(
                     'DIAGNOSTIC FINDINGS',
-                    style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -840,14 +840,14 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                     ),
                     child: Text(
                       widget.item['results']?.toString() ?? 'No results recorded.',
-                      style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                      style: GoogleFonts.roboto(color: Colors.white, fontSize: 13, height: 1.4),
                     ),
                   ),
                   if (widget.item['result_notes'] != null && widget.item['result_notes'].toString().isNotEmpty) ...[
                     const SizedBox(height: 15),
-                    const Text(
+                    Text(
                       'ADDITIONAL OBSERVER NOTES',
-                      style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: GoogleFonts.roboto(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -859,21 +859,21 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                       ),
                       child: Text(
                         widget.item['result_notes'].toString(),
-                        style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                        style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13, height: 1.4),
                       ),
                     ),
                   ],
                   const SizedBox(height: 25),
                   Text(
                     'Recorded by ${widget.item['completed_by'] ?? "System"} on ${widget.item['completed_at'] != null ? widget.item['completed_at'].toString().split('T')[0] : "N/A"}',
-                    style: const TextStyle(color: Colors.white24, fontSize: 10, fontStyle: FontStyle.italic),
+                    style: GoogleFonts.roboto(color: Colors.white24, fontSize: 10, fontStyle: FontStyle.italic),
                     textAlign: TextAlign.center,
                   ),
                 ] else ...[
                   // Interactive Fields
-                  const Text(
+                  Text(
                     'UPDATE STATUS',
-                    style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: GoogleFonts.roboto(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
@@ -881,15 +881,15 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                     dropdownColor: const Color(0xFF0F172A),
                     decoration: _inputDeco(''),
                     items: widget.currentTab == 0
-                        ? const [
-                            DropdownMenuItem(value: 'sample_collected', child: Text('Sample Collected', style: TextStyle(color: Colors.white))),
-                            DropdownMenuItem(value: 'processing', child: Text('Processing Sample', style: TextStyle(color: Colors.white))),
-                            DropdownMenuItem(value: 'completed', child: Text('Completed & Approved', style: TextStyle(color: Colors.white))),
+                        ? [
+                            DropdownMenuItem(value: 'sample_collected', child: Text('Sample Collected', style: GoogleFonts.roboto(color: Colors.white))),
+                            DropdownMenuItem(value: 'processing', child: Text('Processing Sample', style: GoogleFonts.roboto(color: Colors.white))),
+                            DropdownMenuItem(value: 'completed', child: Text('Completed & Approved', style: GoogleFonts.roboto(color: Colors.white))),
                           ]
-                        : const [
-                            DropdownMenuItem(value: 'scheduled', child: Text('Scheduled', style: TextStyle(color: Colors.white))),
-                            DropdownMenuItem(value: 'processing', child: Text('Processing / Scanning', style: TextStyle(color: Colors.white))),
-                            DropdownMenuItem(value: 'completed', child: Text('Completed & Approved', style: TextStyle(color: Colors.white))),
+                        : [
+                            DropdownMenuItem(value: 'scheduled', child: Text('Scheduled', style: GoogleFonts.roboto(color: Colors.white))),
+                            DropdownMenuItem(value: 'processing', child: Text('Processing / Scanning', style: GoogleFonts.roboto(color: Colors.white))),
+                            DropdownMenuItem(value: 'completed', child: Text('Completed & Approved', style: GoogleFonts.roboto(color: Colors.white))),
                           ],
                     onChanged: (v) {
                       if (v != null) setState(() => _status = v);
@@ -897,29 +897,29 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                   ),
                   const SizedBox(height: 15),
 
-                  const Text(
+                  Text(
                     'DIAGNOSTIC FINDINGS',
-                    style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: GoogleFonts.roboto(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _resultsController,
                     maxLines: 3,
-                    style: const TextStyle(color: Colors.white),
+                    style: GoogleFonts.roboto(color: Colors.white),
                     decoration: _inputDeco('Enter test details or results (e.g. Hemoglobin 14.2 g/dL)...'),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Please enter results findings' : null,
                   ),
                   const SizedBox(height: 15),
 
-                  const Text(
+                  Text(
                     'OBSERVER NOTES (OPTIONAL)',
-                    style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: GoogleFonts.roboto(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _notesController,
                     maxLines: 2,
-                    style: const TextStyle(color: Colors.white),
+                    style: GoogleFonts.roboto(color: Colors.white),
                     decoration: _inputDeco('Enter additional diagnostic observations...'),
                   ),
                   const SizedBox(height: 25),
@@ -937,7 +937,7 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('SUBMIT DIAGNOSTICS', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text('SUBMIT DIAGNOSTICS', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ],
@@ -951,7 +951,7 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
   InputDecoration _inputDeco(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+      hintStyle: GoogleFonts.roboto(color: Colors.white30, fontSize: 12),
       filled: true,
       fillColor: Colors.white.withOpacity(0.02),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),

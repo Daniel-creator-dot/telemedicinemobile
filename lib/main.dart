@@ -116,7 +116,6 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        fontFamily: 'Roboto',
         colorScheme: const ColorScheme.light(
           primary: Color(0xFF8B5CF6), // Electric Violet
           secondary: Color(0xFF00D2C4), // Emerald Mint
@@ -127,18 +126,38 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
           onSurface: Color(0xFF0F172A),
         ),
         scaffoldBackgroundColor: Colors.white,
-        textTheme: ThemeData.light().textTheme.copyWith(
-          titleLarge: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
-          ),
-          headlineMedium: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
-          ),
-          headlineLarge: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
+        textTheme: GoogleFonts.robotoTextTheme(
+          ThemeData.light().textTheme.copyWith(
+            titleLarge: GoogleFonts.roboto(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0F172A),
+            ),
+            headlineMedium: GoogleFonts.roboto(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0F172A),
+            ),
+            headlineLarge: GoogleFonts.roboto(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0F172A),
+            ),
+            bodyLarge: GoogleFonts.roboto(
+              color: const Color(0xFF0F172A),
+            ),
+            bodyMedium: GoogleFonts.roboto(
+              color: const Color(0xFF0F172A),
+            ),
+            bodySmall: GoogleFonts.roboto(
+              color: const Color(0xFF64748B),
+            ),
+            labelLarge: GoogleFonts.roboto(
+              color: const Color(0xFF0F172A),
+            ),
+            labelMedium: GoogleFonts.roboto(
+              color: const Color(0xFF64748B),
+            ),
+            labelSmall: GoogleFonts.roboto(
+              color: const Color(0xFF64748B),
+            ),
           ),
         ),
       ),
@@ -222,8 +241,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isActive ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent,
+                      gradient: isActive
+                          ? const LinearGradient(
+                              colors: [Color(0xFF8B5CF6), Color(0xFF00D2C4)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            )
+                          : null,
                       borderRadius: BorderRadius.circular(14),
+                      boxShadow: isActive
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFF8B5CF6).withOpacity(0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              )
+                            ]
+                          : null,
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -236,7 +270,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         const SizedBox(height: 4),
                         Text(
                           labels[index],
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: isActive ? theme.colorScheme.primary : const Color(0xFF64748B),
                             fontSize: 10,
                             fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
@@ -267,6 +301,7 @@ class _DashboardViewState extends State<DashboardView> {
   List<AuthUser> _doctors = [];
   Appointment? _nextAppointment;
   bool _loading = true;
+  bool _isSearchFocused = false;
 
   @override
   void initState() {
@@ -338,21 +373,36 @@ class _DashboardViewState extends State<DashboardView> {
                   ],
                 ),
                 Container(
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.primary.withOpacity(0.3),
-                      width: 2,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF8B5CF6), Color(0xFF00D2C4)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF8B5CF6).withOpacity(0.5),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                      BoxShadow(
+                        color: const Color(0xFF00D2C4).withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                   child: CircleAvatar(
-                    radius: 22,
+                    radius: 24,
                     backgroundColor: const Color(0xFF1E293B),
                     child: Text(
                       session.user?.name.substring(0, session.user!.name.length > 1 ? 2 : 1).toUpperCase() ?? 'SJ',
-                      style: const TextStyle(
-                        color: Color(0xFF00D2C4),
+                      style: GoogleFonts.roboto(
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
                   ),
@@ -419,7 +469,7 @@ class _DashboardViewState extends State<DashboardView> {
                               const SizedBox(width: 10),
                               Text(
                                 'Digi Health',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   color: Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
@@ -431,7 +481,7 @@ class _DashboardViewState extends State<DashboardView> {
                           const SizedBox(height: 12),
                           Text(
                             'Your Health in Safe Hands',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               color: Colors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
@@ -440,7 +490,7 @@ class _DashboardViewState extends State<DashboardView> {
                           const SizedBox(height: 6),
                           Text(
                             'Access 24/7 medical consultation instantly',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               color: Colors.white.withOpacity(0.7),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -455,26 +505,42 @@ class _DashboardViewState extends State<DashboardView> {
             ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
 
             // Modern Search Bar
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: const Color(0xFFE2E8F0),
-                  width: 1,
+                  color: _isSearchFocused
+                      ? const Color(0xFF00D2C4).withOpacity(0.6)
+                      : const Color(0xFFE2E8F0),
+                  width: _isSearchFocused ? 2 : 1,
                 ),
+                boxShadow: _isSearchFocused
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF00D2C4).withOpacity(0.3),
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                        ),
+                      ]
+                    : null,
               ),
               child: TextField(
-                style: const TextStyle(color: Color(0xFF0F172A)),
+                onTap: () => setState(() => _isSearchFocused = true),
+                onSubmitted: (_) => setState(() => _isSearchFocused = false),
+                style: GoogleFonts.roboto(color: const Color(0xFF0F172A)),
                 decoration: InputDecoration(
                   icon: Icon(
                     Icons.search_rounded,
-                    color: theme.colorScheme.primary,
+                    color: _isSearchFocused
+                        ? const Color(0xFF00D2C4)
+                        : theme.colorScheme.primary,
                   ),
                   hintText: 'Search symptoms, specialists, clinics...',
-                  hintStyle: const TextStyle(
-                    color: Color(0xFF64748B),
+                  hintStyle: GoogleFonts.roboto(
+                    color: const Color(0xFF64748B),
                     fontSize: 14,
                   ),
                   border: InputBorder.none,
@@ -501,6 +567,8 @@ class _DashboardViewState extends State<DashboardView> {
                   icon: Icons.add_circle_outline_rounded,
                   label: 'Book Visit',
                   color: const Color(0xFF8B5CF6),
+                  backgroundImage: 'assets/appointment.png',
+                  overlayColor: const Color(0xFF4C0099), // deep purple
                   onTap: () {
                     showDialog(
                       context: context,
@@ -514,6 +582,8 @@ class _DashboardViewState extends State<DashboardView> {
                   icon: Icons.videocam_rounded,
                   label: 'Teleconsult',
                   color: const Color(0xFF00D2C4),
+                  backgroundImage: 'assets/speciality.png',
+                  overlayColor: const Color(0xFF065F46), // deep emerald
                   onTap: () {
                     showDialog(
                       context: context,
@@ -527,16 +597,32 @@ class _DashboardViewState extends State<DashboardView> {
                   icon: Icons.medication_rounded,
                   label: 'Prescriptions',
                   color: const Color(0xFFF59E0B),
-                  onTap: () {},
+                  backgroundImage: 'assets/records.png',
+                  overlayColor: const Color(0xFF92400E), // deep amber
+                  onTap: () {
+                    // Navigate to Messages tab where prescriptions are located
+                    final parentState = context.findAncestorStateOfType<_MainNavigationScreenState>();
+                    if (parentState != null) {
+                      parentState.setState(() => parentState._currentIndex = 2);
+                    }
+                  },
                 ),
                 const SizedBox(width: 10),
                 _buildQuickAction(
                   context,
                   icon: Icons.emergency_rounded,
-                  label: 'Emergency',
+                  label: 'Live Queue',
                   color: const Color(0xFFEF4444),
-                  onTap: () {},
-                ),
+                  backgroundImage: 'assets/live queue.png',
+                  overlayColor: const Color(0xFF9B1C1C), // deep crimson
+                  onTap: () {
+                    // Navigate to Appointments tab to see queue status
+                    final parentState = context.findAncestorStateOfType<_MainNavigationScreenState>();
+                    if (parentState != null) {
+                      parentState.setState(() => parentState._currentIndex = 1);
+                    }
+                  },
+                );
               ],
             ).animate().fadeIn(delay: 200.ms),
 
@@ -590,7 +676,7 @@ class _DashboardViewState extends State<DashboardView> {
                               const SizedBox(width: 5),
                               Text(
                                 _nextAppointment!.isTelemedicine ? 'VIDEO VISIT' : 'CLINICAL VISIT',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   color: const Color(0xFF00D2C4),
@@ -611,7 +697,7 @@ class _DashboardViewState extends State<DashboardView> {
                           backgroundColor: const Color(0xFF1E293B),
                           child: Text(
                             _nextAppointment!.doctorName?.substring(0, 2).toUpperCase() ?? 'MD',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                           ),
                         ),
                         const SizedBox(width: 15),
@@ -624,10 +710,10 @@ class _DashboardViewState extends State<DashboardView> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const Text(
+                            Text(
                               'Medical Practitioner',
-                              style: TextStyle(
-                                color: Color(0xFF94A3B8),
+                              style: GoogleFonts.roboto(
+                                color: const Color(0xFF94A3B8),
                                 fontSize: 12,
                               ),
                             ),
@@ -668,11 +754,13 @@ class _DashboardViewState extends State<DashboardView> {
                             icon: const Icon(Icons.videocam, size: 16),
                             label: Text(
                               'Join Room',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                              style: GoogleFonts.roboto(fontWeight: FontWeight.bold),
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: Colors.black,
+                              foregroundColor: Colors.white,
+                              elevation: 6,
+                              shadowColor: theme.colorScheme.primary.withOpacity(0.45),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
@@ -704,7 +792,7 @@ class _DashboardViewState extends State<DashboardView> {
                   ),
                   child: Text(
                     'Synced',
-                    style: TextStyle(
+                    style: GoogleFonts.roboto(
                       color: theme.colorScheme.primary,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -742,7 +830,7 @@ class _DashboardViewState extends State<DashboardView> {
                       const SizedBox(width: 5),
                       Text(
                         'Pulse graph sync',
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontSize: 11,
                           color: Colors.white.withOpacity(0.4),
                         ),
@@ -786,7 +874,7 @@ class _DashboardViewState extends State<DashboardView> {
                   onPressed: () {},
                   child: Text(
                     'See All',
-                    style: TextStyle(
+                    style: GoogleFonts.roboto(
                       color: theme.colorScheme.secondary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -802,10 +890,10 @@ class _DashboardViewState extends State<DashboardView> {
             _loading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF00D2C4)))
                 : _doctors.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'No doctors registered in portal.',
-                          style: TextStyle(color: Colors.white30, fontSize: 13),
+                          style: GoogleFonts.roboto(color: Colors.white30, fontSize: 13),
                         ),
                       )
                     : SizedBox(
@@ -841,40 +929,65 @@ class _DashboardViewState extends State<DashboardView> {
     required String label,
     required Color color,
     required VoidCallback onTap,
+    String? backgroundImage,
+    Color? overlayColor,
   }) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          height: 85,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.2), width: 1),
+            border: Border.all(color: color.withOpacity(0.25), width: 1),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  shape: BoxShape.circle,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background image (faded texture)
+                if (backgroundImage != null)
+                  Image.asset(backgroundImage, fit: BoxFit.cover),
+
+                // Light overlay — image shows through with a bright wash
+                Container(
+                  color: backgroundImage != null
+                      ? Colors.white.withOpacity(0.15)
+                      : color.withOpacity(0.10),
                 ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.bold,
+
+                // Foreground content
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.20),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, color: color, size: 16),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.roboto(
+                          color: color,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -899,61 +1012,96 @@ class _DashboardViewState extends State<DashboardView> {
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withOpacity(0.03),
-          width: 1,
+          color: accentColor.withOpacity(0.3),
+          width: 1.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.25),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: accentColor.withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: -2,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF94A3B8),
-                  fontWeight: FontWeight.w500,
+          // Faint gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  colors: [
+                    accentColor.withOpacity(0.05),
+                    Colors.transparent,
+                    accentColor.withOpacity(0.02),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
-              Icon(icon, color: iconColor, size: 20),
-            ],
+            ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: accentColor,
-                    fontWeight: FontWeight.bold,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.roboto(
+                      fontSize: 12,
+                      color: Color(0xFF94A3B8),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                  Icon(icon, color: iconColor, size: 20),
+                ],
               ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: accentColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      status,
+                      style: GoogleFonts.roboto(
+                        fontSize: 9,
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (customWidget != null) ...[
+                const SizedBox(height: 8),
+                customWidget,
+              ]
             ],
           ),
-          if (customWidget != null) ...[
-            const SizedBox(height: 8),
-            customWidget,
-          ]
         ],
       ),
     );
@@ -970,88 +1118,149 @@ class _DashboardViewState extends State<DashboardView> {
     final theme = Theme.of(context);
 
     return Container(
-      width: 130,
+      width: 135,
       margin: const EdgeInsets.only(right: 15),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withOpacity(0.03),
-          width: 1,
+          color: theme.colorScheme.primary.withOpacity(0.25),
+          width: 1.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Stack(
+            clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-                child: Text(
-                  initials,
-                  style: TextStyle(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      theme.colorScheme.primary,
+                      theme.colorScheme.secondary,
+                      const Color(0xFF00D2C4),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withOpacity(0.4),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 26,
+                  backgroundColor: const Color(0xFF1E293B),
+                  child: Text(
+                    initials,
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
               if (isOnline)
                 Positioned(
-                  bottom: 2,
-                  right: 2,
+                  bottom: -2,
+                  right: -2,
                   child: Container(
-                    width: 12,
-                    height: 12,
+                    width: 16,
+                    height: 16,
                     decoration: BoxDecoration(
                       color: const Color(0xFF22C55E),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: const Color(0xFF0F172A),
-                        width: 2,
+                        width: 3,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF22C55E).withOpacity(0.7),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
+            style: GoogleFonts.roboto(
+              fontSize: 13,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          Text(
-            specialty,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 10,
-              color: Color(0xFF64748B),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  theme.colorScheme.secondary.withOpacity(0.15),
+                  theme.colorScheme.primary.withOpacity(0.1),
+                ],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.colorScheme.secondary.withOpacity(0.35), width: 1),
+            ),
+            child: Text(
+              specialty,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.roboto(
+                fontSize: 9,
+                color: theme.colorScheme.secondary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 12),
-              const SizedBox(width: 3),
+              const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 14),
+              const SizedBox(width: 4),
               Text(
                 rating,
-                style: const TextStyle(
-                  fontSize: 10,
+                style: GoogleFonts.roboto(
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -1083,7 +1292,7 @@ class _DashboardViewState extends State<DashboardView> {
       ),
       child: Text(
         status.toUpperCase(),
-        style: TextStyle(
+        style: GoogleFonts.roboto(
           color: color,
           fontSize: 9,
           fontWeight: FontWeight.bold,
@@ -1255,8 +1464,8 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(apt.doctorName ?? 'Consultation', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text(apt.preferredTime, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text(apt.doctorName ?? 'Consultation', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(apt.preferredTime, style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 11)),
                         ],
                       ),
                     ),
@@ -1266,7 +1475,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                         color: sc.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(apt.status.toUpperCase(), style: TextStyle(color: sc, fontSize: 9, fontWeight: FontWeight.bold)),
+                      child: Text(apt.status.toUpperCase(), style: GoogleFonts.roboto(color: sc, fontSize: 9, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -1325,7 +1534,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             child: Center(
               child: Text(
                 label,
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold),
+                style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ),
           )).toList(),
@@ -1373,7 +1582,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                   children: [
                     Text(
                       '$day',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         color: isToday
                             ? theme.colorScheme.primary
                             : hasApt
@@ -1412,11 +1621,11 @@ class _AppointmentsViewState extends State<AppointmentsView> {
         ),
         const SizedBox(height: 16),
         if (aptDates.isEmpty)
-          const Text('No appointments this month.', style: TextStyle(color: Colors.white24, fontSize: 13))
+          Text('No appointments this month.', style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13))
         else
           Text(
             'Tap a purple day to see details',
-            style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+            style: GoogleFonts.roboto(color: Colors.white.withOpacity(0.3), fontSize: 11),
           ),
       ],
     );
@@ -1427,7 +1636,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+        Text(label, style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 11)),
       ],
     );
   }
@@ -1460,9 +1669,9 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Manage your clinical checkups and teleconsultations',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: Color(0xFF64748B),
               fontSize: 13,
             ),
@@ -1503,7 +1712,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                                   _activeTab == 0
                                       ? 'No upcoming consultations booked.'
                                       : 'No consultation logs found.',
-                                  style: const TextStyle(color: Colors.white24, fontSize: 13),
+                                  style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13),
                                 ),
                               )
                             : RefreshIndicator(
@@ -1540,7 +1749,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
           ),
           child: Text(
             label,
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: isActive ? theme.colorScheme.primary : const Color(0xFF64748B),
               fontWeight: FontWeight.bold,
               fontSize: 11,
@@ -1590,7 +1799,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             children: [
               Text(
                 apt.doctorName ?? 'General Practitioner',
-                style: const TextStyle(
+                style: GoogleFonts.roboto(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   color: Colors.white,
@@ -1604,7 +1813,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                 ),
                 child: Text(
                   apt.status.toUpperCase(),
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     color: statusColor,
                     fontSize: 9,
                     fontWeight: FontWeight.bold,
@@ -1616,7 +1825,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
           const SizedBox(height: 4),
           Text(
             apt.fullName,
-            style: const TextStyle(
+            style: GoogleFonts.roboto(
               fontSize: 12,
               color: Color(0xFF64748B),
             ),
@@ -1628,14 +1837,14 @@ class _AppointmentsViewState extends State<AppointmentsView> {
               const SizedBox(width: 8),
               Text(
                 apt.preferredDate,
-                style: const TextStyle(fontSize: 13, color: Colors.white70),
+                style: GoogleFonts.roboto(fontSize: 13, color: Colors.white70),
               ),
               const SizedBox(width: 15),
               const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF94A3B8)),
               const SizedBox(width: 8),
               Text(
                 apt.preferredTime,
-                style: const TextStyle(fontSize: 13, color: Colors.white70),
+                style: GoogleFonts.roboto(fontSize: 13, color: Colors.white70),
               ),
             ],
           ),
@@ -1668,7 +1877,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                     Expanded(
                       child: SelectableText(
                         'Secure Link: ${apt.meetingLink}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        style: GoogleFonts.roboto(color: Colors.white70, fontSize: 11),
                       ),
                     ),
                   ],
@@ -1702,9 +1911,9 @@ class MessagesView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Direct, HIPAA-compliant chat tunnels with your doctors',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: Color(0xFF64748B),
               fontSize: 13,
             ),
@@ -1767,7 +1976,7 @@ class MessagesView extends StatelessWidget {
             backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
             child: Text(
               initials,
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
               ),
@@ -1783,7 +1992,7 @@ class MessagesView extends StatelessWidget {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
+                      style: GoogleFonts.roboto(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                         color: Colors.white,
@@ -1791,7 +2000,7 @@ class MessagesView extends StatelessWidget {
                     ),
                     Text(
                       time,
-                      style: const TextStyle(
+                      style: GoogleFonts.roboto(
                         fontSize: 11,
                         color: Color(0xFF64748B),
                       ),
@@ -1803,7 +2012,7 @@ class MessagesView extends StatelessWidget {
                   lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     fontSize: 12,
                     color: unreadCount > 0 ? Colors.white : const Color(0xFF94A3B8),
                     fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
@@ -1822,7 +2031,7 @@ class MessagesView extends StatelessWidget {
               ),
               child: Text(
                 '$unreadCount',
-                style: const TextStyle(
+                style: GoogleFonts.roboto(
                   color: Colors.black,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
@@ -1895,7 +2104,7 @@ class _ProfileViewState extends State<ProfileView> {
               backgroundColor: const Color(0xFF1E293B),
               child: Text(
                 session.user?.name.substring(0, session.user!.name.length > 1 ? 2 : 1).toUpperCase() ?? 'SJ',
-                style: const TextStyle(
+                style: GoogleFonts.roboto(
                   fontSize: 24,
                   color: Color(0xFF00D2C4),
                   fontWeight: FontWeight.bold,
@@ -1910,7 +2119,7 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           Text(
             'Patient ID: #DH-${session.user?.id ?? "00"}-PORTAL',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               fontSize: 11,
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w600,
@@ -1976,8 +2185,8 @@ class _ProfileViewState extends State<ProfileView> {
 
   Widget _buildPrescriptionsTab() {
     if (_prescriptions.isEmpty) {
-      return const Center(
-        child: Text('No active prescriptions registered.', style: TextStyle(color: Colors.white24, fontSize: 13)),
+      return Center(
+        child: Text('No active prescriptions registered.', style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13)),
       );
     }
 
@@ -1999,18 +2208,18 @@ class _ProfileViewState extends State<ProfileView> {
             children: [
               Text(
                 pr.medicationName,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 4),
               Text(
                 'Dosage: ${pr.dosage ?? "-"}  |  Frequency: ${pr.frequency ?? "-"}  |  Duration: ${pr.duration ?? "-"}',
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11),
               ),
               if (pr.instructions != null && pr.instructions!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
                   'Instructions: ${pr.instructions}',
-                  style: const TextStyle(color: Color(0xFF00D2C4), fontSize: 11, fontStyle: FontStyle.italic),
+                  style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontStyle: FontStyle.italic),
                 ),
               ],
             ],
@@ -2022,8 +2231,8 @@ class _ProfileViewState extends State<ProfileView> {
 
   Widget _buildConsultationsTab() {
     if (_consultations.isEmpty) {
-      return const Center(
-        child: Text('No past consultation logs found.', style: TextStyle(color: Colors.white24, fontSize: 13)),
+      return Center(
+        child: Text('No past consultation logs found.', style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13)),
       );
     }
 
@@ -2058,13 +2267,13 @@ class _ProfileViewState extends State<ProfileView> {
                   Expanded(
                     child: Text(
                       c.doctorName ?? 'Consultation Log',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                   if (c.createdAt != null)
                     Text(
                       c.createdAt!.split('T').first,
-                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                      style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 10),
                     ),
                   const SizedBox(width: 8),
                   const Icon(Icons.check_circle_outline, color: Color(0xFF00D2C4), size: 16),
@@ -2073,14 +2282,14 @@ class _ProfileViewState extends State<ProfileView> {
               const SizedBox(height: 6),
               Text(
                 'Diagnosis: ${c.diagnosis ?? "No diagnosis entered."}',
-                style: const TextStyle(color: Color(0xFF8B5CF6), fontSize: 12, fontWeight: FontWeight.w600),
+                style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 12, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
-              Text('Chief Complaint: ${c.chiefComplaint ?? "-"}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-              Text('Symptoms: ${c.symptoms ?? "-"}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              Text('Chief Complaint: ${c.chiefComplaint ?? "-"}', style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11)),
+              Text('Symptoms: ${c.symptoms ?? "-"}', style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11)),
               if (c.clinicalNotes != null && c.clinicalNotes!.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text('Advice: ${c.clinicalNotes}', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                Text('Advice: ${c.clinicalNotes}', style: GoogleFonts.roboto(color: Colors.white38, fontSize: 11)),
               ],
               // Vitals badges row
               if (vitals.isNotEmpty) ...[
@@ -2099,7 +2308,7 @@ class _ProfileViewState extends State<ProfileView> {
                     const SizedBox(width: 4),
                     Text(
                       'Follow-up: ${c.followUpDate}',
-                      style: const TextStyle(color: Color(0xFF00D2C4), fontSize: 11),
+                      style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11),
                     ),
                   ],
                 ),
@@ -2124,12 +2333,12 @@ class _ProfileViewState extends State<ProfileView> {
         children: [
           Text(
             label,
-            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.bold),
+            style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 9, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 4),
           Text(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
           ),
         ],
       ),

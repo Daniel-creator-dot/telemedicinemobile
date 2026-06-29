@@ -1,4 +1,3 @@
-import 'dart:js' as js;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -119,14 +118,6 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   Future<void> _launchUrl(String url) async {
-    if (kIsWeb) {
-      try {
-        js.context.callMethod('open', [url, '_blank']);
-        return;
-      } catch (e) {
-        debugPrint('JS open failed: $e');
-      }
-    }
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -196,7 +187,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       ),
       child: Text(
         status.toUpperCase(),
-        style: TextStyle(
+        style: GoogleFonts.roboto(
           color: c,
           fontSize: 9,
           fontWeight: FontWeight.w800,
@@ -281,7 +272,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             const SizedBox(width: 6),
             Text(
               label,
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
                 fontWeight: active ? FontWeight.bold : FontWeight.w500,
                 fontSize: 12,
@@ -330,17 +321,17 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Digi Health',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         color: Color(0xFF0F172A),
                         fontWeight: FontWeight.w800,
                         fontSize: 14,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Doctor Portal',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         color: Color(0xFF64748B),
                         fontSize: 8,
                         fontWeight: FontWeight.w700,
@@ -376,7 +367,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       backgroundColor: const Color(0xFFEEF2FF),
                       child: Text(
                         (session.user?.name ?? 'D')[0].toUpperCase(),
-                        style: const TextStyle(
+                        style: GoogleFonts.roboto(
                           color: Color(0xFF4F46E5),
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
@@ -386,7 +377,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     const SizedBox(width: 8),
                     Text(
                       session.user?.name ?? 'Doctor',
-                      style: const TextStyle(
+                      style: GoogleFonts.roboto(
                         color: Color(0xFF0F172A),
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
@@ -429,7 +420,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   tabLabels[_tab]!,
-                  style: const TextStyle(
+                  style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                     color: Color(0xFF0F172A),
@@ -446,7 +437,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   backgroundColor: const Color(0xFFEEF2FF),
                   child: Text(
                     (session.user?.name ?? 'D')[0].toUpperCase(),
-                    style: const TextStyle(
+                    style: GoogleFonts.roboto(
                       color: Color(0xFF4F46E5),
                       fontWeight: FontWeight.w800,
                       fontSize: 11,
@@ -507,15 +498,15 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       Icon(
                         item.$2,
                         size: 20,
-                        color: active ? const Color(0xFF8B5CF6) : const Color(0xFF64748B),
+                        color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         item.$3,
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontSize: 9,
                           fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                          color: active ? const Color(0xFF8B5CF6) : const Color(0xFF64748B),
+                          color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
                         ),
                       ),
                     ],
@@ -534,65 +525,75 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     String subtitle,
     IconData icon,
     Color color,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    String? backgroundImage,
+    Color? overlayColor,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.18), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                shape: BoxShape.circle,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.25), width: 1.2),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image (faded texture)
+              if (backgroundImage != null)
+                Image.asset(backgroundImage, fit: BoxFit.cover),
+
+              // Light overlay — image shows through with a bright wash
+              Container(
+                color: backgroundImage != null
+                    ? Colors.white.withOpacity(0.15)
+                    : color.withOpacity(0.06),
               ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 18,
-              ),
-            ),
-            const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                title,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+
+              // Foreground content
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.20),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: color, size: 18),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.roboto(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.roboto(
+                        color: color.withOpacity(0.80),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                subtitle,
-                style: TextStyle(
-                  color: color.withOpacity(0.7),
-                  fontSize: 9,
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -618,32 +619,70 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
   Widget _buildError() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            color: Color(0xFF94A3B8),
-            size: 48,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Failed to load data',
-            style: TextStyle(
-              color: const Color(0xFF64748B),
-              fontWeight: FontWeight.w600,
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F46E5).withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _loadAll,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
-              foregroundColor: Colors.white,
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4F46E5).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                color: Color(0xFF4F46E5),
+                size: 48,
+              ),
             ),
-            child: const Text('Retry'),
-          ),
-        ],
+            const SizedBox(height: 20),
+            Text(
+              'Failed to load data',
+              style: GoogleFonts.roboto(
+                color: const Color(0xFF0F172A),
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please check your connection and try again',
+              style: GoogleFonts.roboto(
+                color: const Color(0xFF64748B),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadAll,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                elevation: 4,
+                shadowColor: const Color(0xFF4F46E5).withOpacity(0.4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -711,7 +750,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       children: [
                         Text(
                           '$greeting,',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white70,
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -720,8 +759,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Dr. ${session.user?.name ?? 'Doctor'}',
-                          style: TextStyle(
+                          (session.user?.name != null)
+                              ? (session.user!.name.toLowerCase().startsWith('dr.')
+                                  ? session.user!.name
+                                  : 'Dr. ${session.user!.name}')
+                              : 'Doctor',
+                          style: GoogleFonts.roboto(
                             color: Colors.white,
                             fontSize: 28,
                             fontWeight: FontWeight.w900,
@@ -753,12 +796,20 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                   const SizedBox(width: 6),
                                   Text(
                                     '$_todayCount appointments today',
-                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
                                   ),
                                 ],
                               ),
                               if (!isMobile)
-                                Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.white30, shape: BoxShape.circle)),
+                                Container(
+                                  width: 1,
+                                  height: 16,
+                                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(1),
+                                  ),
+                                ),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -766,7 +817,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                   const SizedBox(width: 6),
                                   Text(
                                     '$_pendingCount pending',
-                                    style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w700),
+                                    style: GoogleFonts.roboto(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w700),
                                   ),
                                 ],
                               ),
@@ -783,24 +834,26 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
           // ── Active Consultation Spotlight ──────────────────────────────────
           if (activeConsult != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xFF4F46E5).withOpacity(0.35),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF4F46E5).withOpacity(0.2),
-                    blurRadius: 25,
-                    offset: const Offset(0, 10),
+            Builder(
+              builder: (context) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFF4F46E5).withOpacity(0.35),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4F46E5).withOpacity(0.2),
+                        blurRadius: 25,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: ClipRRect(
+                  child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
                 child: Stack(
                   children: [
@@ -827,29 +880,45 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                               Row(
                                 children: [
                                   Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF00D2C4),
-                                          shape: BoxShape.circle,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEF4444).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: const Color(0xFFEF4444).withOpacity(0.4),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFEF4444),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        )
+                                            .animate(onPlay: (c) => c.repeat())
+                                            .scale(
+                                              begin: const Offset(0.7, 0.7),
+                                              end: const Offset(1.4, 1.4),
+                                              duration: 1000.ms,
+                                            )
+                                            .then()
+                                            .fadeOut(),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '● LIVE',
+                                          style: GoogleFonts.roboto(
+                                            color: const Color(0xFFEF4444),
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.5,
+                                          ),
                                         ),
-                                      )
-                                      .animate(onPlay: (c) => c.repeat())
-                                      .scale(
-                                        begin: const Offset(0.7, 0.7),
-                                        end: const Offset(1.6, 1.6),
-                                        duration: 1200.ms,
-                                      )
-                                      .then()
-                                      .fadeOut(),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'LIVE CONSULTATION',
-                                    style: TextStyle(
-                                      color: const Color(0xFF00D2C4),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.5,
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -861,12 +930,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: const Color(
-                                    0xFF8B5CF6,
+                                    0xFF4F46E5,
                                   ).withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
                                     color: const Color(
-                                      0xFF8B5CF6,
+                                      0xFF4F46E5,
                                     ).withOpacity(0.3),
                                   ),
                                 ),
@@ -874,8 +943,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                   activeConsult.isTelemedicine
                                       ? 'TELEHEALTH'
                                       : 'IN-CLINIC',
-                                  style: TextStyle(
-                                    color: const Color(0xFFC084FC),
+                                  style: GoogleFonts.roboto(
+                                    color: const Color(0xFF818CF8),
                                     fontSize: 8,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.5,
@@ -887,7 +956,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           const SizedBox(height: 12),
                           Text(
                             activeConsult.fullName,
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               color: Colors.white,
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
@@ -904,7 +973,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                               const SizedBox(width: 4),
                               Text(
                                 'Scheduled for ${activeConsult.preferredTime}',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   color: Colors.white54,
                                   fontSize: 11,
                                 ),
@@ -932,7 +1001,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                       activeConsult.meetingLink != null
                                           ? 'JOIN ROOM'
                                           : 'LINK SMS',
-                                      style: TextStyle(
+                                      style: GoogleFonts.roboto(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 11,
                                       ),
@@ -962,7 +1031,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                   ),
                                   label: Text(
                                     'WORKSPACE',
-                                    style: TextStyle(
+                                    style: GoogleFonts.roboto(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 11,
                                     ),
@@ -1013,7 +1082,21 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   ],
                 ),
               ),
-            ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1),
+            ).animate(onPlay: (controller) => controller.repeat())
+                .shimmer(
+                  duration: 2000.ms,
+                  color: const Color(0xFF4F46E5).withOpacity(0.3),
+                  angle: 0.5,
+                )
+                .then()
+                .shimmer(
+                  duration: 2000.ms,
+                  color: const Color(0xFF818CF8).withOpacity(0.2),
+                  angle: -0.5,
+                )
+                .fadeIn(duration: 400.ms).slideY(begin: -0.1),
+              ),
+            ),
 
           // ── Quick Actions Grid ──────────────────────────────────────────────
           _sectionHeader('Quick Actions'),
@@ -1032,6 +1115,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 Icons.calendar_month_rounded,
                 const Color(0xFF4F46E5),
                 () => setState(() => _tab = _DoctorTab.appointments),
+                backgroundImage: 'assets/appointment.png',
+                overlayColor: const Color(0xFF4C0099), // deep purple
               ),
               _quickActionCard(
                 'Live Queue',
@@ -1039,6 +1124,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 Icons.queue_rounded,
                 const Color(0xFF00D2C4),
                 () => setState(() => _tab = _DoctorTab.queue),
+                backgroundImage: 'assets/live queue.png',
+                overlayColor: const Color(0xFF9B1C1C), // deep crimson
               ),
               _quickActionCard(
                 'Specialists',
@@ -1046,6 +1133,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 Icons.people_alt_rounded,
                 const Color(0xFFF59E0B),
                 () => setState(() => _tab = _DoctorTab.doctors),
+                backgroundImage: 'assets/speciality.png',
+                overlayColor: const Color(0xFF065F46), // deep emerald
               ),
               _quickActionCard(
                 'Reports',
@@ -1053,6 +1142,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 Icons.bar_chart_rounded,
                 const Color(0xFFEF4444),
                 () => setState(() => _tab = _DoctorTab.reports),
+                backgroundImage: 'assets/records.png',
+                overlayColor: const Color(0xFF92400E), // deep amber
               ),
             ],
           ).animate().fadeIn(duration: 300.ms, delay: 100.ms),
@@ -1073,30 +1164,30 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 Icons.calendar_today_rounded,
                 const Color(0xFF2563EB),
                 const Color(0xFFEFF6FF),
-              ),
+              ).animate().fadeIn(delay: 150.ms, duration: 400.ms).slideY(begin: 0.1, end: 0),
               _statCard(
                 'Pending Approval',
                 '$_pendingCount',
                 Icons.hourglass_top_rounded,
                 const Color(0xFFD97706),
                 const Color(0xFFFFFBEB),
-              ),
+              ).animate().fadeIn(delay: 200.ms, duration: 400.ms).slideY(begin: 0.1, end: 0),
               _statCard(
                 'Completed',
                 '$_completedCount',
                 Icons.check_circle_rounded,
                 const Color(0xFF16A34A),
                 const Color(0xFFF0FDF4),
-              ),
+              ).animate().fadeIn(delay: 250.ms, duration: 400.ms).slideY(begin: 0.1, end: 0),
               _statCard(
                 'Total Bookings',
                 '$_totalCount',
                 Icons.people_rounded,
                 const Color(0xFF4F46E5),
                 const Color(0xFFEEF2FF),
-              ),
+              ).animate().fadeIn(delay: 300.ms, duration: 400.ms).slideY(begin: 0.1, end: 0),
             ],
-          ).animate().fadeIn(duration: 300.ms, delay: 150.ms),
+          ),
           const SizedBox(height: 20),
 
           // ── Live Appointment Table ─────────────────────────────────────────
@@ -1118,12 +1209,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: _getLiveAppointmentsList().isEmpty
-                  ? const Padding(
+                  ? Padding(
                       padding: EdgeInsets.all(40),
                       child: Center(
                         child: Text(
                           'No live appointments scheduled for today',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Color(0xFF94A3B8),
                             fontSize: 13,
                           ),
@@ -1175,14 +1266,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           children: [
                             Text(
                               name,
-                              style: const TextStyle(
+                              style: GoogleFonts.roboto(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
                             ),
                             Text(
                               '$count Patients',
-                              style: const TextStyle(
+                              style: GoogleFonts.roboto(
                                 color: Color(0xFF64748B),
                                 fontSize: 12,
                               ),
@@ -1245,7 +1336,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(height: 10),
           Text(
             title,
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               fontWeight: FontWeight.w800,
               fontSize: 14,
               color: const Color(0xFF0F172A),
@@ -1254,7 +1345,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+            style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1270,7 +1361,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                textStyle: const TextStyle(
+                textStyle: GoogleFonts.roboto(
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1306,7 +1397,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(width: 4),
           Text(
             'Active schedule',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: const Color(0xFF16A34A),
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -1326,7 +1417,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(width: 4),
           Text(
             'Needs review',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: const Color(0xFFD97706),
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -1346,7 +1437,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(width: 4),
           Text(
             'Finished today',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: const Color(0xFF16A34A),
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -1366,7 +1457,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(width: 4),
           Text(
             '+8% this week',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: const Color(0xFF4F46E5),
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -1433,23 +1524,22 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           ),
           const Spacer(),
           // Value
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                color: const Color(0xFF0F172A),
-                fontSize: isMobile ? 26 : 30,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1,
-              ),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.roboto(
+              color: const Color(0xFF0F172A),
+              fontSize: isMobile ? 26 : 30,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1,
             ),
           ),
           const SizedBox(height: 2),
           // Label
           Text(
             label,
-            style: const TextStyle(
+            style: GoogleFonts.roboto(
               color: Color(0xFF64748B),
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -1460,16 +1550,13 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           if (trendWidget != null) ...[
             const SizedBox(height: 6),
             // Trend badge at the bottom
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: bg.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: trendWidget,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: bg.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: trendWidget,
             ),
           ],
         ],
@@ -1538,7 +1625,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   backgroundColor: const Color(0xFFEEF2FF),
                   child: Text(
                     _getInitials(apt.fullName),
-                    style: TextStyle(
+                    style: GoogleFonts.roboto(
                       color: const Color(0xFF4F46E5),
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -1574,7 +1661,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                           softWrap: false,
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
                             color: const Color(0xFF0F172A),
@@ -1594,7 +1681,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           ),
                           child: Text(
                             'HIGH',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               fontSize: 8,
                               fontWeight: FontWeight.w900,
                               color: const Color(0xFFD97706),
@@ -1617,7 +1704,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                       Text(
                         apt.preferredTime,
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           color: const Color(0xFF475569),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -1633,7 +1720,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                       Text(
                         _fmtDate(apt.preferredDate),
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           color: const Color(0xFF64748B),
                           fontSize: 11,
                         ),
@@ -1649,7 +1736,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         ),
                         Text(
                           'Telehealth',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: const Color(0xFF4F46E5),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -1672,7 +1759,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         if (apt.nationwideId != null)
                           'Nationwide: ${apt.nationwideId}',
                       ].join(' • '),
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         color: const Color(0xFF94A3B8),
                         fontSize: 10,
                       ),
@@ -1709,7 +1796,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             foregroundColor: Colors.white,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            textStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+            textStyle: GoogleFonts.roboto(fontSize: 10, fontWeight: FontWeight.bold),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -1724,7 +1811,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             foregroundColor: const Color(0xFF16A34A),
             side: const BorderSide(color: Color(0xFF16A34A), width: 1.0),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            textStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+            textStyle: GoogleFonts.roboto(fontSize: 10, fontWeight: FontWeight.bold),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -1741,7 +1828,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        textStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+        textStyle: GoogleFonts.roboto(fontSize: 10, fontWeight: FontWeight.bold),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
@@ -1822,7 +1909,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       children: [
                         Text(
                           'Appointment Management',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
                             fontSize: 20,
@@ -1831,7 +1918,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '${_appointments.length} total appointments • $_pendingCount pending approval',
-                          style: const TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white70,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -1858,7 +1945,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'All Appointments',
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                     color: const Color(0xFF0F172A),
@@ -1876,7 +1963,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   ),
                   child: Text(
                     '${_appointments.length}',
-                    style: const TextStyle(
+                    style: GoogleFonts.roboto(
                       color: Color(0xFF4F46E5),
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -1916,7 +2003,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     children: [
                       Text(
                         apt.fullName,
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                           color: const Color(0xFF0F172A),
@@ -1928,7 +2015,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
                             'For: ${apt.whoIsComing!.join(', ')}',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               color: const Color(0xFF4F46E5),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -1938,7 +2025,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       if (apt.email != null)
                         Text(
                           apt.email!,
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: const Color(0xFF64748B),
                             fontSize: 11,
                           ),
@@ -1946,7 +2033,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       if (apt.staffId != null)
                         Text(
                           'Staff No: ${apt.staffId}',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: const Color(0xFF64748B),
                             fontSize: 11,
                           ),
@@ -1954,7 +2041,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       if (apt.nationwideId != null)
                         Text(
                           'Nationwide: ${apt.nationwideId}',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: const Color(0xFF94A3B8),
                             fontSize: 10,
                           ),
@@ -1985,7 +2072,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 5),
                 Text(
                   _fmtDate(apt.preferredDate),
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     fontSize: 11,
                     color: const Color(0xFF475569),
                   ),
@@ -1999,7 +2086,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 5),
                 Text(
                   apt.preferredTime,
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     fontSize: 11,
                     color: const Color(0xFF475569),
                   ),
@@ -2010,7 +2097,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   Flexible(
                     child: Text(
                       apt.doctorName!,
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         fontSize: 11,
                         color: const Color(0xFF475569),
                         fontWeight: FontWeight.w600,
@@ -2042,7 +2129,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                       child: Text(
                         apt.service!,
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF475569),
@@ -2072,7 +2159,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           const SizedBox(width: 3),
                           Text(
                             'Priority',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFFD97706),
@@ -2103,7 +2190,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           const SizedBox(width: 3),
                           Text(
                             'Telehealth',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFF4F46E5),
@@ -2146,7 +2233,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         const SizedBox(width: 6),
                         Text(
                           'Join Video Session',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: const Color(0xFF4F46E5),
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -2255,7 +2342,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             ],
             Text(
               label,
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 color: color,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -2310,16 +2397,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(height: 12),
                 Text(
                   'No patients in queue',
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     color: const Color(0xFF94A3B8),
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Patients will appear here once they check in',
-                  style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                  style: GoogleFonts.roboto(color: Color(0xFFCBD5E1), fontSize: 12),
                 ),
               ],
             ),
@@ -2372,7 +2459,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             children: [
                               Text(
                                 'Queue & Check-In',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w800,
                                   fontSize: 20,
@@ -2381,7 +2468,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 '${queue.length} patients currently in queue',
-                                style: const TextStyle(
+                                style: GoogleFonts.roboto(
                                   color: Colors.white70,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -2408,7 +2495,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       const SizedBox(width: 8),
                       Text(
                         'Current Queue',
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                           color: const Color(0xFF0F172A),
@@ -2436,7 +2523,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             const SizedBox(width: 4),
                             Text(
                               '${queue.length} Waiting',
-                              style: const TextStyle(
+                              style: GoogleFonts.roboto(
                                 color: Color(0xFF2563EB),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -2478,7 +2565,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             ),
             child: Text(
               '$idx',
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 14,
@@ -2493,7 +2580,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               children: [
                 Text(
                   apt.fullName,
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                     color: const Color(0xFF0F172A),
@@ -2502,7 +2589,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 if (apt.whoIsComing != null && apt.whoIsComing!.isNotEmpty)
                   Text(
                     'For: ${apt.whoIsComing!.join(', ')}',
-                    style: TextStyle(
+                    style: GoogleFonts.roboto(
                       color: const Color(0xFF4F46E5),
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -2511,7 +2598,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 if (apt.staffId != null)
                   Text(
                     'Staff No: ${apt.staffId}',
-                    style: TextStyle(
+                    style: GoogleFonts.roboto(
                       color: const Color(0xFF64748B),
                       fontSize: 10,
                     ),
@@ -2519,7 +2606,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 if (apt.nationwideId != null)
                   Text(
                     'Nationwide: ${apt.nationwideId}',
-                    style: TextStyle(
+                    style: GoogleFonts.roboto(
                       color: const Color(0xFF94A3B8),
                       fontSize: 9,
                     ),
@@ -2527,7 +2614,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'Time: ${apt.preferredTime}',
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     color: const Color(0xFF475569),
                     fontSize: 11,
                   ),
@@ -2654,7 +2741,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       children: [
                         Text(
                           'Doctor Profiles & Schedules',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
                             fontSize: 20,
@@ -2663,7 +2750,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '${_doctors.length} doctors registered',
-                          style: const TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white70,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -2690,7 +2777,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'All Doctors',
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                     color: const Color(0xFF0F172A),
@@ -2708,7 +2795,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   ),
                   child: Text(
                     '${_doctors.length}',
-                    style: const TextStyle(
+                    style: GoogleFonts.roboto(
                       color: Color(0xFF4F46E5),
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -2749,7 +2836,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 backgroundColor: const Color(0xFFEEF2FF),
                 child: Text(
                   initials,
-                  style: const TextStyle(
+                  style: GoogleFonts.roboto(
                     color: Color(0xFF4F46E5),
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
@@ -2763,7 +2850,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   children: [
                     Text(
                       doc['name']?.toString() ?? '',
-                      style: const TextStyle(
+                      style: GoogleFonts.roboto(
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
                         color: Color(0xFF0F172A),
@@ -2771,7 +2858,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     ),
                     Text(
                       doc['specialization']?.toString() ?? '',
-                      style: const TextStyle(
+                      style: GoogleFonts.roboto(
                         color: Color(0xFF64748B),
                         fontSize: 12,
                       ),
@@ -2794,7 +2881,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 ),
                 child: Text(
                   active ? 'Active' : 'Inactive',
-                  style: TextStyle(
+                  style: GoogleFonts.roboto(
                     color: active
                         ? const Color(0xFF16A34A)
                         : const Color(0xFFDC2626),
@@ -2818,9 +2905,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'SLOT DURATION',
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           color: Color(0xFF94A3B8),
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
@@ -2829,7 +2916,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                       Text(
                         '${doc['slot_duration']} mins',
-                        style: const TextStyle(
+                        style: GoogleFonts.roboto(
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
@@ -2844,9 +2931,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'WORKING HOURS',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Color(0xFF94A3B8),
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
@@ -2855,7 +2942,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         ),
                         Text(
                           '${doc['start_time']?.toString().substring(0, 5) ?? '--'} – ${doc['end_time']?.toString().substring(0, 5) ?? '--'}',
-                          style: const TextStyle(
+                          style: GoogleFonts.roboto(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                           ),
@@ -2900,7 +2987,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         children: [
           Text(
             'Reports & Analytics',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               fontWeight: FontWeight.w800,
               fontSize: 18,
               color: const Color(0xFF0F172A),
@@ -2927,11 +3014,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: trends.isEmpty
                         ? [
-                            const Expanded(
+                            Expanded(
                               child: Center(
                                 child: Text(
                                   'No data',
-                                  style: TextStyle(color: Color(0xFF94A3B8)),
+                                  style: GoogleFonts.roboto(color: Color(0xFF94A3B8)),
                                 ),
                               ),
                             ),
@@ -2953,7 +3040,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                   children: [
                                     Text(
                                       '${count.toInt()}',
-                                      style: const TextStyle(
+                                      style: GoogleFonts.roboto(
                                         color: Color(0xFF94A3B8),
                                         fontSize: 9,
                                       ),
@@ -2971,7 +3058,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                     const SizedBox(height: 6),
                                     Text(
                                       t['day']?.toString().toUpperCase() ?? '',
-                                      style: const TextStyle(
+                                      style: GoogleFonts.roboto(
                                         color: Color(0xFF94A3B8),
                                         fontSize: 8,
                                         fontWeight: FontWeight.w700,
@@ -3026,15 +3113,15 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             children: [
                               Text(
                                 '${(attendanceRate * 100).toInt()}%',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 20,
                                   color: const Color(0xFF0F172A),
                                 ),
                               ),
-                              const Text(
+                              Text(
                                 'Rate',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   color: Color(0xFF94A3B8),
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
@@ -3099,7 +3186,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       alignment: Alignment.center,
                       child: Text(
                         '${(noShowRate * 100).toInt()}%',
-                        style: const TextStyle(
+                        style: GoogleFonts.roboto(
                           color: Color(0xFFDC2626),
                           fontWeight: FontWeight.w800,
                           fontSize: 14,
@@ -3107,19 +3194,19 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Overall No-Show Rate',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
                           ),
                         ),
                         Text(
                           'Calculated from total appointments',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Color(0xFF64748B),
                             fontSize: 11,
                           ),
@@ -3177,7 +3264,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: GoogleFonts.roboto(
               color: Color(0xFF64748B),
               fontSize: 9,
               fontWeight: FontWeight.w700,
@@ -3186,7 +3273,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+            style: GoogleFonts.roboto(fontWeight: FontWeight.w800, fontSize: 20),
           ),
         ],
       ),
@@ -3212,13 +3299,13 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11),
               ),
             ],
           ),
           Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+            style: GoogleFonts.roboto(fontWeight: FontWeight.w800, fontSize: 13),
           ),
         ],
       ),
@@ -3228,7 +3315,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: GoogleFonts.roboto(
         color: Color(0xFF94A3B8),
         fontSize: 11,
         fontWeight: FontWeight.w700,

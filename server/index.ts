@@ -5,8 +5,62 @@ import { initDb, query } from './db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 
 dotenv.config();
+
+// Initialize Firebase Admin
+let firebaseApp: any = null;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    firebaseApp = initializeApp({
+      credential: cert(serviceAccount)
+    });
+    console.log('[FIREBASE] Admin SDK Initialized successfully');
+  } else {
+    console.warn('[FIREBASE] FIREBASE_SERVICE_ACCOUNT_KEY missing from environment. Push notifications will be simulated.');
+  }
+} catch (e) {
+  console.error('[FIREBASE] Initialization error:', e);
+}
+
+// Push notification sender helper
+async function sendPushNotification(userIds: number[], title: string, body: string, data?: Record<string, string>) {
+  if (!firebaseApp) {
+    console.log(`[PUSH SIMULATED] To users ${userIds.join(', ')}: "${title}" - "${body}"`);
+    return;
+  }
+
+  try {
+    // Get FCM tokens for targeted users
+    const tokensResult = await query(
+      'SELECT token FROM fcm_tokens WHERE user_id = ANY($1)',
+      [userIds]
+    );
+    const tokens = tokensResult.rows.map(r => r.token);
+
+    if (tokens.length === 0) {
+      console.log(`[PUSH] No registered FCM tokens for user IDs: ${userIds.join(', ')}`);
+      return;
+    }
+
+    console.log(`[PUSH] Sending message to ${tokens.length} devices...`);
+    const messaging = getMessaging(firebaseApp);
+    
+    // Send to tokens
+    const response = await messaging.sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      data: data || {},
+    });
+
+    console.log(`[PUSH] Successfully sent ${response.successCount} messages; ${response.failureCount} failed.`);
+  } catch (err) {
+    console.error('[PUSH ERROR] Failed to send push notification:', err);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -17,20 +71,26 @@ app.use(express.json());
 // --- Middleware ---
 const authenticate = (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
+  console.log('[AUTH] Auth header:', authHeader ? 'Present' : 'Missing');
+  
   if (!authHeader) return res.status(401).json({ message: 'No token provided' });
 
   const token = authHeader.split(' ')[1];
+  console.log('[AUTH] Token extracted:', token ? 'Yes' : 'No');
+  console.log('[AUTH] JWT_SECRET present:', !!process.env.JWT_SECRET);
+  
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    console.log('[AUTH] Token verified successfully:', decoded);
     req.user = decoded;
     next();
   } catch (err) {
+    console.log('[AUTH] Token verification failed:', err);
     res.status(401).json({ message: 'Invalid token' });
   }
 };
 
-// Initialize Database
-initDb();
+
 
 // --- Auth Routes ---
 app.post('/api/auth/login', async (req, res) => {
@@ -313,7 +373,8 @@ app.get('/api/appointments', authenticate, async (req: any, res) => {
         queryText += ' WHERE a.doctor_id = $1';
         queryParams.push(docResult.rows[0].id);
       } else {
-        // If doctor not found in doctors table, return empty
+        // If doctor not found in doctors table, return empty array instead of error
+        // This prevents immediate logout due to 403 response
         return res.json([]);
       }
     }
@@ -394,12 +455,27 @@ app.post('/api/appointments', async (req, res) => {
     const locationLink = "https://www.google.com/maps/search/?api=1&query=Primecare+Medical+Center+Accra";
     await sendSMS(phoneNumber, `CSA: Your appointment ${appointmentId} is booked for ${preferredDate} at ${preferredTime}. Location: ${locationLink}. Thank you for choosing Primecare Medical Center.`);
     
-    
     // Admin Alerts
     console.log(`Admin Alert: New appointment ${appointmentId} booked by ${fullName}.`);
     
     // Send SMS to Admin
     await sendSMS('+233200024081', `Admin Alert: New appointment ${appointmentId} booked by ${fullName} for ${preferredDate} at ${preferredTime}.`).catch(e => console.error('Admin SMS Error:', e));
+
+    // Send Push Notification to all Admin users
+    try {
+      const adminUsers = await query("SELECT id FROM users WHERE role = 'admin'");
+      const adminIds = adminUsers.rows.map(r => r.id);
+      if (adminIds.length > 0) {
+        await sendPushNotification(
+          adminIds,
+          'New Appointment Booked',
+          `New appointment ${appointmentId} booked by ${fullName} for ${preferredDate} at ${preferredTime}.`,
+          { type: 'new-appointment', appointmentId: appointmentId }
+        );
+      }
+    } catch (pushErr) {
+      console.error('Error sending push notifications to admin users:', pushErr);
+    }
 
     await query('INSERT INTO notifications (message) VALUES ($1)', [
       `New appointment booked: ${appointmentId} by ${fullName}`
@@ -451,6 +527,36 @@ app.patch('/api/appointments/:id', async (req, res) => {
       } else if (status === 'cancelled') {
         const msg = `CSA: Your appointment ${apt.appointment_id} has been CANCELLED. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Cancel:', e));
+      }
+
+      // Send push notification to the patient
+      if (status === 'approved' || status === 'completed' || status === 'cancelled') {
+        try {
+          const userRes = await query('SELECT id FROM users WHERE phone_number = $1 OR username = $2', [apt.phone_number, apt.email]);
+          const userIds = userRes.rows.map(r => r.id);
+          if (userIds.length > 0) {
+            let title = 'Appointment Update';
+            let body = `Your appointment ${apt.appointment_id} status has been updated to ${status}.`;
+            if (status === 'approved') {
+              title = 'Appointment Approved';
+              body = `Your appointment ${apt.appointment_id} has been approved.`;
+            } else if (status === 'completed') {
+              title = 'Appointment Completed';
+              body = `Your appointment ${apt.appointment_id} has been marked as completed. Thank you!`;
+            } else if (status === 'cancelled') {
+              title = 'Appointment Cancelled';
+              body = `Your appointment ${apt.appointment_id} has been cancelled.`;
+            }
+
+            await sendPushNotification(userIds, title, body, {
+              type: 'appointment-status',
+              appointmentId: String(apt.id),
+              status: status
+            });
+          }
+        } catch (pushErr) {
+          console.error('Error sending status push notification:', pushErr);
+        }
       }
     }
 
@@ -584,6 +690,36 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
         const msg = `CSA: Your appointment ${apt.appointment_id} has been CANCELLED. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Cancel:', e));
       }
+
+      // Send push notification to the patient
+      if (status === 'approved' || status === 'completed' || status === 'cancelled') {
+        try {
+          const userRes = await query('SELECT id FROM users WHERE phone_number = $1 OR username = $2', [apt.phone_number, apt.email]);
+          const userIds = userRes.rows.map(r => r.id);
+          if (userIds.length > 0) {
+            let title = 'Appointment Update';
+            let body = `Your appointment ${apt.appointment_id} status has been updated to ${status}.`;
+            if (status === 'approved') {
+              title = 'Appointment Approved';
+              body = `Your appointment ${apt.appointment_id} has been approved.`;
+            } else if (status === 'completed') {
+              title = 'Appointment Completed';
+              body = `Your appointment ${apt.appointment_id} has been marked as completed. Thank you!`;
+            } else if (status === 'cancelled') {
+              title = 'Appointment Cancelled';
+              body = `Your appointment ${apt.appointment_id} has been cancelled.`;
+            }
+
+            await sendPushNotification(userIds, title, body, {
+              type: 'appointment-status',
+              appointmentId: String(apt.id),
+              status: status
+            });
+          }
+        } catch (pushErr) {
+          console.error('Error sending status push notification:', pushErr);
+        }
+      }
     }
 
     res.json(apt);
@@ -621,6 +757,23 @@ app.patch('/api/appointments/:id/no-show', async (req, res) => {
 });
 
 // --- Notification Routes ---
+app.post('/api/push/fcm-token', authenticate, async (req: any, res) => {
+  const { token, platform } = req.body;
+  const userId = req.user.id;
+  try {
+    await query(`
+      INSERT INTO fcm_tokens (user_id, token, platform, updated_at)
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id, token) 
+      DO UPDATE SET platform = $3, updated_at = CURRENT_TIMESTAMP
+    `, [userId, token, platform]);
+    res.json({ message: 'Token registered successfully' });
+  } catch (err) {
+    console.error('Error registering FCM token:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 app.get('/api/notifications', async (req, res) => {
   try {
     const result = await query('SELECT * FROM notifications ORDER BY created_at DESC LIMIT 10');
@@ -1072,7 +1225,20 @@ app.get('/api/analytics/dashboard', authenticate, async (req: any, res) => {
       if (docResult.rows.length > 0) {
         doctorId = docResult.rows[0].id;
       } else {
-        return res.status(403).json({ message: 'Doctor record not found' });
+        // Doctor record not found - return empty stats instead of 403 to avoid logout
+        return res.json({
+          stats: { total: 0, today: 0, pending: 0, completed: 0 },
+          trends: [],
+          workload: [],
+          noShow: { missed_total: 0, repeated_offenders: 0 },
+          peakHours: 'No Data',
+          waitDistribution: [
+            { label: 'Under 15m', val: 0, color: 'bg-green-500' },
+            { label: '15 - 30m', val: 0, color: 'bg-amber-500' },
+            { label: 'Over 30m', val: 0, color: 'bg-red-500' }
+          ],
+          satisfaction: '0.0'
+        });
       }
     }
 
@@ -1200,6 +1366,15 @@ app.get('/api/analytics/dashboard', authenticate, async (req: any, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Initialize Database
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });
+
+// Keep the process alive
+setInterval(() => {}, 1000);

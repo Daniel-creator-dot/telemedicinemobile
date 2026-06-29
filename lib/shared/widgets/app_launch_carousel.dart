@@ -114,19 +114,19 @@ class _AppLaunchCarouselState extends State<AppLaunchCarousel>
                     alignment: Alignment.centerLeft,
                     child: RichText(
                       text: TextSpan(
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.5,
                         ),
-                        children: const [
+                        children: [
                           TextSpan(
                             text: 'Gra',
-                            style: TextStyle(color: Color(0xFF8B5CF6)), // Violet
+                            style: GoogleFonts.roboto(color: Color(0xFF8B5CF6)), // Violet
                           ),
                           TextSpan(
                             text: 'prime',
-                            style: TextStyle(color: Color(0xFF00D2C4)), // Mint
+                            style: GoogleFonts.roboto(color: Color(0xFF00D2C4)), // Mint
                           ),
                         ],
                       ),
@@ -157,8 +157,8 @@ class _AppLaunchCarouselState extends State<AppLaunchCarousel>
                 const SizedBox(height: 12),
                 Text(
                   widget.message,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B), // Dark slate — readable on white
+                  style: GoogleFonts.roboto(
+                    color: const Color(0xFF64748B), // Dark slate — readable on white
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.2,
@@ -324,7 +324,7 @@ class _CaptionPanel extends StatelessWidget {
             ),
             child: Text(
               'DIGI HEALTH',
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 fontSize: 9,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.4,
@@ -335,7 +335,7 @@ class _CaptionPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             slide.title,
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               fontSize: 22,
               fontWeight: FontWeight.w900,
               height: 1.1,
@@ -346,7 +346,7 @@ class _CaptionPanel extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             slide.subtitle,
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               fontSize: 13,
               color: const Color(0xFF94A3B8),
               height: 1.35,

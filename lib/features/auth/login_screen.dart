@@ -197,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
                     Text(
                       'DIGI HEALTH',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         fontSize: 48,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
@@ -207,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1, end: 0),
                     Text(
                       'Universal Telehealth Portal',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         fontSize: 14,
                         color: const Color(0xFF00D2C4),
                         fontWeight: FontWeight.w600,
@@ -239,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     : isForgot
                                         ? 'Forgot Password'
                                         : 'Reset Password',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -254,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     : isForgot
                                         ? 'Enter your username to receive an SMS verification code'
                                         : 'Enter the verification code & your new password',
-                            style: const TextStyle(
+                            style: GoogleFonts.roboto(
                               fontSize: 12,
                               color: Color(0xFF94A3B8),
                             ),
@@ -272,7 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               child: Text(
                                 _error!,
-                                style: const TextStyle(
+                                style: GoogleFonts.roboto(
                                   color: Color(0xFFFCA5A5),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -286,7 +286,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           if (isSignUp) ...[
                             TextFormField(
                               controller: _name,
-                              style: const TextStyle(color: Colors.white),
+                              style: GoogleFonts.roboto(color: Colors.white),
                               decoration: _inputDeco('Full Name', Icons.person_outline),
                               validator: (v) => v == null || v.trim().isEmpty
                                   ? 'Full name is required'
@@ -296,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _email,
                               keyboardType: TextInputType.emailAddress,
-                              style: const TextStyle(color: Colors.white),
+                              style: GoogleFonts.roboto(color: Colors.white),
                               decoration: _inputDeco('Email Address', Icons.email_outlined),
                               validator: (v) => v == null || !v.contains('@')
                                   ? 'Enter a valid email'
@@ -306,7 +306,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _phoneNumber,
                               keyboardType: TextInputType.phone,
-                              style: const TextStyle(color: Colors.white),
+                              style: GoogleFonts.roboto(color: Colors.white),
                               decoration: _inputDeco('Phone Number', Icons.phone_outlined),
                               validator: (v) => v == null || v.trim().isEmpty
                                   ? 'Phone number is required'
@@ -318,7 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Username field used in sign in, sign up, forgot, reset
                           TextFormField(
                             controller: _username,
-                            style: const TextStyle(color: Colors.white),
+                            style: GoogleFonts.roboto(color: Colors.white),
                             decoration: _inputDeco('Username', Icons.account_circle_outlined),
                             validator: (v) => v == null || v.trim().isEmpty
                                 ? 'Username is required'
@@ -330,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _otpCode,
                               keyboardType: TextInputType.number,
-                              style: const TextStyle(color: Colors.white),
+                              style: GoogleFonts.roboto(color: Colors.white),
                               decoration: _inputDeco('OTP Verification Code', Icons.lock_clock_outlined),
                               validator: (v) => v == null || v.trim().isEmpty
                                   ? 'Enter verification code'
@@ -340,7 +340,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _newPassword,
                               obscureText: _obscure,
-                              style: const TextStyle(color: Colors.white),
+                              style: GoogleFonts.roboto(color: Colors.white),
                               decoration: _inputDeco('New Password', Icons.lock_outline),
                               validator: (v) => v == null || v.length < 5
                                   ? 'Min 5 characters required'
@@ -353,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _password,
                               obscureText: _obscure,
-                              style: const TextStyle(color: Colors.white),
+                              style: GoogleFonts.roboto(color: Colors.white),
                               decoration: _inputDeco('Password', Icons.lock_outline).copyWith(
                                 suffixIcon: IconButton(
                                   icon: Icon(
@@ -395,7 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 : Text(
                                     _primaryLabel,
-                                    style: TextStyle(
+                                    style: GoogleFonts.roboto(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -409,9 +409,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Center(
                               child: TextButton(
                                 onPressed: () => _setMode(_AuthMode.forgot),
-                                child: const Text(
+                                child: Text(
                                   'Forgot Password?',
-                                  style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 13),
+                                  style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 13),
                                 ),
                               ),
                             ),
@@ -419,9 +419,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Center(
                               child: TextButton(
                                 onPressed: () => _setMode(_AuthMode.signIn),
-                                child: const Text(
+                                child: Text(
                                   'Already have an account? Sign In',
-                                  style: TextStyle(color: Color(0xFF00D2C4), fontSize: 13),
+                                  style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 13),
                                 ),
                               ),
                             ),
@@ -432,16 +432,16 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 TextButton(
                                   onPressed: () => _setMode(_AuthMode.signIn),
-                                  child: const Text(
+                                  child: Text(
                                     'Back to Sign In',
-                                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                                    style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 13),
                                   ),
                                 ),
                                 TextButton(
                                   onPressed: () => _setMode(_AuthMode.reset),
-                                  child: const Text(
+                                  child: Text(
                                     'Enter Code',
-                                    style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 13),
+                                    style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 13),
                                   ),
                                 ),
                               ],
@@ -450,9 +450,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Center(
                               child: TextButton(
                                 onPressed: () => _setMode(_AuthMode.signIn),
-                                child: const Text(
+                                child: Text(
                                   'Back to Sign In',
-                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                                  style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 13),
                                 ),
                               ),
                             ),
@@ -473,7 +473,7 @@ class _LoginScreenState extends State<LoginScreen> {
   InputDecoration _inputDeco(String hintText, IconData prefixIcon) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+      hintStyle: GoogleFonts.roboto(color: Colors.white38, fontSize: 14),
       prefixIcon: Icon(prefixIcon, color: const Color(0xFF00D2C4), size: 20),
       filled: true,
       fillColor: Colors.white.withOpacity(0.06),

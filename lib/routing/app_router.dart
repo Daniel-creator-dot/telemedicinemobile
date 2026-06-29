@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../core/session.dart';
 import '../features/admin/admin_home_screen.dart';
@@ -69,7 +70,7 @@ GoRouter createAppRouter(Session session) {
       body: Center(
         child: Text(
           state.error?.toString() ?? 'Route not found',
-          style: const TextStyle(color: Colors.white),
+          style: GoogleFonts.roboto(color: Colors.white),
         ),
       ),
     ),

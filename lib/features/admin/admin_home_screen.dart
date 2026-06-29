@@ -1,4 +1,3 @@
-import 'dart:js' as js;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -231,14 +230,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Future<void> _launchUrl(String url) async {
-    if (kIsWeb) {
-      try {
-        js.context.callMethod('open', [url, '_blank']);
-        return;
-      } catch (e) {
-        debugPrint('JS open failed: $e');
-      }
-    }
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -265,7 +256,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF00D2C4)))
                   : _error != null
-                      ? Center(child: Text(_error!, style: const TextStyle(color: Color(0xFF64748B))))
+                      ? Center(child: Text(_error!, style: GoogleFonts.roboto(color: Color(0xFF64748B))))
                       : _buildTabContent(),
             ),
           ],
@@ -297,7 +288,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             const SizedBox(width: 4),
             Text(
               label,
-              style: TextStyle(
+              style: GoogleFonts.roboto(
                 color: active ? const Color(0xFF00D2C4) : const Color(0xFF64748B),
                 fontWeight: active ? FontWeight.bold : FontWeight.w500,
                 fontSize: 11,
@@ -311,7 +302,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   Widget _buildAdminTopBar(Session session, ThemeData theme, bool isDesktop) {
     return Container(
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.white, Color(0xFFF0FDFC)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFB2F5F0), width: 1.2),
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: isDesktop
           ? Row(
@@ -334,13 +334,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'Digi Health',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         color: Color(0xFF0F172A),
                         fontWeight: FontWeight.w800,
                         fontSize: 14,
@@ -348,11 +348,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     ),
                     Text(
                       'Admin Portal',
-                      style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 8,
+                      style: GoogleFonts.roboto(
+                        color: Color(0xFF00D2C4),
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ],
@@ -390,7 +390,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       backgroundColor: const Color(0xFFE6F9F8),
                       child: Text(
                         (session.user?.name ?? 'A')[0].toUpperCase(),
-                        style: const TextStyle(
+                        style: GoogleFonts.roboto(
                           color: Color(0xFF00D2C4),
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
@@ -400,7 +400,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     const SizedBox(width: 8),
                     Text(
                       session.user?.name ?? 'Admin',
-                      style: const TextStyle(
+                      style: GoogleFonts.roboto(
                         color: Color(0xFF0F172A),
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
@@ -443,7 +443,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   _getTabTitle(),
-                  style: const TextStyle(
+                  style: GoogleFonts.roboto(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     color: Color(0xFF0F172A),
@@ -460,7 +460,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   backgroundColor: const Color(0xFFE6F9F8),
                   child: Text(
                     (session.user?.name ?? 'A')[0].toUpperCase(),
-                    style: const TextStyle(
+                    style: GoogleFonts.roboto(
                       color: Color(0xFF00D2C4),
                       fontWeight: FontWeight.w800,
                       fontSize: 11,
@@ -526,7 +526,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       const SizedBox(height: 4),
                       Text(
                         item.$3,
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontSize: 9,
                           fontWeight: active ? FontWeight.bold : FontWeight.normal,
                           color: active ? const Color(0xFF00D2C4) : const Color(0xFF64748B),
@@ -554,16 +554,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
+          gradient: LinearGradient(
+            colors: [color.withOpacity(0.10), color.withOpacity(0.04)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.18), width: 1.2),
+          border: Border.all(color: color.withOpacity(0.28), width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: color.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: color.withOpacity(0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -572,7 +581,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.15),
                 shape: BoxShape.circle,
@@ -580,30 +589,29 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               child: Icon(
                 icon,
                 color: color,
-                size: 18,
+                size: 20,
               ),
             ),
-            const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                title,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.roboto(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
             ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                subtitle,
-                style: TextStyle(
-                  color: color.withOpacity(0.7),
-                  fontSize: 9,
-                ),
+            const SizedBox(height: 3),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.roboto(
+                color: color.withOpacity(0.75),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -648,7 +656,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     final workloads = _stats['workload'] as List<dynamic>? ?? [];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -694,9 +702,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
+                        Text(
                           'Welcome Back,',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white70,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -705,7 +713,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         const SizedBox(height: 4),
                         Text(
                           session.user?.name ?? 'Administrator',
-                          style: TextStyle(
+                          style: GoogleFonts.roboto(
                             color: Colors.white,
                             fontSize: 26,
                             fontWeight: FontWeight.w800,
@@ -723,7 +731,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           ),
                           child: Text(
                             'Clinic Operations Portal • System Administrator',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -739,9 +747,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
 
           // ── Quick Actions Grid ──────────────────────────────────────────────
-          const Text(
+          Text(
             'Quick Actions',
-            style: TextStyle(
+            style: GoogleFonts.roboto(
               color: Color(0xFF0F172A),
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -763,7 +771,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               _quickActionCard('Staff Accounts', 'User registry', Icons.people_rounded, const Color(0xFF4F46E5), () => setState(() => _currentTab = 5)),
               _quickActionCard('SMS Settings', 'Clinic config', Icons.settings_rounded, const Color(0xFFF43F5E), () => setState(() => _currentTab = 6)),
             ],
-          ).animate().fadeIn(duration: 300.ms, delay: 100.ms),
+          ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.08, end: 0),
           const SizedBox(height: 20),
 
           // Stat Counters Cards Grid
@@ -780,7 +788,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               _buildStatMetricCard('COMPLETED VISITS', '$completed', const Color(0xFF00D2C4)),
               _buildStatMetricCard('TOTAL BOOKINGS', '$total', const Color(0xFF8B5CF6)),
             ],
-          ),
+          ).animate().fadeIn(duration: 400.ms),
           const SizedBox(height: 20),
 
           // Workload
@@ -794,13 +802,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Doctor Workloads (Today)',
-                  style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 15),
                 if (workloads.isEmpty)
-                  const Text('No stats compiled yet.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12))
+                  Text('No stats compiled yet.', style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 12))
                 else
                   ...workloads.map((item) {
                     final count = int.tryParse(item['count']?.toString() ?? '0') ?? 0;
@@ -818,20 +826,59 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                   item['name']?.toString() ?? 'Specialist',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.w600),
+                                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.w600),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 '$count slots',
-                                style: const TextStyle(color: Color(0xFF00D2C4), fontSize: 12, fontWeight: FontWeight.bold),
+                                style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                             ],
                           ),
                           const SizedBox(height: 6),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(6),
                             child: LinearProgressIndicator(
+                              value: pct,
+                              color: const Color(0xFF00D2C4),
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              minHeight: 8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+              ],
+            ),
+          ).animate().fadeIn(delay: 200.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
+          const SizedBox(height: 20),
+
+          // Wait Distribution
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Wait Time Distribution',
+                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                _buildWaitBar('Under 15m', 0.70, const Color(0xFF22C55E)),
+                const SizedBox(height: 8),
+                _buildWaitBar('15 - 30m', 0.20, Colors.amber),
+                const SizedBox(height: 8),
+                _buildWaitBar('Over 30m', 0.10, Colors.redAccent),
+              ],
+            ),
+          ).animate().fadeIn(delay: 300.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
                               value: pct,
                               backgroundColor: const Color(0xFFF1F5F9),
                               color: const Color(0xFF00D2C4),
@@ -858,9 +905,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Wait Time Distribution',
-                  style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 _buildWaitBar('Under 15m', 0.70, const Color(0xFF22C55E)),
@@ -887,24 +934,24 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 10),
               ),
             ),
             const SizedBox(width: 8),
             Text(
               '${(pct * 100).toInt()}%',
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+              style: GoogleFonts.roboto(color: color, fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ],
         ),
         const SizedBox(height: 4),
         ClipRRect(
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(6),
           child: LinearProgressIndicator(
             value: pct,
             color: color,
             backgroundColor: const Color(0xFFF1F5F9),
-            minHeight: 4,
+            minHeight: 8,
           ),
         ),
       ],
@@ -913,26 +960,84 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   Widget _buildStatMetricCard(String title, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(6, 14, 14, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.12), color.withOpacity(0.04), Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            title,
-            style: TextStyle(color: color.withOpacity(0.8), fontSize: 9, fontWeight: FontWeight.bold),
+        border: Border.all(color: color.withOpacity(0.25), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.2),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(color: const Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.bold),
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 5,
+            height: 44,
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color, color.withOpacity(0.6)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(6),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.4),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.roboto(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.roboto(
+                    color: const Color(0xFF0F172A),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    shadows: [
+                      Shadow(
+                        color: color.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -942,7 +1047,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   Widget _buildAppointmentsTab() {
     if (_appointments.isEmpty) {
-      return const Center(child: Text('No appointments recorded.', style: TextStyle(color: Color(0xFF94A3B8))));
+      return Center(child: Text('No appointments recorded.', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8))));
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -951,15 +1056,38 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       itemBuilder: (context, index) {
         final apt = _appointments[index];
         final isPending = apt.status == 'pending';
+        final statusColor = _getStatusColor(apt.status);
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          child: Column(
+          child: Row(
+            children: [
+              // Left accent strip
+              Container(
+                width: 5,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
@@ -968,7 +1096,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   Expanded(
                     child: Text(
                       apt.fullName,
-                      style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                      style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -979,7 +1107,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               const SizedBox(height: 5),
               Text(
                 'Phone: ${apt.phoneNumber}  |  Specialist: ${apt.doctorName ?? "Unassigned"}',
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 12),
               ),
               const SizedBox(height: 8),
               Row(
@@ -989,13 +1117,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   Expanded(
                     child: Text(
                       '${apt.preferredDate} at ${apt.preferredTime}',
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (apt.isTelemedicine) ...[
                     const SizedBox(width: 8),
-                    const Text('Telehealth Session', style: TextStyle(color: Color(0xFF00D2C4), fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text('Telehealth Session', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontWeight: FontWeight.bold)),
                   ],
                 ],
               ),
@@ -1004,14 +1132,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
+                      child: ElevatedButton(
                         onPressed: () => _updateStatus(apt, 'cancelled'),
-                        style: OutlinedButton.styleFrom(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent.withOpacity(0.1),
                           foregroundColor: Colors.redAccent,
-                          side: BorderSide(color: Colors.red.withOpacity(0.2)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 2,
+                          shadowColor: Colors.redAccent.withOpacity(0.2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text('CancelSlot', style: TextStyle(fontSize: 12)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.close_rounded, size: 16),
+                            const SizedBox(width: 6),
+                            Text('Cancel', style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1020,10 +1157,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         onPressed: () => _updateStatus(apt, 'approved'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00D2C4),
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: const Color(0xFF00D2C4).withOpacity(0.4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text('ApproveSlot', style: TextStyle(fontSize: 12)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_rounded, size: 16),
+                            const SizedBox(width: 6),
+                            Text('Approve', style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -1031,8 +1177,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               ],
             ],
           ),
-        );
-      },
+          ),
+        ),
+      );
     );
   }
 
@@ -1045,7 +1192,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Active Specialists Profiles', style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold)),
+              Text('Active Specialists Profiles', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold)),
               ElevatedButton.icon(
                 onPressed: _openAddDoctorDialog,
                 icon: const Icon(Icons.add, size: 14),
@@ -1053,7 +1200,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00D2C4),
                   foregroundColor: Colors.black,
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  textStyle: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -1061,7 +1208,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ),
         Expanded(
           child: _doctors.isEmpty
-              ? const Center(child: Text('No doctor profiles configured.', style: TextStyle(color: Color(0xFF94A3B8))))
+              ? Center(child: Text('No doctor profiles configured.', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8))))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _doctors.length,
@@ -1087,12 +1234,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(doc['name']?.toString() ?? '', style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
-                                Text(doc['specialization']?.toString() ?? '', style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                                Text(doc['name']?.toString() ?? '', style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
+                                Text(doc['specialization']?.toString() ?? '', style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 12)),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Duration: ${doc['slot_duration']}m  |  Hours: ${doc['start_time']?.toString().substring(0, 5)} - ${doc['end_time']?.toString().substring(0, 5)}',
-                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                  style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 11),
                                 ),
                               ],
                             ),
@@ -1119,13 +1266,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     final queue = _appointments.where((a) => ['approved', 'arrived', 'waiting', 'consulting'].contains(a.status.toLowerCase())).toList();
 
     if (queue.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.hourglass_empty, color: Color(0xFF64748B), size: 48),
             SizedBox(height: 10),
-            Text('Clinic queue is empty.', style: TextStyle(color: Color(0xFF94A3B8))),
+            Text('Clinic queue is empty.', style: GoogleFonts.roboto(color: Color(0xFF94A3B8))),
           ],
         ),
       );
@@ -1154,7 +1301,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: const Color(0xFF8B5CF6).withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                child: Text('${index + 1}', style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold)),
+                child: Text('${index + 1}', style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1163,24 +1310,24 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   children: [
                     Text(
                       apt.fullName,
-                      style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                      style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Time: ${apt.preferredTime}  |  Specialist: ${apt.doctorName ?? "Unassigned"}',
-                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11),
                     ),
                     if (apt.isTelemedicine && apt.meetingLink != null) ...[
                       const SizedBox(height: 6),
                       InkWell(
                         onTap: () => _launchUrl(apt.meetingLink!),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.video_call_rounded, color: Color(0xFF00D2C4), size: 13),
                             SizedBox(width: 4),
-                            Text('Join Meeting', style: TextStyle(color: Color(0xFF00D2C4), fontSize: 11, decoration: TextDecoration.underline)),
+                            Text('Join Meeting', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, decoration: TextDecoration.underline)),
                           ],
                         ),
                       ),
@@ -1209,13 +1356,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       return ElevatedButton(
         onPressed: () => _updateStatus(apt, 'arrived'),
         style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-        child: const Text('Arrived', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+        child: Text('Arrived', style: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.bold)),
       );
     } else if (status == 'arrived') {
       return ElevatedButton(
         onPressed: () => _updateStatus(apt, 'consulting'),
         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-        child: const Text('Consult', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+        child: Text('Consult', style: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.bold)),
       );
     } else if (status == 'consulting') {
       return Row(
@@ -1233,7 +1380,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ElevatedButton(
             onPressed: () => _updateStatus(apt, 'completed'),
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-            child: const Text('Complete', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            child: Text('Complete', style: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.bold)),
           ),
         ],
       );
@@ -1268,14 +1415,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Weekly Booking Trends', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('Weekly Booking Trends', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(height: 20),
                       SizedBox(
                         height: 120,
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: trends.isEmpty
-                              ? [const Center(child: Text('No analytics data', style: TextStyle(color: Color(0xFF94A3B8))))]
+                              ? [Center(child: Text('No analytics data', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8))))]
                               : trends.map((t) {
                                   final count = double.tryParse(t['count']?.toString() ?? '0') ?? 0.0;
                                   final maxCount = trends.map((item) => double.tryParse(item['count']?.toString() ?? '0') ?? 1.0).reduce((a, b) => a > b ? a : b);
@@ -1285,7 +1432,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.end,
                                       children: [
-                                        Text('${count.toInt()}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 9)),
+                                        Text('${count.toInt()}', style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 9)),
                                         const SizedBox(height: 4),
                                         Container(
                                           height: (heightPct * 80).clamp(5.0, 80.0),
@@ -1296,7 +1443,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 6),
-                                        Text(t['day']?.toString().toUpperCase() ?? '', style: const TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.bold)),
+                                        Text(t['day']?.toString().toUpperCase() ?? '', style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.bold)),
                                       ],
                                     ),
                                   );
@@ -1319,7 +1466,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   ),
                   child: Column(
                     children: [
-                      const Text('Attendance Rate', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text('Attendance Rate', style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
                       Container(
                         width: 70,
@@ -1331,11 +1478,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         ),
                         child: Text(
                           '${(attendanceRate * 100).toInt()}%',
-                          style: TextStyle(color: const Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const Text('VISITS METRIC', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 8)),
+                      Text('VISITS METRIC', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8), fontSize: 8)),
                     ],
                   ),
                 ),
@@ -1355,7 +1502,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('No-Show Analysis', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
+                Text('No-Show Analysis', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 15),
                 Row(
                   children: [
@@ -1385,9 +1532,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.bold)),
+            Text(title, style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text(val, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(val, style: GoogleFonts.roboto(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -1414,7 +1561,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               children: [
                 Text(
                   'Register Staff Member',
-                  style: TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
+                  style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 12),
                 _formField(_regName, 'Full Name', Icons.person_outline),
@@ -1429,11 +1576,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   value: _regRole,
                   dropdownColor: Colors.white,
                   decoration: _deco('Staff Role', Icons.badge_outlined),
-                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13),
-                  items: const [
-                    DropdownMenuItem(value: 'doctor', child: Text('Doctor / Specialist', style: TextStyle(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'admin', child: Text('Administrator', style: TextStyle(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'lab_technician', child: Text('Lab Technician', style: TextStyle(color: Color(0xFF0F172A)))),
+                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontSize: 13),
+                  items: [
+                    DropdownMenuItem(value: 'doctor', child: Text('Doctor / Specialist', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'admin', child: Text('Administrator', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'lab_technician', child: Text('Lab Technician', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _regRole = v);
@@ -1448,7 +1595,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Register Account', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text('Register Account', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -1457,10 +1604,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           const SizedBox(height: 25),
           
           // User list
-          Text('Staff Registry', style: TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+          Text('Staff Registry', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 10),
           _users.isEmpty
-              ? const Center(child: Text('No users found in registry.', style: TextStyle(color: Color(0xFF94A3B8))))
+              ? Center(child: Text('No users found in registry.', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8))))
               : ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1471,10 +1618,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: CircleAvatar(
                         backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.12),
-                        child: Text(u.name.substring(0, u.name.length > 1 ? 2 : 1).toUpperCase(), style: const TextStyle(color: Color(0xFF8B5CF6))),
+                        child: Text(u.name.substring(0, u.name.length > 1 ? 2 : 1).toUpperCase(), style: GoogleFonts.roboto(color: Color(0xFF8B5CF6))),
                       ),
-                      title: Text(u.name, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text('Username: ${u.username}  |  Role: ${u.role.label}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                      title: Text(u.name, style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: Text('Username: ${u.username}  |  Role: ${u.role.label}', style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11)),
                     );
                   },
                 ),
@@ -1497,7 +1644,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('SMS Gateway Settings', style: TextStyle(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('SMS Gateway Settings', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
             _formField(_clinicName, 'Clinic Display Name', Icons.home_work_outlined),
             const SizedBox(height: 10),
@@ -1515,7 +1662,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Save Gateway Config', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text('Save Gateway Config', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1527,7 +1674,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
-      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13),
+      style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontSize: 13),
       decoration: _deco(hint, icon),
     );
   }
@@ -1535,7 +1682,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   InputDecoration _deco(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+      hintStyle: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 12),
       prefixIcon: Icon(icon, color: const Color(0xFF00D2C4), size: 18),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
@@ -1551,30 +1698,26 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  Widget _buildBadge(String status) {
-    Color color;
+  Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'approved':
-        color = const Color(0xFF22C55E);
-        break;
+        return const Color(0xFF22C55E);
       case 'completed':
-        color = const Color(0xFF00D2C4);
-        break;
+        return const Color(0xFF00D2C4);
       case 'arrived':
-        color = Colors.blue;
-        break;
+        return Colors.blue;
       case 'consulting':
-        color = const Color(0xFF8B5CF6);
-        break;
+        return const Color(0xFF8B5CF6);
       case 'cancelled':
-        color = Colors.redAccent;
-        break;
+        return Colors.redAccent;
       case 'pending':
       default:
-        color = const Color(0xFFFBBF24);
-        break;
+        return const Color(0xFFFBBF24);
     }
+  }
 
+  Widget _buildBadge(String status) {
+    final color = _getStatusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -1583,7 +1726,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ),
       child: Text(
         status.toUpperCase(),
-        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+        style: GoogleFonts.roboto(color: color, fontSize: 9, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -1591,7 +1734,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   InputDecoration _inputDeco(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+      hintStyle: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 12),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -1618,27 +1761,27 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          title: const Text('Add New Doctor Profile', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+          title: Text('Add New Doctor Profile', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextFormField(controller: nameC, style: const TextStyle(color: Color(0xFF0F172A)), decoration: _inputDeco('Full Name (e.g. Dr. Arthur)')),
+                TextFormField(controller: nameC, style: GoogleFonts.roboto(color: Color(0xFF0F172A)), decoration: _inputDeco('Full Name (e.g. Dr. Arthur)')),
                 const SizedBox(height: 10),
-                TextFormField(controller: specC, style: const TextStyle(color: Color(0xFF0F172A)), decoration: _inputDeco('Specialization')),
+                TextFormField(controller: specC, style: GoogleFonts.roboto(color: Color(0xFF0F172A)), decoration: _inputDeco('Specialization')),
                 const SizedBox(height: 10),
-                TextFormField(controller: durC, style: const TextStyle(color: Color(0xFF0F172A)), decoration: _inputDeco('Slot Duration (min)'), keyboardType: TextInputType.number),
+                TextFormField(controller: durC, style: GoogleFonts.roboto(color: Color(0xFF0F172A)), decoration: _inputDeco('Slot Duration (min)'), keyboardType: TextInputType.number),
                 const SizedBox(height: 10),
-                TextFormField(controller: startC, style: const TextStyle(color: Color(0xFF0F172A)), decoration: _inputDeco('Start Time (e.g. 08:00)')),
+                TextFormField(controller: startC, style: GoogleFonts.roboto(color: Color(0xFF0F172A)), decoration: _inputDeco('Start Time (e.g. 08:00)')),
                 const SizedBox(height: 10),
-                TextFormField(controller: endC, style: const TextStyle(color: Color(0xFF0F172A)), decoration: _inputDeco('End Time (e.g. 17:00)')),
+                TextFormField(controller: endC, style: GoogleFonts.roboto(color: Color(0xFF0F172A)), decoration: _inputDeco('End Time (e.g. 17:00)')),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+              child: Text('CANCEL', style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
               onPressed: () {

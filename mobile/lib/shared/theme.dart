@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Bolt / Uber–inspired ride-hail theme for bike delivery.
 class BytzGoTheme {
@@ -42,7 +43,7 @@ class BytzGoTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: background,
-      fontFamily: 'Roboto',
+      textTheme: GoogleFonts.robotoTextTheme(ThemeData.dark().textTheme),
       colorScheme: const ColorScheme.dark(
         primary: brandBlue,
         secondary: accent,
@@ -67,7 +68,7 @@ class BytzGoTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: const TextStyle(
+          textStyle: GoogleFonts.roboto(
             fontWeight: FontWeight.w700,
             fontSize: 17,
             letterSpacing: 0.2,
@@ -93,14 +94,14 @@ class BytzGoTheme {
     );
   }
 
-  static TextStyle sheetTitle([double size = 22]) => TextStyle(
+  static TextStyle sheetTitle([double size = 22]) => GoogleFonts.roboto(
         fontSize: size,
         fontWeight: FontWeight.w800,
         color: sheetText,
         letterSpacing: -0.5,
       );
 
-  static TextStyle sheetBody([double size = 15]) => TextStyle(
+  static TextStyle sheetBody([double size = 15]) => GoogleFonts.roboto(
         fontSize: size,
         color: sheetMuted,
         height: 1.35,
@@ -112,7 +113,7 @@ class BytzGoTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: sheetBg,
-      fontFamily: 'Roboto',
+      textTheme: GoogleFonts.robotoTextTheme(ThemeData.light().textTheme),
     );
     return base.copyWith(
       colorScheme: const ColorScheme.light(
@@ -155,9 +156,9 @@ class BytzGoTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: sheetDivider.withValues(alpha: 0.35),
-        hintStyle: TextStyle(color: sheetMuted.withValues(alpha: 0.95)),
-        labelStyle: const TextStyle(color: sheetMuted),
-        floatingLabelStyle: const TextStyle(color: brandBlue),
+        hintStyle: GoogleFonts.roboto(color: sheetMuted.withValues(alpha: 0.95)),
+        labelStyle: GoogleFonts.roboto(color: sheetMuted),
+        floatingLabelStyle: GoogleFonts.roboto(color: brandBlue),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

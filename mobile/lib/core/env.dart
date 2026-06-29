@@ -4,7 +4,7 @@ import 'maps_key.dart';
 class Env {
   static const String apiUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://10.0.2.2:3000',
+    defaultValue: 'http://10.0.2.2:5000',
   );
 
   /// OAuth web client ID for Google Sign-In (public; override via --dart-define).

@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import '../models/appointment.dart';
+import 'api_client.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -15,6 +16,30 @@ class NotificationService {
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
+
+  ApiClient? _apiClient;
+
+  // Register token with backend server
+  Future<void> registerTokenWithBackend(ApiClient api) async {
+    _apiClient = api;
+    final token = _fcmToken ?? await _messaging.getToken();
+    if (token == null || token.isEmpty) return;
+    _fcmToken = token;
+    
+    try {
+      await api.dio.post('/api/push/fcm-token', data: {
+        'token': token,
+        'platform': defaultTargetPlatform.name,
+      });
+      if (kDebugMode) {
+        print('FCM Token registered with backend successfully: $token');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error registering FCM token with backend: $e');
+      }
+    }
+  }
 
   // Initialize notification service
   Future<void> initialize() async {
@@ -120,7 +145,9 @@ class NotificationService {
         if (kDebugMode) {
           print('FCM Token refreshed: $newToken');
         }
-        // TODO: Send new token to your backend
+        if (_apiClient != null) {
+          registerTokenWithBackend(_apiClient!);
+        }
       });
     } catch (e) {
       if (kDebugMode) {

@@ -168,6 +168,19 @@ export const initDb = async () => {
       );
     `);
 
+    // Create FCM Tokens table for push notifications
+    await query(`
+      CREATE TABLE IF NOT EXISTS fcm_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL,
+        platform VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, token)
+      );
+    `);
+
     // Create Settings table
     await query(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -324,5 +337,11 @@ export const initDb = async () => {
     console.error('Error initializing database:', err);
   }
 };
+
+// Keep the pool alive by preventing it from closing
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
 
 export default pool;

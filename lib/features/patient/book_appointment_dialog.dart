@@ -240,7 +240,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                 children: [
                   Text(
                     _currentStep == 3 ? 'Appointment Booked!' : 'Pre-Booking System',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   if (_currentStep != 3)
                     IconButton(
@@ -303,7 +303,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        textStyle: GoogleFonts.roboto(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -332,38 +332,38 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         key: const ValueKey('basic-step'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Basic Patient Profile', style: TextStyle(color: Color(0xFF00D2C4), fontSize: 13, fontWeight: FontWeight.bold)),
+          Text('Basic Patient Profile', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           TextFormField(
             controller: _fullName,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
             decoration: _fieldDeco('Patient Full Name', Icons.person_outline),
             validator: (v) => v == null || v.trim().isEmpty ? 'Please enter patient full name' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _phoneNumber,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
             decoration: _fieldDeco('Contact Phone Number', Icons.phone_outlined),
             validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _email,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
             decoration: _fieldDeco('Email Address (Optional)', Icons.mail_outline),
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _nationwideId,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
             decoration: _fieldDeco('Nationwide Membership No.', Icons.badge_outlined),
             validator: (v) => v == null || v.trim().isEmpty ? 'Nationwide membership no. is required' : null,
           ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _department,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
             decoration: _fieldDeco('Office/Department (Optional)', Icons.business_outlined),
           ),
           const SizedBox(height: 20),
@@ -372,7 +372,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Dependants / Who is coming?', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Dependants / Who is coming?', style: GoogleFonts.roboto(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
               TextButton.icon(
                 onPressed: () {
                   setState(() {
@@ -380,12 +380,12 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   });
                 },
                 icon: const Icon(Icons.add, size: 14, color: Color(0xFF00D2C4)),
-                label: const Text('Add Dependant', style: TextStyle(color: Color(0xFF00D2C4), fontSize: 11, fontWeight: FontWeight.bold)),
+                label: Text('Add Dependant', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           if (_dependantsControllers.isEmpty)
-            const Text('No dependants added. Leave empty if coming alone.', style: TextStyle(color: Colors.white30, fontSize: 11, fontStyle: FontStyle.italic))
+            Text('No dependants added. Leave empty if coming alone.', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 11, fontStyle: FontStyle.italic))
           else
             ListView.builder(
               shrinkWrap: true,
@@ -399,7 +399,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                       Expanded(
                         child: TextFormField(
                           controller: _dependantsControllers[index],
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
                           decoration: _fieldDeco('Dependant Name', Icons.person_outline),
                         ),
                       ),
@@ -427,7 +427,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
       key: const ValueKey('details-step'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Preferred Dates & Specialties', style: TextStyle(color: Color(0xFF00D2C4), fontSize: 13, fontWeight: FontWeight.bold)),
+        Text('Preferred Dates & Specialties', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 13, fontWeight: FontWeight.bold)),
         const SizedBox(height: 15),
 
         // Date Picker
@@ -449,7 +449,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   _selectedDate == null
                       ? 'Choose Appointment Date'
                       : 'Selected Date: ${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -476,7 +476,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   _selectedTime == null
                       ? 'Choose Preferred Time'
                       : 'Selected Time: ${_selectedTime!.format(context)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -492,7 +492,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
           items: _services
               .map((s) => DropdownMenuItem(
                     value: s,
-                    child: Text(s, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    child: Text(s, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13)),
                   ))
               .toList(),
           onChanged: (v) {
@@ -511,7 +511,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                 items: _doctors
                     .map((d) => DropdownMenuItem(
                           value: d,
-                          child: Text(d.name, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          child: Text(d.name, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13)),
                         ))
                     .toList(),
                 onChanged: (v) => setState(() => _selectedDoctor = v),
@@ -520,8 +520,8 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
 
         // Telehealth Mode
         SwitchListTile(
-          title: const Text('Telemedicine (Video Call)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-          subtitle: const Text('Consult online instead of physical clinic visit', style: TextStyle(color: Colors.white30, fontSize: 11)),
+          title: Text('Telemedicine (Video Call)', style: GoogleFonts.roboto(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          subtitle: Text('Consult online instead of physical clinic visit', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 11)),
           value: _isTelemedicine,
           activeColor: const Color(0xFF00D2C4),
           contentPadding: EdgeInsets.zero,
@@ -533,7 +533,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         TextFormField(
           controller: _reason,
           maxLines: 2,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
+          style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
           decoration: _fieldDeco('Symptoms / Reason for appointment', Icons.chat_bubble_outline),
         ),
       ],
@@ -549,7 +549,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
       key: const ValueKey('review-step'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Confirm Reservation Details', style: TextStyle(color: Color(0xFF00D2C4), fontSize: 13, fontWeight: FontWeight.bold)),
+        Text('Confirm Reservation Details', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 13, fontWeight: FontWeight.bold)),
         const SizedBox(height: 15),
         Container(
           padding: const EdgeInsets.all(16),
@@ -586,11 +586,11 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text(label, style: const TextStyle(color: Colors.white30, fontSize: 11)),
+          child: Text(label, style: GoogleFonts.roboto(color: Colors.white30, fontSize: 11)),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text(val, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          child: Text(val, style: GoogleFonts.roboto(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
         ),
       ],
     );
@@ -606,12 +606,12 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         const SizedBox(height: 15),
         Text(
           'Booking Confirmed!',
-          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          style: GoogleFonts.roboto(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Your appointment has been successfully recorded in the portal. Please save your verification code below.',
-          style: TextStyle(color: Colors.white38, fontSize: 12),
+          style: GoogleFonts.roboto(color: Colors.white38, fontSize: 12),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -630,16 +630,16 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('CSAA TELEMEDICINE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  Text('CSAA TELEMEDICINE', style: GoogleFonts.roboto(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   const Icon(Icons.shield, color: Color(0xFF00D2C4), size: 16),
                 ],
               ),
               const SizedBox(height: 15),
-              const Text('APPOINTMENT VERIFICATION CODE', style: TextStyle(color: Colors.white38, fontSize: 8)),
+              Text('APPOINTMENT VERIFICATION CODE', style: GoogleFonts.roboto(color: Colors.white38, fontSize: 8)),
               const SizedBox(height: 2),
               SelectableText(
                 _bookedId,
-                style: TextStyle(color: const Color(0xFF00D2C4), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                style: GoogleFonts.roboto(color: const Color(0xFF00D2C4), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0.5),
               ),
               const SizedBox(height: 15),
               Row(
@@ -648,15 +648,15 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('STATUS', style: TextStyle(color: Colors.white30, fontSize: 8)),
-                      Text('CONFIRMED', style: TextStyle(color: const Color(0xFF22C55E), fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('STATUS', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 8)),
+                      Text('CONFIRMED', style: GoogleFonts.roboto(color: const Color(0xFF22C55E), fontSize: 10, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('VERIFICATION DATE', style: TextStyle(color: Colors.white30, fontSize: 8)),
-                      Text(_bookingTimeStr, style: TextStyle(color: Colors.white70, fontSize: 10)),
+                      Text('VERIFICATION DATE', style: GoogleFonts.roboto(color: Colors.white30, fontSize: 8)),
+                      Text(_bookingTimeStr, style: GoogleFonts.roboto(color: Colors.white70, fontSize: 10)),
                     ],
                   ),
                 ],
@@ -674,7 +674,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
             minimumSize: const Size.fromHeight(45),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          child: const Text('DISMISS', style: TextStyle(fontWeight: FontWeight.bold)),
+          child: Text('DISMISS', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
         ),
       ],
     );
@@ -683,7 +683,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   InputDecoration _fieldDeco(String hintText, IconData prefixIcon) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+      hintStyle: GoogleFonts.roboto(color: Colors.white24, fontSize: 12),
       prefixIcon: Icon(prefixIcon, color: const Color(0xFF00D2C4), size: 16),
       filled: true,
       fillColor: Colors.white.withOpacity(0.02),
