@@ -868,7 +868,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               children: [
                 Text(
                   'Wait Time Distribution',
-                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                  style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 _buildWaitBar('Under 15m', 0.70, const Color(0xFF22C55E)),
@@ -879,45 +879,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               ],
             ),
           ).animate().fadeIn(delay: 300.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
-                              value: pct,
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              color: const Color(0xFF00D2C4),
-                              minHeight: 6,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  })
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Wait Distribution
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Wait Time Distribution',
-                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                _buildWaitBar('Under 15m', 0.70, const Color(0xFF22C55E)),
-                const SizedBox(height: 8),
-                _buildWaitBar('15 - 30m', 0.20, Colors.amber),
-                const SizedBox(height: 8),
-                _buildWaitBar('Over 30m', 0.10, Colors.redAccent),
-              ],
-            ),
-          ),
           const SizedBox(height: 25),
         ],
       ),
@@ -1088,98 +1049,101 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      apt.fullName,
-                      style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildBadge(apt.status),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                'Phone: ${apt.phoneNumber}  |  Specialist: ${apt.doctorName ?? "Unassigned"}',
-                style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.date_range, color: Color(0xFF8B5CF6), size: 14),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      '${apt.preferredDate} at ${apt.preferredTime}',
-                      style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (apt.isTelemedicine) ...[
-                    const SizedBox(width: 8),
-                    Text('Telehealth Session', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontWeight: FontWeight.bold)),
-                  ],
-                ],
-              ),
-              if (isPending) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _updateStatus(apt, 'cancelled'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent.withOpacity(0.1),
-                          foregroundColor: Colors.redAccent,
-                          elevation: 2,
-                          shadowColor: Colors.redAccent.withOpacity(0.2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              apt.fullName,
+                              style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildBadge(apt.status),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        'Phone: ${apt.phoneNumber}  |  Specialist: ${apt.doctorName ?? "Unassigned"}',
+                        style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.date_range, color: Color(0xFF8B5CF6), size: 14),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              '${apt.preferredDate} at ${apt.preferredTime}',
+                              style: GoogleFonts.roboto(color: const Color(0xFF94A3B8), fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (apt.isTelemedicine) ...[
+                            const SizedBox(width: 8),
+                            Text('Telehealth Session', style: GoogleFonts.roboto(color: const Color(0xFF00D2C4), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ],
+                      ),
+                      if (isPending) ...[
+                        const SizedBox(height: 12),
+                        Row(
                           children: [
-                            Icon(Icons.close_rounded, size: 16),
-                            const SizedBox(width: 6),
-                            Text('Cancel', style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.w600)),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => _updateStatus(apt, 'cancelled'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent.withOpacity(0.1),
+                                  foregroundColor: Colors.redAccent,
+                                  elevation: 2,
+                                  shadowColor: Colors.redAccent.withOpacity(0.2),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.close_rounded, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text('Cancel', style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => _updateStatus(apt, 'approved'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00D2C4),
+                                  foregroundColor: Colors.white,
+                                  elevation: 4,
+                                  shadowColor: const Color(0xFF00D2C4).withOpacity(0.4),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.check_rounded, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text('Approve', style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _updateStatus(apt, 'approved'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00D2C4),
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: const Color(0xFF00D2C4).withOpacity(0.4),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_rounded, size: 16),
-                            const SizedBox(width: 6),
-                            Text('Approve', style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ],
           ),
-          ),
-        ),
-      );
+        );
+      },
     );
   }
 
@@ -1375,6 +1339,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 context: context,
                 builder: (context) => ConsultationDialog(appointment: apt),
               ).then((_) => _loadData());
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.chat_bubble, color: Color(0xFF8B5CF6), size: 18),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Opening chat with ${apt.fullName}')),
+              );
+              // TODO: Implement actual chat functionality
             },
           ),
           ElevatedButton(

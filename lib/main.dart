@@ -622,7 +622,7 @@ class _DashboardViewState extends State<DashboardView> {
                       parentState.setState(() => parentState._currentIndex = 1);
                     }
                   },
-                );
+                ),
               ],
             ).animate().fadeIn(delay: 200.ms),
 
@@ -953,7 +953,7 @@ class _DashboardViewState extends State<DashboardView> {
                 // Light overlay — image shows through with a bright wash
                 Container(
                   color: backgroundImage != null
-                      ? Colors.white.withOpacity(0.15)
+                      ? Colors.white.withOpacity(0.05)
                       : color.withOpacity(0.10),
                 ),
 
@@ -1891,9 +1891,14 @@ class _AppointmentsViewState extends State<AppointmentsView> {
 }
 
 // ==================== MESSAGES VIEW ====================
-class MessagesView extends StatelessWidget {
+class MessagesView extends StatefulWidget {
   const MessagesView({super.key});
 
+  @override
+  State<MessagesView> createState() => _MessagesViewState();
+}
+
+class _MessagesViewState extends State<MessagesView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1931,6 +1936,12 @@ class MessagesView extends StatelessWidget {
                   lastMessage: 'Sure, we can check the dosage during our call today.',
                   time: '10:14 AM',
                   unreadCount: 2,
+                  onTap: () {
+                    // Navigate to chat detail or open chat dialog
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Opening chat with Dr. Olivia Carter')),
+                    );
+                  },
                 ),
                 _buildChatItem(
                   context,
@@ -1939,6 +1950,12 @@ class MessagesView extends StatelessWidget {
                   lastMessage: 'Your blood panel reports look completely healthy.',
                   time: 'Yesterday',
                   unreadCount: 0,
+                  onTap: () {
+                    // Navigate to chat detail or open chat dialog
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Opening chat with Dr. John Doe')),
+                    );
+                  },
                 ),
               ],
             ),
@@ -1955,21 +1972,24 @@ class MessagesView extends StatelessWidget {
     required String lastMessage,
     required String time,
     required int unreadCount,
+    VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.03),
-          width: 1,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.03),
+            width: 1,
+          ),
         ),
-      ),
-      child: Row(
+        child: Row(
         children: [
           CircleAvatar(
             radius: 22,
@@ -2040,6 +2060,7 @@ class MessagesView extends StatelessWidget {
             )
           ]
         ],
+      ),
       ),
     );
   }

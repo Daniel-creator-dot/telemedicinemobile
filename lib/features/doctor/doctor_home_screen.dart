@@ -136,6 +136,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     ).then((_) => _loadAll());
   }
 
+  void _openChat(Appointment apt) {
+    // Open chat with patient
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening chat with ${apt.fullName}')),
+    );
+    // TODO: Implement actual chat functionality
+  }
+
   void _openPrescription(Appointment apt) {
     showDialog(
       context: context,
@@ -854,24 +862,24 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     ],
                   ),
                   child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  children: [
-                    // Watermark background icon
-                    Positioned(
-                      right: -25,
-                      bottom: -25,
-                      child: Icon(
-                        activeConsult.isTelemedicine
-                            ? Icons.videocam_rounded
-                            : Icons.assignment_rounded,
-                        size: 160,
-                        color: Colors.white.withOpacity(0.03),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(22),
-                      child: Column(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Stack(
+                      children: [
+                        // Watermark background icon
+                        Positioned(
+                          right: -25,
+                          bottom: -25,
+                          child: Icon(
+                            activeConsult.isTelemedicine
+                                ? Icons.videocam_rounded
+                                : Icons.assignment_rounded,
+                            size: 160,
+                            color: Colors.white.withOpacity(0.03),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(22),
+                          child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
@@ -1094,8 +1102,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   color: const Color(0xFF818CF8).withOpacity(0.2),
                   angle: -0.5,
                 )
-                .fadeIn(duration: 400.ms).slideY(begin: -0.1),
-              ),
+                .fadeIn(duration: 400.ms).slideY(begin: -0.1);
+              },
             ),
 
           // ── Quick Actions Grid ──────────────────────────────────────────────
@@ -1274,7 +1282,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             Text(
                               '$count Patients',
                               style: GoogleFonts.roboto(
-                                color: Color(0xFF64748B),
+                                color: const Color(0xFF64748B),
                                 fontSize: 12,
                               ),
                             ),
@@ -2292,6 +2300,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           icon: Icons.assignment_rounded,
         ),
 
+        // Chat with patient
+        _actionBtn(
+          'Chat',
+          const Color(0xFF00D2C4),
+          () => _openChat(apt),
+          icon: Icons.chat_bubble_rounded,
+        ),
+
         // Prescription
         _actionBtn(
           'Prescription',
@@ -2677,6 +2693,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             '📋 Consult',
             const Color(0xFF4F46E5),
             () => _openConsultation(apt),
+          ),
+          const SizedBox(height: 4),
+          _actionBtn(
+            '💬 Chat',
+            const Color(0xFF00D2C4),
+            () => _openChat(apt),
           ),
           const SizedBox(height: 4),
           _actionBtn(
