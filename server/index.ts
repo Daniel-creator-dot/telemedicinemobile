@@ -32,7 +32,7 @@ import {
   ADMIN_OPS,
   CLINICAL_STAFF,
 } from './authz';
-import { getAccessiblePatientIds } from './patients';
+import { getAccessiblePatientIds, resolvePatientIdFromAppointment } from './patients';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
@@ -1051,11 +1051,12 @@ app.post('/api/prescriptions', authenticate, async (req: any, res) => {
   
   const { appointment_id, patient_id, consultation_id, medication_name, dosage, frequency, duration, instructions, strength, route, quantity } = req.body;
   try {
+    const resolvedPatientId = await resolvePatientIdFromAppointment(appointment_id, patient_id);
     const prescriptionRef = 'RX-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
     const result = await query(`
       INSERT INTO prescriptions (appointment_id, patient_id, consultation_id, medication_name, dosage, frequency, duration, instructions, prescription_ref, strength, route, quantity)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *
-    `, [appointment_id, patient_id, consultation_id || null, medication_name, dosage, frequency, duration, instructions, prescriptionRef, strength || null, route || null, quantity || null]);
+    `, [appointment_id, resolvedPatientId, consultation_id || null, medication_name, dosage, frequency, duration, instructions, prescriptionRef, strength || null, route || null, quantity || null]);
     
     const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
     if (aptResult.rows[0]) {
@@ -1124,12 +1125,13 @@ app.post('/api/consultations', authenticate, async (req: any, res) => {
     vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2,
     follow_up_date, status, hpc, medical_history, working_diagnosis, differential, treatment_plan, patient_education } = req.body;
   try {
+    const resolvedPatientId = await resolvePatientIdFromAppointment(appointment_id, patient_id);
     const result = await query(`
       INSERT INTO consultations (appointment_id, patient_id, doctor_id, chief_complaint, symptoms, diagnosis, clinical_notes,
         vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2, follow_up_date, status,
         hpc, medical_history, working_diagnosis, differential, treatment_plan, patient_education, started_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, CURRENT_TIMESTAMP) RETURNING *
-    `, [appointment_id, patient_id, req.user.id, chief_complaint, symptoms, diagnosis, clinical_notes,
+    `, [appointment_id, resolvedPatientId, req.user.id, chief_complaint, symptoms, diagnosis, clinical_notes,
       vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2, follow_up_date || null, status || 'in_progress',
       hpc || null, medical_history || null, working_diagnosis || diagnosis || null, differential || null, treatment_plan || null, patient_education || null]);
     
@@ -1241,15 +1243,16 @@ app.post('/api/labs', authenticate, async (req: any, res) => {
   }
   const { consultation_id, appointment_id, patient_id, test_name, test_type, urgency } = req.body;
   try {
+    const resolvedPatientId = await resolvePatientIdFromAppointment(appointment_id, patient_id);
     // Get doctor name
     const userResult = await query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const doctorName = userResult.rows[0]?.name || 'Unknown';
     
-    const nearest = await assignNearestPartner('laboratory', patient_id);
+    const nearest = await assignNearestPartner('laboratory', resolvedPatientId);
     const result = await query(`
       INSERT INTO lab_requests (consultation_id, appointment_id, patient_id, doctor_id, test_name, test_type, urgency, requested_by, partner_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
-    `, [consultation_id || null, appointment_id, patient_id, req.user.id, test_name, test_type || 'blood', urgency || 'routine', doctorName, nearest?.id || null]);
+    `, [consultation_id || null, appointment_id, resolvedPatientId, req.user.id, test_name, test_type || 'blood', urgency || 'routine', doctorName, nearest?.id || null]);
     res.status(201).json({ ...result.rows[0], partner_name: nearest?.name || null });
   } catch (err) {
     console.error(err);
@@ -1346,14 +1349,15 @@ app.post('/api/scans', authenticate, async (req: any, res) => {
   }
   const { consultation_id, appointment_id, patient_id, scan_type, body_part, clinical_indication, urgency } = req.body;
   try {
+    const resolvedPatientId = await resolvePatientIdFromAppointment(appointment_id, patient_id);
     const userResult = await query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const doctorName = userResult.rows[0]?.name || 'Unknown';
     
-    const nearest = await assignNearestPartner('imaging', patient_id);
+    const nearest = await assignNearestPartner('imaging', resolvedPatientId);
     const result = await query(`
       INSERT INTO scan_requests (consultation_id, appointment_id, patient_id, doctor_id, scan_type, body_part, clinical_indication, urgency, requested_by, partner_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *
-    `, [consultation_id || null, appointment_id, patient_id, req.user.id, scan_type, body_part, clinical_indication, urgency || 'routine', doctorName, nearest?.id || null]);
+    `, [consultation_id || null, appointment_id, resolvedPatientId, req.user.id, scan_type, body_part, clinical_indication, urgency || 'routine', doctorName, nearest?.id || null]);
     res.status(201).json({ ...result.rows[0], partner_name: nearest?.name || null });
   } catch (err) {
     console.error(err);

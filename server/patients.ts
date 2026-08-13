@@ -16,6 +16,16 @@ export async function getPatientForUser(userId: number) {
   return null;
 }
 
+export async function resolvePatientIdFromAppointment(
+  appointmentId?: number | null,
+  fallback?: number | null
+) {
+  if (fallback) return Number(fallback);
+  if (!appointmentId) return null;
+  const row = await query('SELECT patient_id FROM appointments WHERE id = $1', [appointmentId]);
+  return row.rows[0]?.patient_id ? Number(row.rows[0].patient_id) : null;
+}
+
 export async function getAccessiblePatientIds(userId: number): Promise<number[]> {
   const patient = await getPatientForUser(userId);
   if (!patient) return [];

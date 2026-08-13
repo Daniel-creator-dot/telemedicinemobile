@@ -366,6 +366,23 @@ export const initDb = async () => {
     const { initMembershipSchema } = require('./membership') as typeof import('./membership');
     await initMembershipSchema();
 
+    await query(`
+      UPDATE prescriptions p SET patient_id = a.patient_id
+      FROM appointments a WHERE p.appointment_id = a.id AND p.patient_id IS NULL
+    `);
+    await query(`
+      UPDATE lab_requests l SET patient_id = a.patient_id
+      FROM appointments a WHERE l.appointment_id = a.id AND l.patient_id IS NULL
+    `);
+    await query(`
+      UPDATE scan_requests s SET patient_id = a.patient_id
+      FROM appointments a WHERE s.appointment_id = a.id AND s.patient_id IS NULL
+    `);
+    await query(`
+      UPDATE consultations c SET patient_id = a.patient_id
+      FROM appointments a WHERE c.appointment_id = a.id AND c.patient_id IS NULL
+    `);
+
     await query(`UPDATE settings SET value = 'Digi Health' WHERE key = 'clinic_name' AND value ILIKE '%prime%'`);
     await query(`UPDATE settings SET value = 'DigiHealth' WHERE key = 'sms_sender_id' AND value ILIKE '%prime%'`);
 
