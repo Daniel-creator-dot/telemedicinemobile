@@ -60,7 +60,7 @@ export function registerPhaseOverviewRoutes(app: Express) {
           [idList]
         ),
         countWhere(
-          `SELECT COUNT(*)::int AS n FROM prescriptions WHERE patient_id = ANY($1) AND COALESCE(dispense_status, status, 'unsent') NOT IN ('dispensed','cancelled')`,
+          `SELECT COUNT(*)::int AS n FROM prescriptions WHERE patient_id = ANY($1) AND COALESCE(dispense_status, 'unsent') NOT IN ('dispensed','cancelled')`,
           [idList]
         ),
         countWhere(

@@ -58,22 +58,23 @@ export function registerClinicalRoutes(app: Express) {
            FROM appointments a LEFT JOIN doctors d ON a.doctor_id = d.id
            WHERE a.patient_id = $1 ORDER BY a.created_at DESC LIMIT 40`,
           [patient.id]
-        ),
+        ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, test_name, status, created_at, result_returned_at, partner_id FROM lab_requests
+          `SELECT id, test_name, status, created_at, completed_at FROM lab_requests
            WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
           [patient.id]
-        ),
+        ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, scan_type, status, created_at, result_returned_at FROM scan_requests
+          `SELECT id, scan_type, status, created_at, completed_at FROM scan_requests
            WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
           [patient.id]
-        ),
+        ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, medication_name, status, prescription_ref, created_at FROM prescriptions
+          `SELECT id, medication_name, COALESCE(dispense_status, 'unsent') AS status, prescription_ref, created_at
+           FROM prescriptions
            WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
           [patient.id]
-        ),
+        ).catch(() => ({ rows: [] })),
         query(
           `SELECT id, specialty, status, reason, created_at FROM referrals
            WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
