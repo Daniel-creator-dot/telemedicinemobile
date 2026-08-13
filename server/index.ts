@@ -100,6 +100,13 @@ app.use(cors());
 app.use(express.json());
 registerAuditMiddleware(app);
 
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'digihealth' });
+});
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'digihealth' });
+});
+
 // Auth middleware lives in ./authz (no token / JWT payload logging).
 
 
