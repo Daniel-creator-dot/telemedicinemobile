@@ -61,7 +61,12 @@ class _OpsHomeScreenState extends State<OpsHomeScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text('Command centre', style: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('Medical Operations command centre', style: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text(
+                  'Live staffing, queue, documentation and closed-loop care. Clinical quality only — commercial contracts stay with finance and admin.',
+                  style: GoogleFonts.roboto(color: const Color(0xFF64748B)),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 10,

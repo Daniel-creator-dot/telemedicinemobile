@@ -2,6 +2,9 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from './db';
+import { checkOtpRateLimit, recordOtpFailure, assertAppointmentAccess } from './authz';
+import { getAccessiblePatientIds, getPatientForUser } from './patients';
+import { createSecureJitsiLink } from './jitsi';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -33,10 +36,7 @@ function notifyDebugOtp() {
 }
 
 function createJitsiMeetingLink() {
-  const chars = 'abcdefghijklmnopqrstuvwxyz';
-  const getChars = (len: number) =>
-    Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
+  return createSecureJitsiLink();
 }
 
 export async function initPhase1Schema() {
@@ -303,21 +303,7 @@ async function nextPatientCode() {
   return `DH-${String(r.rows[0].n).padStart(6, '0')}`;
 }
 
-export async function getPatientForUser(userId: number) {
-  const byUser = await query('SELECT * FROM patients WHERE user_id = $1', [userId]);
-  if (byUser.rows[0]) return byUser.rows[0];
-
-  const user = await query('SELECT * FROM users WHERE id = $1', [userId]);
-  const phone = user.rows[0]?.phone_number;
-  if (!phone) return null;
-
-  const byPhone = await query('SELECT * FROM patients WHERE phone_number = $1 ORDER BY id DESC LIMIT 1', [phone]);
-  if (byPhone.rows[0]) {
-    await query('UPDATE patients SET user_id = $1 WHERE id = $2 AND user_id IS NULL', [userId, byPhone.rows[0].id]);
-    return { ...byPhone.rows[0], user_id: userId };
-  }
-  return null;
-}
+export { getPatientForUser };
 
 async function notifyUser(
   deps: Deps,
@@ -360,6 +346,10 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     if (!phone) return res.status(400).json({ message: 'Phone number is required' });
 
     try {
+      const limited = checkOtpRateLimit(`otp:${phone}:${usePurpose}`, 'request');
+      if (!limited.ok) {
+        return res.status(429).json({ message: 'Too many OTP requests. Try again later.' });
+      }
       if (usePurpose === 'register') {
         const exists = await query(
           'SELECT id FROM users WHERE phone_number = $1 OR username = $1',
@@ -373,7 +363,9 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
           'SELECT * FROM users WHERE phone_number = $1 OR username = $1',
           [phone]
         );
-        if (!user.rows[0]) return res.status(404).json({ message: 'No account found for this phone number' });
+        if (!user.rows[0]) {
+          return res.json({ message: 'If an account exists for that number, a code has been sent.' });
+        }
       }
 
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -428,6 +420,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         [phone, code]
       );
       if (otpResult.rows.length === 0) {
+        recordOtpFailure(`otp-verify:${phone}`);
         return res.status(400).json({ message: 'Invalid or expired OTP' });
       }
 
@@ -554,7 +547,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     }
   });
 
-  app.get('/api/doctors/directory', async (req, res) => {
+  app.get('/api/doctors/directory', authenticate, async (req, res) => {
     try {
       const { specialty, q } = req.query;
       let sql = `
@@ -581,7 +574,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     }
   });
 
-  app.get('/api/doctors/:id/slots', async (req, res) => {
+  app.get('/api/doctors/:id/slots', authenticate, async (req, res) => {
     try {
       const doctorId = Number(req.params.id);
       const date = String(req.query.date || new Date().toISOString().slice(0, 10));
@@ -653,9 +646,9 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
   app.post('/api/queue/consult-now', authenticate, async (req: AuthedRequest, res) => {
     if (req.user!.role !== 'patient') return res.status(403).json({ message: 'Patients only' });
     try {
-      const patient = await getPatientForUser(req.user!.id);
-      if (!patient) return res.status(400).json({ message: 'Complete registration first' });
-      if (patient.is_restricted) {
+      const guardian = await getPatientForUser(req.user!.id);
+      if (!guardian) return res.status(400).json({ message: 'Complete registration first' });
+      if (guardian.is_restricted) {
         return res.status(403).json({ message: 'Booking restricted due to repeated no-shows.' });
       }
 
@@ -673,7 +666,19 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         vitals_temp,
         vitals_pulse,
         vitals_spo2,
+        dependent_patient_id,
       } = req.body;
+
+      let patient = guardian;
+      if (dependent_patient_id) {
+        const ids = await getAccessiblePatientIds(req.user!.id);
+        if (!ids.includes(Number(dependent_patient_id))) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+        const dep = await query('SELECT * FROM patients WHERE id = $1', [dependent_patient_id]);
+        if (!dep.rows[0]) return res.status(404).json({ message: 'Dependent not found' });
+        patient = dep.rows[0];
+      }
 
       const existing = await query(
         `SELECT * FROM appointments
@@ -725,8 +730,8 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
           appointmentId,
           patient.id,
           patient.full_name,
-          patient.phone_number,
-          patient.email,
+          guardian.phone_number,
+          guardian.email || patient.email,
           doctorId,
           date,
           time,
@@ -891,6 +896,8 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
 
   app.get('/api/chat/:appointmentId', authenticate, async (req: AuthedRequest, res) => {
     try {
+      const apt = await assertAppointmentAccess(req, res, String(req.params.appointmentId));
+      if (!apt) return;
       const result = await query(
         `SELECT * FROM chat_messages WHERE appointment_id = $1 ORDER BY created_at ASC`,
         [req.params.appointmentId]
@@ -905,6 +912,8 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     const body = String(req.body?.body || '').trim();
     if (!body) return res.status(400).json({ message: 'Message is required' });
     try {
+      const apt = await assertAppointmentAccess(req, res, String(req.params.appointmentId));
+      if (!apt) return;
       const user = await query('SELECT name, role FROM users WHERE id = $1', [req.user!.id]);
       const result = await query(
         `INSERT INTO chat_messages (appointment_id, sender_id, sender_role, sender_name, body)

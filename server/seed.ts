@@ -69,7 +69,7 @@ const seed = async () => {
     `, [patIds[0], patIds[1], docIds[0], docIds[1], today]);
 
     console.log('Seeding notifications...');
-    await query('INSERT INTO notifications (message) VALUES ($1)', ['Welcome to CSA HEALTH Admin Portal!']);
+    await query('INSERT INTO notifications (message) VALUES ($1)', ['Welcome to the Digi Health operations portal.']);
 
     console.log('Seeding completed successfully');
     process.exit(0);

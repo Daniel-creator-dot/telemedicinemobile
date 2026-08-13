@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../patient/care_repository.dart';
 
 class PharmacyHomeScreen extends StatefulWidget {
@@ -73,11 +74,10 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _queue.isEmpty
-              ? Center(
-                  child: Text(
-                    'No e-prescriptions in the queue.',
-                    style: GoogleFonts.roboto(color: Colors.black54),
-                  ),
+              ? const ClinicalEmptyState(
+                  icon: Icons.local_pharmacy_outlined,
+                  title: 'No prescriptions waiting',
+                  message: 'Electronic prescriptions sent to this pharmacy will appear here for accept, prepare and dispense.',
                 )
               : RefreshIndicator(
                   onRefresh: _load,

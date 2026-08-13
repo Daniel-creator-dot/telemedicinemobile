@@ -63,25 +63,6 @@ class AuthRepository {
     return _parseAuthResponse(res.data);
   }
 
-  Future<void> register({
-    required String username,
-    required String password,
-    required String name,
-    required String phoneNumber,
-    required String email,
-  }) async {
-    await _api.dio.post<Map<String, dynamic>>(
-      '/api/auth/register',
-      data: {
-        'username': username.trim(),
-        'password': password,
-        'name': name.trim(),
-        'phone_number': phoneNumber.trim(),
-        'email': email.trim(),
-      },
-    );
-  }
-
   Future<void> forgotPassword(String username) async {
     await _api.dio.post<Map<String, dynamic>>(
       '/api/auth/forgot-password',

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../core/session.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../patient/care_repository.dart';
 
 class ImagingHomeScreen extends StatefulWidget {
@@ -99,7 +100,11 @@ class _ImagingHomeScreenState extends State<ImagingHomeScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _scans.isEmpty
-              ? const Center(child: Text('No imaging requests assigned.'))
+              ? const ClinicalEmptyState(
+                  icon: Icons.photo_camera_outlined,
+                  title: 'No imaging referrals',
+                  message: 'X-ray, ultrasound, CT and MRI requests from Digi Health clinicians will land here for scheduling and report return.',
+                )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(

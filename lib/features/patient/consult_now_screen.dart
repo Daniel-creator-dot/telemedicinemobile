@@ -8,7 +8,9 @@ import 'care_repository.dart';
 import 'chat_screen.dart';
 
 class ConsultNowScreen extends StatefulWidget {
-  const ConsultNowScreen({super.key});
+  const ConsultNowScreen({super.key, this.dependentPatientId});
+
+  final int? dependentPatientId;
 
   @override
   State<ConsultNowScreen> createState() => _ConsultNowScreenState();
@@ -74,6 +76,7 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
         'vitals_temp': _temp.text.trim(),
         'vitals_pulse': _pulse.text.trim(),
         'vitals_spo2': _spo2.text.trim(),
+        if (widget.dependentPatientId != null) 'dependent_patient_id': widget.dependentPatientId,
       });
       setState(() => _queued = apt);
     } catch (e) {
@@ -143,7 +146,11 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
       children: [
         Text('Pre-consultation triage', style: GoogleFonts.roboto(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        const Text('This information is sent to the nurse and assigned doctor before you join.'),
+        Text(
+          widget.dependentPatientId != null
+              ? 'This live queue visit is for a dependent on your account.'
+              : 'This information is sent to the nurse and assigned doctor before you join.',
+        ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(

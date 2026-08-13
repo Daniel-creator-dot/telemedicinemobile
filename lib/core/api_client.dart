@@ -1,16 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'env.dart';
+
 typedef UnauthorizedHandler = void Function();
 
 class ApiClient {
-  static String get defaultBaseUrl {
-    if (kIsWeb) return 'http://localhost:5000';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000';
-    }
-    return 'http://localhost:5000';
-  }
+  static String get defaultBaseUrl => AppEnv.resolveApiBaseUrl();
 
   ApiClient() {
     _dio = Dio(
@@ -26,8 +22,7 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          debugPrint('[API] Request: ${options.method} ${options.uri}');
-          debugPrint('[API] Headers: ${options.headers}');
+          debugPrint('[API] ${options.method} ${options.uri.path}');
           handler.next(options);
         },
         onResponse: (response, handler) {
@@ -60,9 +55,8 @@ class ApiClient {
       debugPrint('[API] Token removed');
     } else {
       _dio.options.headers['Authorization'] = 'Bearer $token';
-      debugPrint('[API] Token set: Bearer ${token.substring(0, 10)}...');
+      debugPrint('[API] Session token attached');
     }
-    debugPrint('[API] Current headers: ${_dio.options.headers}');
   }
 
   static String messageFromDio(DioException err, [String fallback = 'Something went wrong']) {

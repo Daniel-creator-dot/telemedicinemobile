@@ -18,8 +18,15 @@ import '../features/consult/video_consult_screen.dart';
 import '../features/patient/chat_screen.dart';
 import '../features/patient/consult_now_screen.dart';
 import '../features/patient/doctor_directory_screen.dart';
+import '../features/patient/health_journey_screen.dart';
+import '../features/patient/health_tracker_screen.dart';
 import '../features/patient/medical_profile_screen.dart';
-import '../main.dart';
+import '../features/patient/care_programs_screen.dart';
+import '../features/patient/family_screen.dart';
+import '../features/patient/notifications_inbox_screen.dart';
+import '../features/patient/patient_home_screen.dart';
+import '../features/patient/records_vault_screen.dart';
+import '../features/patient/symptom_helper_screen.dart';
 import '../models/appointment.dart';
 
 GoRouter createAppRouter(Session session) {
@@ -85,7 +92,21 @@ GoRouter createAppRouter(Session session) {
         routes: [
           GoRoute(path: 'profile', builder: (context, state) => const MedicalProfileScreen()),
           GoRoute(path: 'doctors', builder: (context, state) => const DoctorDirectoryScreen()),
-          GoRoute(path: 'consult-now', builder: (context, state) => const ConsultNowScreen()),
+          GoRoute(
+            path: 'consult-now',
+            builder: (context, state) {
+              final extra = state.extra;
+              final depId = extra is int ? extra : int.tryParse(extra?.toString() ?? '');
+              return ConsultNowScreen(dependentPatientId: depId);
+            },
+          ),
+          GoRoute(path: 'journey', builder: (context, state) => const HealthJourneyScreen()),
+          GoRoute(path: 'records', builder: (context, state) => const RecordsVaultScreen()),
+          GoRoute(path: 'family', builder: (context, state) => const FamilyScreen()),
+          GoRoute(path: 'programs', builder: (context, state) => const CareProgramsScreen()),
+          GoRoute(path: 'symptom-helper', builder: (context, state) => const SymptomHelperScreen()),
+          GoRoute(path: 'notifications', builder: (context, state) => const NotificationsInboxScreen()),
+          GoRoute(path: 'tracker', builder: (context, state) => const HealthTrackerScreen()),
           GoRoute(
             path: 'chat',
             builder: (context, state) {

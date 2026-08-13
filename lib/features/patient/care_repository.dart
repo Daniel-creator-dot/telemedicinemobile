@@ -209,4 +209,85 @@ class CareRepository {
   Future<void> updateSettlement(int id, String status) async {
     await _api.dio.patch('/api/finance/settlements/$id', data: {'status': status});
   }
+
+  Future<void> markNotificationsRead() async {
+    await _api.dio.patch('/api/notifications/me/read');
+  }
+
+  Future<Map<String, dynamic>> healthJourney() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/journey/me');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> documentVault() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/vault/me');
+    return res.data ?? {};
+  }
+
+  Future<List<Map<String, dynamic>>> getTracker({int? patientId}) async {
+    final res = await _api.dio.get<List<dynamic>>(
+      '/api/tracker',
+      queryParameters: {if (patientId != null) 'patient_id': patientId},
+    );
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<void> addTracker(Map<String, dynamic> payload) async {
+    await _api.dio.post('/api/tracker', data: payload);
+  }
+
+  Future<List<Map<String, dynamic>>> chronicPrograms({int? patientId}) async {
+    final res = await _api.dio.get<List<dynamic>>(
+      '/api/chronic/me',
+      queryParameters: {if (patientId != null) 'patient_id': patientId},
+    );
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> chronicCatalog() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/chronic/catalog');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> enrollChronic(Map<String, dynamic> payload) async {
+    final res = await _api.dio.post<Map<String, dynamic>>('/api/chronic', data: payload);
+    return res.data ?? {};
+  }
+
+  Future<void> updateChronicTask(int programId, int taskId, Map<String, dynamic> payload) async {
+    await _api.dio.patch('/api/chronic/$programId/tasks/$taskId', data: payload);
+  }
+
+  Future<List<Map<String, dynamic>>> getFamily() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/family');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> addDependent(Map<String, dynamic> payload) async {
+    final res = await _api.dio.post<Map<String, dynamic>>('/api/family', data: payload);
+    return res.data ?? {};
+  }
+
+  Future<void> removeDependent(int id) async {
+    await _api.dio.delete('/api/family/$id');
+  }
+
+  Future<Map<String, dynamic>> addVaultDocument(Map<String, dynamic> payload) async {
+    final res = await _api.dio.post<Map<String, dynamic>>('/api/vault/documents', data: payload);
+    return res.data ?? {};
+  }
+
+  Future<void> deleteVaultDocument(int id) async {
+    await _api.dio.delete('/api/vault/documents/$id');
+  }
+
+  Future<Map<String, dynamic>> aiAssist(Map<String, dynamic> payload) async {
+    final res = await _api.dio.post<Map<String, dynamic>>('/api/ai/assist', data: payload);
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> adminOpsSummary() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/admin/ops-summary');
+    return res.data ?? {};
+  }
 }

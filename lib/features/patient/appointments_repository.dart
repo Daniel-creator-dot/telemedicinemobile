@@ -36,6 +36,7 @@ class AppointmentsRepository {
     List<String>? whoIsComing,
     String? department,
     String? notes,
+    int? dependentPatientId,
   }) async {
     final res = await _api.dio.post<Map<String, dynamic>>(
       '/api/appointments',
@@ -55,6 +56,7 @@ class AppointmentsRepository {
         if (notes != null && notes.isNotEmpty) 'notes': notes.trim(),
         if (service != null && service.isNotEmpty) 'consult_type': service,
         'booking_type': 'scheduled',
+        if (dependentPatientId != null) 'dependent_patient_id': dependentPatientId,
       },
     );
     if (res.data == null) throw Exception('Booking failed: Empty response');

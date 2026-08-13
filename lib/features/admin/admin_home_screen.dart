@@ -11,6 +11,8 @@ import '../../models/appointment.dart';
 import '../../models/auth_user.dart';
 import '../consult/open_video_consult.dart';
 import '../doctor/consultation_dialog.dart';
+import 'admin_settings_tab.dart';
+import 'admin_users_tab.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -36,6 +38,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   
   bool _loading = true;
   String? _error;
+  Map<String, dynamic>? _opsSummary;
 
   // Settings Controllers
   final _clinicName = TextEditingController();
@@ -105,6 +108,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       if (analyticsData != null) {
         _stats = analyticsData as Map<String, dynamic>;
       }
+      try {
+        final ops = await api.dio.get<Map<String, dynamic>>('/api/admin/ops-summary');
+        _opsSummary = ops.data;
+      } catch (_) {}
     } catch (e) {
       setState(() => _error = 'Failed to sync database details: ${e.toString()}');
     } finally {
@@ -1509,154 +1516,35 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Widget _buildUsersTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Registration Form
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Register Staff Member',
-                  style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 12),
-                _formField(_regName, 'Full Name', Icons.person_outline),
-                const SizedBox(height: 10),
-                _formField(_regUsername, 'Username', Icons.account_circle_outlined),
-                const SizedBox(height: 10),
-                _formField(_regPassword, 'Password', Icons.lock_outline, obscureText: true),
-                const SizedBox(height: 10),
-                _formField(_regPhone, 'Phone (for alerts)', Icons.phone_android_outlined),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _regRole,
-                  dropdownColor: Colors.white,
-                  decoration: _deco('Staff Role', Icons.badge_outlined),
-                  style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontSize: 13),
-                  items: [
-                    DropdownMenuItem(value: 'doctor', child: Text('Doctor / Specialist', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'admin', child: Text('Administrator', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'lab_technician', child: Text('Lab Technician', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'nurse', child: Text('Nurse / Triage', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'medical_ops', child: Text('Medical Operations', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'pharmacy', child: Text('Pharmacy', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'imaging', child: Text('Imaging Centre', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'corporate', child: Text('Corporate client', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'insurance', child: Text('Insurance', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                    DropdownMenuItem(value: 'finance', child: Text('Finance', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) setState(() => _regRole = v);
-                  },
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _createUser,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00D2C4),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text('Register Account', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 25),
-          
-          // User list
-          Text('Staff Registry', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 10),
-          _users.isEmpty
-              ? Center(child: Text('No users found in registry.', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8))))
-              : ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _users.length,
-                  itemBuilder: (context, index) {
-                    final u = _users[index];
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: const Color(0xFF8B5CF6).withOpacity(0.12),
-                        child: Text(u.name.substring(0, u.name.length > 1 ? 2 : 1).toUpperCase(), style: GoogleFonts.roboto(color: Color(0xFF8B5CF6))),
-                      ),
-                      title: Text(u.name, style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: Text('Username: ${u.username}  |  Role: ${u.role.label}', style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11)),
-                    );
-                  },
-                ),
-        ],
-      ),
+    return AdminUsersTab(
+      users: _users,
+      name: _regName,
+      username: _regUsername,
+      password: _regPassword,
+      phone: _regPhone,
+      role: _regRole,
+      onRoleChanged: (v) => setState(() => _regRole = v),
+      onCreate: _createUser,
+      fieldDecoration: _deco,
     );
   }
 
   Widget _buildSettingsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      physics: const BouncingScrollPhysics(),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('SMS Gateway Settings', style: GoogleFonts.roboto(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 12),
-            _formField(_clinicName, 'Clinic Display Name', Icons.home_work_outlined),
-            const SizedBox(height: 10),
-            _formField(_smsBaseUrl, 'Intek SMS Gateway URL', Icons.link_rounded),
-            const SizedBox(height: 10),
-            _formField(_smsSenderId, 'Sender ID (Sender Mask)', Icons.abc_outlined),
-            const SizedBox(height: 10),
-            _formField(_smsApiKey, 'Gateway Bearer API Token', Icons.key_rounded, obscureText: true),
-            const SizedBox(height: 25),
-            ElevatedButton(
-              onPressed: _saveSettings,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00D2C4),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text('Save Gateway Config', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _formField(TextEditingController controller, String hint, IconData icon, {bool obscureText = false}) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      style: GoogleFonts.roboto(color: Color(0xFF0F172A), fontSize: 13),
-      decoration: _deco(hint, icon),
+    return AdminSettingsTab(
+      clinicName: _clinicName,
+      smsBaseUrl: _smsBaseUrl,
+      smsSenderId: _smsSenderId,
+      smsApiKey: _smsApiKey,
+      onSave: _saveSettings,
+      fieldDecoration: _deco,
+      opsSummary: _opsSummary,
     );
   }
 
   InputDecoration _deco(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 12),
+      hintStyle: GoogleFonts.roboto(color: const Color(0xFF94A3B8), fontSize: 12),
       prefixIcon: Icon(icon, color: const Color(0xFF00D2C4), size: 18),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),

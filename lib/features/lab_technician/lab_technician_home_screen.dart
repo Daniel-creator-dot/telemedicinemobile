@@ -425,7 +425,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               const Icon(Icons.biotech, color: Color(0xFF00D2C4), size: 24),
               const SizedBox(width: 8),
               Text(
-                'CSAA LAB PORTAL',
+                'DIGI HEALTH LAB',
                 style: GoogleFonts.roboto(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

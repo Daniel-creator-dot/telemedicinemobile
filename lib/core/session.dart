@@ -28,7 +28,7 @@ class Session extends ChangeNotifier {
     try {
       final token = await _storage.read(key: _kToken);
       final userJson = await _storage.read(key: _kUser);
-      debugPrint('[SESSION] Token from storage: ${token != null ? 'Present (${token.substring(0, 10)}...)' : 'Missing'}');
+      debugPrint('[SESSION] Token from storage: ${token != null ? 'Present' : 'Missing'}');
       debugPrint('[SESSION] User from storage: ${userJson != null ? 'Present' : 'Missing'}');
       
       if (token != null && userJson != null) {
@@ -57,7 +57,7 @@ class Session extends ChangeNotifier {
     required String token,
     required AuthUser user,
   }) async {
-    debugPrint('[SESSION] Setting session with token: ${token.substring(0, 10)}...');
+    debugPrint('[SESSION] Setting session');
     debugPrint('[SESSION] User: ${user.username}, role: ${user.role.name}');
     
     _token = token;

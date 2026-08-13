@@ -39,8 +39,8 @@ class AppLaunchCarousel extends StatefulWidget {
     ),
     _LaunchSlide(
       asset: 'assets/branding/onboarding_3.png',
-      title: 'HIPAA Secure',
-      subtitle: 'Your consultations are protected with military-grade encryption',
+      title: 'Connected care',
+      subtitle: 'Consultations, labs, imaging and pharmacy stay in one patient record',
       accent: Color(0xFF00D2C4),
     ),
     _LaunchSlide(
@@ -121,12 +121,12 @@ class _AppLaunchCarouselState extends State<AppLaunchCarousel>
                         ),
                         children: [
                           TextSpan(
-                            text: 'Gra',
-                            style: GoogleFonts.roboto(color: Color(0xFF8B5CF6)), // Violet
+                            text: 'Digi',
+                            style: GoogleFonts.roboto(color: Color(0xFF8B5CF6)),
                           ),
                           TextSpan(
-                            text: 'prime',
-                            style: GoogleFonts.roboto(color: Color(0xFF00D2C4)), // Mint
+                            text: ' Health',
+                            style: GoogleFonts.roboto(color: Color(0xFF00D2C4)),
                           ),
                         ],
                       ),

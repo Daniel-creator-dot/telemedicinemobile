@@ -143,6 +143,51 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
     }
   }
 
+  Future<void> _draftSoapAssist() async {
+    setState(() => _saving = true);
+    try {
+      final draft = await context.read<CareRepository>().aiAssist({
+        'mode': 'soap',
+        'appointment_id': widget.appointment.id,
+        'complaint': _chiefComplaint.text.trim(),
+        'symptoms': _symptoms.text.trim(),
+        'notes': _clinicalNotes.text.trim(),
+        'history': _medicalHistory.text.trim(),
+        'vitals_bp': _vitalsBp.text.trim(),
+        'vitals_temp': _vitalsTemp.text.trim(),
+        'vitals_pulse': _vitalsPulse.text.trim(),
+        'vitals_spo2': _vitalsSpo2.text.trim(),
+        'vitals_weight': _vitalsWeight.text.trim(),
+      });
+      final soap = Map<String, dynamic>.from((draft['soap'] as Map?) ?? {});
+      if (_chiefComplaint.text.trim().isEmpty && soap['subjective'] != null) {
+        _chiefComplaint.text = soap['subjective'].toString();
+      }
+      if (_clinicalNotes.text.trim().isEmpty && soap['objective'] != null) {
+        _clinicalNotes.text = soap['objective'].toString();
+      }
+      if (_diagnosis.text.trim().isEmpty && soap['assessment'] != null) {
+        _diagnosis.text = soap['assessment'].toString();
+      }
+      if (_treatmentPlan.text.trim().isEmpty && soap['plan'] != null) {
+        _treatmentPlan.text = soap['plan'].toString();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(draft['disclaimer']?.toString() ?? 'Assistive draft filled empty SOAP fields. Review before saving.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Assistive draft unavailable: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _saveConsultation({String status = 'in_progress'}) async {
     setState(() => _saving = true);
     try {
@@ -478,6 +523,19 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF00D2C4),
                     side: const BorderSide(color: Color(0xFF00D2C4)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _draftSoapAssist,
+                  icon: const Icon(Icons.auto_awesome, size: 16),
+                  label: const Text('Draft SOAP (assistive)'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF8B5CF6),
+                    side: const BorderSide(color: Color(0xFF8B5CF6)),
                   ),
                 ),
               ),

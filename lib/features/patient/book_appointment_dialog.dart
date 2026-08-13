@@ -16,11 +16,15 @@ class BookAppointmentDialog extends StatefulWidget {
     this.preselectedDoctorId,
     this.preselectedDoctorName,
     this.preselectedSpecialty,
+    this.dependentPatientId,
+    this.dependentName,
   });
 
   final int? preselectedDoctorId;
   final String? preselectedDoctorName;
   final String? preselectedSpecialty;
+  final int? dependentPatientId;
+  final String? dependentName;
 
   @override
   State<BookAppointmentDialog> createState() => _BookAppointmentDialogState();
@@ -93,7 +97,9 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   void _loadDoctorsAndSession() {
     final session = context.read<Session>();
     if (session.isAuthenticated && session.user != null) {
-      _fullName.text = session.user!.name;
+      _fullName.text = widget.dependentName?.trim().isNotEmpty == true
+          ? widget.dependentName!
+          : session.user!.name;
       _phoneNumber.text = session.user!.phoneNumber ?? session.user!.username;
       _email.text = session.user!.email ?? '';
       _nationwideId.text = session.user!.patientCode ?? '';
@@ -256,6 +262,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         whoIsComing: deps,
         department: _department.text,
         notes: _notes.text,
+        dependentPatientId: widget.dependentPatientId,
       );
 
       // Schedule notifications for telemedicine appointment
@@ -771,7 +778,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('CSAA TELEMEDICINE', style: GoogleFonts.roboto(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  Text('DIGI HEALTH', style: GoogleFonts.roboto(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   const Icon(Icons.shield, color: Color(0xFF00D2C4), size: 16),
                 ],
               ),

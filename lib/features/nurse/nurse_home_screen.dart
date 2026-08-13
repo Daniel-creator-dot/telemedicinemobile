@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
 import '../../models/appointment.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../patient/care_repository.dart';
 import '../patient/chat_screen.dart';
 
@@ -75,7 +76,11 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _triage.isEmpty
-              ? const Center(child: Text('No patients waiting for triage.'))
+              ? const ClinicalEmptyState(
+                  icon: Icons.monitor_heart_outlined,
+                  title: 'Triage queue is clear',
+                  message: 'New Consult Now patients will appear here for vitals, urgency and handover to a doctor.',
+                )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(

@@ -191,10 +191,10 @@ export const initDb = async () => {
 
     // Initialize default settings if they don't exist
     const defaultSettings = [
-      ['clinic_name', 'Custom Staff Association - in partnership with Prime Care'],
-      ['sms_base_url', 'https://www.inteksms.top/api/v1/messages/send'],
-      ['sms_sender_id', 'Primecare'],
-      ['sms_api_key', 'INTEK_C29C88.0e7310c3b08164b4773cc74d81ab234b203b38a42800120f']
+      ['clinic_name', 'Digi Health'],
+      ['sms_base_url', ''],
+      ['sms_sender_id', 'DigiHealth'],
+      ['sms_api_key', '']
     ];
 
     for (const [key, value] of defaultSettings) {
@@ -338,6 +338,13 @@ export const initDb = async () => {
     await initPhase2Schema();
     const { initPhase3Schema } = require('./phase3') as typeof import('./phase3');
     await initPhase3Schema();
+    const { initClinicalSchema } = require('./clinical') as typeof import('./clinical');
+    await initClinicalSchema();
+    const { initPhase4Schema } = require('./phase4') as typeof import('./phase4');
+    await initPhase4Schema();
+
+    await query(`UPDATE settings SET value = 'Digi Health' WHERE key = 'clinic_name' AND value ILIKE '%prime%'`);
+    await query(`UPDATE settings SET value = 'DigiHealth' WHERE key = 'sms_sender_id' AND value ILIKE '%prime%'`);
 
     console.log('Database initialized successfully');
   } catch (err) {

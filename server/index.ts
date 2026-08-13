@@ -5,6 +5,23 @@ import { initDb, query } from './db';
 import { registerPhase1Routes, getPatientForUser } from './phase1';
 import { registerPhase2Routes, assignNearestPartner, notifyDiagnosticClosedLoop } from './phase2';
 import { registerPhase3Routes, recordVisitPayment } from './phase3';
+import { registerClinicalRoutes } from './clinical';
+import { registerPhase4Routes } from './phase4';
+import { createSecureJitsiLink } from './jitsi';
+import {
+  authenticate,
+  requireRoles,
+  canAccessPatient,
+  getDoctorForUser,
+  assertAppointmentAccess,
+  publicSettings,
+  checkOtpRateLimit,
+  recordOtpFailure,
+  clearOtpFailures,
+  ADMIN_OPS,
+  CLINICAL_STAFF,
+} from './authz';
+import { getAccessiblePatientIds } from './patients';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
@@ -71,27 +88,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// --- Middleware ---
-const authenticate = (req: any, res: any, next: any) => {
-  const authHeader = req.headers.authorization;
-  console.log('[AUTH] Auth header:', authHeader ? 'Present' : 'Missing');
-  
-  if (!authHeader) return res.status(401).json({ message: 'No token provided' });
-
-  const token = authHeader.split(' ')[1];
-  console.log('[AUTH] Token extracted:', token ? 'Yes' : 'No');
-  console.log('[AUTH] JWT_SECRET present:', !!process.env.JWT_SECRET);
-  
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
-    console.log('[AUTH] Token verified successfully:', decoded);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    console.log('[AUTH] Token verification failed:', err);
-    res.status(401).json({ message: 'Invalid token' });
-  }
-};
+// Auth middleware lives in ./authz (no token / JWT payload logging).
 
 
 
@@ -133,77 +130,40 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
-  const { username, password, name, phone_number, email } = req.body;
-  try {
-    // Check if user exists
-    const checkUser = await query('SELECT * FROM users WHERE username = $1', [username]);
-    if (checkUser.rows.length > 0) {
-      return res.status(400).json({ message: 'Username already exists' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create User
-    const userResult = await query(
-      'INSERT INTO users (username, password, role, name, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, role',
-      [username, hashedPassword, 'patient', name, phone_number]
-    );
-    const user = userResult.rows[0];
-
-    const codeResult = await query(`SELECT nextval('patient_code_seq') AS n`);
-    const patientCode = `DH-${String(codeResult.rows[0].n).padStart(6, '0')}`;
-    const patientResult = await query(
-      'INSERT INTO patients (user_id, patient_code, full_name, email, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING id, patient_code',
-      [user.id, patientCode, name, email, phone_number]
-    );
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      process.env.JWT_SECRET!,
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({ 
-      token, 
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        name,
-        phone_number,
-        email,
-        patient_code: patientResult.rows[0].patient_code,
-        patient_id: patientResult.rows[0].id,
-      } 
-    });
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ message: 'Server error during registration' });
-  }
+app.post('/api/auth/register', async (_req, res) => {
+  res.status(410).json({
+    message: 'Direct registration is closed. Request an OTP, then complete /api/auth/register-otp.',
+  });
 });
 
 
 
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { username } = req.body;
+  const generic = { message: 'If an account exists for that identifier, a reset code has been sent.' };
   try {
-    const userResult = await query('SELECT * FROM users WHERE username = $1', [username]);
-    const user = userResult.rows[0];
-
-    if (!user || !user.phone_number) {
-      return res.status(404).json({ message: 'User not found or no phone number registered.' });
+    const limit = checkOtpRateLimit(`reset:${username}`, 'request');
+    if (!limit.ok) {
+      return res.status(429).json({ message: 'Too many reset attempts. Try again later.' });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60000); // 10 mins
+    const userResult = await query('SELECT * FROM users WHERE username = $1 OR phone_number = $1', [username]);
+    const user = userResult.rows[0];
 
-    await query('DELETE FROM otps WHERE username = $1', [username]);
-    await query('INSERT INTO otps (username, code, expires_at) VALUES ($1, $2, $3)', [username, otp, expiresAt]);
+    if (user?.phone_number) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 10 * 60000);
+      await query('DELETE FROM otps WHERE username = $1', [username]);
+      await query('INSERT INTO otps (username, code, expires_at, purpose, phone_number) VALUES ($1, $2, $3, $4, $5)', [
+        username, otp, expiresAt, 'reset', user.phone_number,
+      ]);
+      await sendSMS(
+        user.phone_number,
+        `Digi Health: your password reset code is ${otp}. It expires in 10 minutes.`
+      );
+    }
 
-    await sendSMS(user.phone_number, `Your CSA Health Portal password reset code is: ${otp}. It expires in 10 minutes.`);
-
-    res.json({ message: 'OTP sent to registered phone number.' });
+    res.json(generic);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -213,15 +173,24 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.post('/api/auth/reset-password', async (req, res) => {
   const { username, code, newPassword } = req.body;
   try {
-    const otpResult = await query('SELECT * FROM otps WHERE username = $1 AND code = $2 AND expires_at > NOW()', [username, code]);
+    const limit = checkOtpRateLimit(`reset-verify:${username}`, 'verify');
+    if (!limit.ok) {
+      return res.status(429).json({ message: 'Too many attempts. Try again later.' });
+    }
+    const otpResult = await query(
+      `SELECT * FROM otps WHERE (username = $1 OR phone_number = $1) AND code = $2 AND expires_at > NOW()`,
+      [username, code]
+    );
     
     if (otpResult.rows.length === 0) {
+      recordOtpFailure(`reset-verify:${username}`);
       return res.status(400).json({ message: 'Invalid or expired OTP.' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await query('UPDATE users SET password = $1 WHERE username = $2', [hashedPassword, username]);
-    await query('DELETE FROM otps WHERE username = $1', [username]);
+    await query('UPDATE users SET password = $1 WHERE username = $2 OR phone_number = $2', [hashedPassword, username]);
+    await query('DELETE FROM otps WHERE username = $1 OR phone_number = $1', [username]);
+    clearOtpFailures(`reset-verify:${username}`);
 
     res.json({ message: 'Password reset successful.' });
   } catch (err) {
@@ -231,23 +200,20 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // --- Settings Routes ---
-app.get('/api/settings', async (req, res) => {
+app.get('/api/settings', authenticate, async (req: any, res) => {
   try {
     const result = await query('SELECT * FROM settings');
-    const settings = result.rows.reduce((acc: any, row: any) => {
-      acc[row.key] = row.value;
-      return acc;
-    }, {});
-    res.json(settings);
+    res.json(publicSettings(result.rows, req.user.role));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.patch('/api/settings', async (req, res) => {
-  const updates = req.body;
+app.patch('/api/settings', authenticate, requireRoles('admin'), async (req, res) => {
+  const updates = req.body || {};
   try {
     for (const [key, value] of Object.entries(updates)) {
+      if (key === 'sms_api_key' && (value === '********' || value === '')) continue;
       await query(
         'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
         [key, value]
@@ -308,7 +274,7 @@ async function sendSMS(recipient: string, message: string) {
 }
 
 // --- User Management Routes ---
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticate, requireRoles('admin', 'medical_ops'), async (_req, res) => {
   try {
     const result = await query('SELECT id, username, role, name, phone_number FROM users ORDER BY name');
     res.json(result.rows);
@@ -317,7 +283,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', authenticate, requireRoles('admin'), async (req, res) => {
   const { username, password, role, name, phone_number } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -341,7 +307,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticate, requireRoles('admin'), async (req, res) => {
   const { id } = req.params;
   const { username, role, name, phone_number, password } = req.body;
   try {
@@ -376,7 +342,7 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (req, res) => {
   try {
     await query('DELETE FROM users WHERE id = $1', [req.params.id]);
     res.json({ message: 'User deleted' });
@@ -396,16 +362,20 @@ app.get('/api/appointments', authenticate, async (req: any, res) => {
     let queryParams: any[] = [];
 
     if (req.user.role === 'doctor') {
-      // Find the doctor_id for this user
-      const docResult = await query('SELECT id FROM doctors WHERE user_id = $1', [req.user.id]);
-      if (docResult.rows.length > 0) {
+      const doc = await getDoctorForUser(req.user.id);
+      if (doc) {
         queryText += ' WHERE a.doctor_id = $1';
-        queryParams.push(docResult.rows[0].id);
+        queryParams.push(doc.id);
       } else {
-        // If doctor not found in doctors table, return empty array instead of error
-        // This prevents immediate logout due to 403 response
         return res.json([]);
       }
+    } else if (req.user.role === 'patient') {
+      const ids = await getAccessiblePatientIds(req.user.id);
+      const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
+      queryText += ' WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2';
+      queryParams.push(ids, userResult.rows[0]?.phone_number || '');
+    } else if (!['admin', 'medical_ops', 'nurse'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     queryText += ' ORDER BY a.preferred_date DESC, a.preferred_time DESC';
@@ -419,7 +389,7 @@ app.get('/api/appointments', authenticate, async (req: any, res) => {
 
 app.get('/api/appointments/my', authenticate, async (req: any, res) => {
   try {
-    const patient = await getPatientForUser(req.user.id);
+    const ids = await getAccessiblePatientIds(req.user.id);
     const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
     const phone = userResult.rows[0]?.phone_number;
 
@@ -427,9 +397,9 @@ app.get('/api/appointments/my', authenticate, async (req: any, res) => {
       SELECT a.*, d.name as doctor_name 
       FROM appointments a 
       LEFT JOIN doctors d ON a.doctor_id = d.id 
-      WHERE ($1::int IS NOT NULL AND a.patient_id = $1) OR a.phone_number = $2
+      WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2
       ORDER BY a.preferred_date DESC, a.preferred_time DESC
-    `, [patient?.id || null, phone || '']);
+    `, [ids, phone || '']);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -442,51 +412,45 @@ app.get('/api/appointments/:id', authenticate, async (req: any, res) => {
     return res.status(404).json({ message: 'Not found' });
   }
   try {
-    const result = await query(
-      `SELECT a.*, d.name as doctor_name
-       FROM appointments a
-       LEFT JOIN doctors d ON a.doctor_id = d.id
-       WHERE a.id = $1`,
-      [id]
-    );
-    const apt = result.rows[0];
-    if (!apt) return res.status(404).json({ message: 'Not found' });
-
-    if (req.user.role === 'doctor') {
-      const docResult = await query('SELECT id FROM doctors WHERE user_id = $1', [req.user.id]);
-      const docId = docResult.rows[0]?.id;
-      if (docId && apt.doctor_id && Number(apt.doctor_id) !== Number(docId)) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
-    }
-    if (req.user.role === 'patient') {
-      const patient = await getPatientForUser(req.user.id);
-      const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
-      const phone = userResult.rows[0]?.phone_number;
-      const mine = (patient?.id && Number(apt.patient_id) === Number(patient.id)) ||
-        (phone && apt.phone_number === phone);
-      if (!mine) return res.status(403).json({ message: 'Forbidden' });
-    }
-
+    const apt = await assertAppointmentAccess(req, res, id);
+    if (!apt) return;
     res.json(apt);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.post('/api/appointments', async (req, res) => {
+app.post('/api/appointments', authenticate, async (req: any, res) => {
     const { 
     fullName, whoIsComing, phoneNumber, email, staffId, nationwideId, department, 
     reason, preferredDate, preferredTime, priority, notes, doctor_id, service, isTelemedicine,
-    consult_type, booking_type
+    consult_type, booking_type, dependent_patient_id
   } = req.body;
   
   const effectiveStaffId = staffId || null;
   
   try {
+    if (req.user.role === 'patient') {
+      const mine = await getPatientForUser(req.user.id);
+      if (!mine) return res.status(400).json({ message: 'Complete your medical profile first.' });
+    } else if (!CLINICAL_STAFF.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
     // 1. Check if patient exists (by staffId if available, else by phoneNumber)
     let patientResult;
-    if (effectiveStaffId) {
+    if (req.user.role === 'patient') {
+      const mine = await getPatientForUser(req.user.id);
+      if (dependent_patient_id) {
+        const ids = await getAccessiblePatientIds(req.user.id);
+        if (!ids.includes(Number(dependent_patient_id))) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+        patientResult = await query('SELECT * FROM patients WHERE id = $1', [dependent_patient_id]);
+      } else {
+        patientResult = { rows: mine ? [mine] : [] };
+      }
+    } else if (effectiveStaffId) {
       patientResult = await query('SELECT * FROM patients WHERE staff_id = $1', [effectiveStaffId]);
     } else {
       patientResult = await query('SELECT * FROM patients WHERE phone_number = $1', [phoneNumber]);
@@ -507,6 +471,7 @@ app.post('/api/appointments', async (req, res) => {
     }
 
     const appointmentId = 'APT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+    const visitName = dependent_patient_id ? patient.full_name : fullName;
 
     const result = await query(`
       INSERT INTO appointments (
@@ -516,14 +481,15 @@ app.post('/api/appointments', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
-      appointmentId, patient.id, fullName, whoIsComing, phoneNumber, email, staffId, nationwideId,
+      appointmentId, patient.id, visitName, whoIsComing, phoneNumber, email, staffId, nationwideId,
       department, reason + (notes ? ' | ' + notes : ''), preferredDate, preferredTime, priority, doctor_id, service, !!isTelemedicine,
       consult_type || service || 'general consultation', booking_type || 'scheduled'
     ]);
 
-    // Real SMS Sending
-    const locationLink = "https://www.google.com/maps/search/?api=1&query=Primecare+Medical+Center+Accra";
-    await sendSMS(phoneNumber, `CSA: Your appointment ${appointmentId} is booked for ${preferredDate} at ${preferredTime}. Location: ${locationLink}. Thank you for choosing Primecare Medical Center.`);
+    await sendSMS(
+      phoneNumber,
+      `Digi Health: appointment ${appointmentId} is booked for ${preferredDate} at ${preferredTime}. Open the app to manage your visit.`
+    );
     
     // Admin Alerts
     console.log(`Admin Alert: New appointment ${appointmentId} booked by ${fullName}.`);
@@ -558,10 +524,15 @@ app.post('/api/appointments', async (req, res) => {
   }
 });
 
-app.patch('/api/appointments/:id', async (req, res) => {
+app.patch('/api/appointments/:id', authenticate, async (req: any, res) => {
   const { id } = req.params;
   const { preferred_date, preferred_time, notes, doctor_id, priority, status, who_is_coming, service, is_telemedicine } = req.body;
   try {
+    const existing = await assertAppointmentAccess(req, res, id);
+    if (!existing) return;
+    if (req.user.role === 'patient' && status && !['cancelled'].includes(status)) {
+      return res.status(403).json({ message: 'Patients can only cancel their own visits.' });
+    }
     const finalDoctorId = doctor_id === '' ? null : doctor_id;
 
     const result = await query(
@@ -586,16 +557,15 @@ app.patch('/api/appointments/:id', async (req, res) => {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'a Physician';
         const dateStr = apt.preferred_date ? new Date(apt.preferred_date).toLocaleDateString() : 'the scheduled date';
-        const locationLink = "https://www.google.com/maps/search/?api=1&query=Primecare+Medical+Center+Accra";
-        const msg = `CSA: Your appointment ${apt.appointment_id} has been APPROVED with ${doctorName} for ${dateStr}. Location: ${locationLink}. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
+        const msg = `Digi Health: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app to join or view details.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Approve:', e));
       } else if (status === 'completed') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'our team';
-        const msg = `CSA: Your appointment ${apt.appointment_id} with ${doctorName} has been marked as COMPLETED. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
+        const msg = `Digi Health: your visit ${apt.appointment_id} with ${doctorName} is complete. Review notes and prescriptions in the app.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Complete:', e));
       } else if (status === 'cancelled') {
-        const msg = `CSA: Your appointment ${apt.appointment_id} has been CANCELLED. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
+        const msg = `Digi Health: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Cancel:', e));
       }
 
@@ -638,27 +608,17 @@ app.patch('/api/appointments/:id', async (req, res) => {
 });
 
 // Manual Meeting Link Generation (for Doctors)
-app.post('/api/appointments/:id/generate-link', authenticate, async (req: any, res) => {
+app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CLINICAL_STAFF), async (req: any, res) => {
   const { id } = req.params;
-  if (req.user.role === 'patient') return res.status(403).json({ message: 'Forbidden' });
 
   try {
-    const existing = await query(
-      `SELECT a.*, d.name as doctor_name
-       FROM appointments a
-       LEFT JOIN doctors d ON a.doctor_id = d.id
-       WHERE a.id = $1`,
-      [id]
-    );
-    const current = existing.rows[0];
-    if (!current) return res.status(404).json({ message: 'Not found' });
+    const current = await assertAppointmentAccess(req, res, id);
+    if (!current) return;
     if (current.meeting_link) {
       return res.json(current);
     }
 
-    const chars = 'abcdefghijklmnopqrstuvwxyz';
-    const getChars = (len: number) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    const meetingLink = `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
+    const meetingLink = createSecureJitsiLink();
     
     await query(
       'UPDATE appointments SET meeting_link = $1, payment_status = $2, is_telemedicine = TRUE WHERE id = $3',
@@ -676,7 +636,7 @@ app.post('/api/appointments/:id/generate-link', authenticate, async (req: any, r
     const apt = result.rows[0];
     if (apt) {
       const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
-      const msg = `CSA: Your Telemedicine session link for ${apt.appointment_id} is ready: ${meetingLink}. Scheduled for ${scheduledInfo}. Please join at your scheduled time. Thank you.`;
+      const msg = `Digi Health: your video visit ${apt.appointment_id} is ready for ${scheduledInfo}. Open the app to join.`;
       await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in manual link gen:', e));
     }
 
@@ -690,19 +650,15 @@ app.post('/api/appointments/:id/generate-link', authenticate, async (req: any, r
 app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
   const { id } = req.params;
   try {
-    const aptResult = await query('SELECT * FROM appointments WHERE id = $1', [id]);
-    const apt = aptResult.rows[0];
-
-    if (!apt) return res.status(404).json({ message: 'Appointment not found' });
+    const apt = await assertAppointmentAccess(req, res, id);
+    if (!apt) return;
 
     const paymentRef = 'PAY-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const status = 'paid'; 
     
     let meetingLink = null;
     if (apt.is_telemedicine) {
-      const chars = 'abcdefghijklmnopqrstuvwxyz';
-      const getChars = (len: number) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      meetingLink = apt.meeting_link || `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
+      meetingLink = apt.meeting_link || createSecureJitsiLink();
     }
 
     await query(`
@@ -726,11 +682,12 @@ app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
 
     if (apt.is_telemedicine && meetingLink) {
       const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
-      await sendSMS(apt.phone_number, `CSA: Payment Confirmed! Your session with the doctor for ${scheduledInfo} is set. Join here: ${meetingLink}`);
+      await sendSMS(apt.phone_number, `Digi Health: payment confirmed for your visit on ${scheduledInfo}. Open the app to join.`);
     }
 
     res.json({
-      message: 'Payment successful',
+      message: 'Simulated payment recorded. No card was charged.',
+      simulated: true,
       paymentRef: billed.paymentRef || paymentRef,
       meetingLink,
       eligibility: billed.eligibility,
@@ -741,22 +698,22 @@ app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
   }
 });
 
-app.patch('/api/appointments/:id/status', async (req, res) => {
+app.patch('/api/appointments/:id/status', authenticate, async (req: any, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
-    // 1. Get current appointment data to check telemedicine status
-    const initialApt = await query('SELECT * FROM appointments WHERE id = $1', [id]);
-    const aptData = initialApt.rows[0];
+    const aptData = await assertAppointmentAccess(req, res, id);
+    if (!aptData) return;
+    if (req.user.role === 'patient' && status !== 'cancelled') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     let meetingLink = aptData?.meeting_link;
 
     // 2. If starting/approving a video consult that doesn't have a link yet, generate one
     if ((status === 'approved' || status === 'consulting') && !meetingLink &&
         (aptData?.is_telemedicine || aptData?.booking_type === 'consult_now')) {
-      const chars = 'abcdefghijklmnopqrstuvwxyz';
-      const getChars = (len: number) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      meetingLink = `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
+      meetingLink = createSecureJitsiLink();
     }
 
     const result = await query(
@@ -779,20 +736,19 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
         
         let msg = '';
         if (apt.is_telemedicine && apt.meeting_link) {
-          msg = `CSA: Your Telemedicine session ${apt.appointment_id} with ${doctorName} is APPROVED for ${dateStr} at ${apt.preferred_time}. Join link: ${apt.meeting_link}. Thank you for choosing Primecare.`;
+          msg = `Digi Health: your video visit ${apt.appointment_id} with ${doctorName} is confirmed for ${dateStr} at ${apt.preferred_time}. Open the app to join.`;
         } else {
-          const locationLink = "https://www.google.com/maps/search/?api=1&query=Primecare+Medical+Center+Accra";
-          msg = `CSA: Your appointment ${apt.appointment_id} has been APPROVED with ${doctorName} for ${dateStr}. Location: ${locationLink}. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
+          msg = `Digi Health: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app for details.`;
         }
         
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Approve:', e));
       } else if (status === 'completed') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'our team';
-        const msg = `CSA: Your appointment ${apt.appointment_id} with ${doctorName} has been marked as COMPLETED. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
+        const msg = `Digi Health: your visit ${apt.appointment_id} with ${doctorName} is complete. Review your care plan in the app.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Complete:', e));
       } else if (status === 'cancelled') {
-        const msg = `CSA: Your appointment ${apt.appointment_id} has been CANCELLED. Call +233200024081 for enquiries. Thank you for choosing Primecare Medical Center.`;
+        const msg = `Digi Health: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Cancel:', e));
       }
 
@@ -834,7 +790,7 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
   }
 });
 
-app.patch('/api/appointments/:id/no-show', async (req, res) => {
+app.patch('/api/appointments/:id/no-show', authenticate, requireRoles(...CLINICAL_STAFF), async (req: any, res) => {
   const { id } = req.params;
   try {
     // Mark as missed
@@ -879,18 +835,23 @@ app.post('/api/push/fcm-token', authenticate, async (req: any, res) => {
   }
 });
 
-app.get('/api/notifications', async (req, res) => {
+app.get('/api/notifications', authenticate, async (req: any, res) => {
   try {
-    const result = await query('SELECT * FROM notifications ORDER BY created_at DESC LIMIT 10');
+    const result = await query(
+      `SELECT * FROM notifications
+       WHERE user_id = $1 OR (user_id IS NULL AND $2 = 'admin')
+       ORDER BY created_at DESC LIMIT 40`,
+      [req.user.id, req.user.role]
+    );
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.patch('/api/notifications/read', async (req, res) => {
+app.patch('/api/notifications/read', authenticate, async (req: any, res) => {
   try {
-    await query('UPDATE notifications SET is_read = TRUE');
+    await query('UPDATE notifications SET is_read = TRUE WHERE user_id = $1', [req.user.id]);
     res.json({ message: 'Notifications marked as read' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -900,6 +861,23 @@ app.patch('/api/notifications/read', async (req, res) => {
 // --- Prescription Routes ---
 app.get('/api/prescriptions', authenticate, async (req: any, res) => {
   try {
+    if (req.user.role === 'patient') {
+      const patient = await getPatientForUser(req.user.id);
+      if (!patient) return res.json([]);
+      const result = await query(`
+        SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name, o.name as pharmacy_name
+        FROM prescriptions pr
+        JOIN appointments a ON pr.appointment_id = a.id
+        JOIN patients p ON pr.patient_id = p.id
+        LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
+        WHERE pr.patient_id = $1
+        ORDER BY pr.created_at DESC
+      `, [patient.id]);
+      return res.json(result.rows);
+    }
+    if (!['doctor', 'admin', 'medical_ops', 'nurse', 'pharmacy'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
     const result = await query(`
       SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name, o.name as pharmacy_name
       FROM prescriptions pr
@@ -948,7 +926,7 @@ app.post('/api/prescriptions', authenticate, async (req: any, res) => {
     
     const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
     if (aptResult.rows[0]) {
-      await sendSMS(aptResult.rows[0].phone_number, `CSA: A new prescription for ${medication_name} has been added to your portal. Please check your Patient Dashboard for dosage instructions.`);
+      await sendSMS(aptResult.rows[0].phone_number, `Digi Health: a new prescription is ready in your app. Open Prescriptions to review instructions.`);
     }
 
     res.status(201).json(result.rows[0]);
@@ -990,6 +968,8 @@ app.get('/api/consultations/my', authenticate, async (req: any, res) => {
 
 app.get('/api/consultations/:appointmentId', authenticate, async (req: any, res) => {
   try {
+    const apt = await assertAppointmentAccess(req, res, req.params.appointmentId);
+    if (!apt) return;
     const result = await query(`
       SELECT c.*, u.name as doctor_name
       FROM consultations c
@@ -1023,7 +1003,7 @@ app.post('/api/consultations', authenticate, async (req: any, res) => {
     if (status === 'completed' && diagnosis) {
       const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
       if (aptResult.rows[0]) {
-        await sendSMS(aptResult.rows[0].phone_number, `CSA: Your consultation is complete. Diagnosis: ${diagnosis}. Please follow your doctor's instructions.`);
+        await sendSMS(aptResult.rows[0].phone_number, `Digi Health: your consultation is complete. Open the app to review your care plan and prescriptions.`);
       }
     }
 
@@ -1059,7 +1039,7 @@ app.put('/api/consultations/:id', authenticate, async (req: any, res) => {
     if (status === 'completed' && oldCons.rows[0]?.status !== 'completed' && diagnosis) {
       const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [oldCons.rows[0].appointment_id]);
       if (aptResult.rows[0]) {
-        await sendSMS(aptResult.rows[0].phone_number, `CSA: Your consultation is complete. Diagnosis: ${diagnosis}. Please follow your doctor's instructions.`);
+        await sendSMS(aptResult.rows[0].phone_number, `Digi Health: your consultation is complete. Open the app to review your care plan and prescriptions.`);
       }
     }
 
@@ -1085,7 +1065,20 @@ app.get('/api/labs', authenticate, async (req: any, res) => {
     const conditions: string[] = [];
     const params: any[] = [];
     
-    if (patient_id) { conditions.push(`lr.patient_id = $${params.length + 1}`); params.push(patient_id); }
+    if (req.user.role === 'patient') {
+      const patient = await getPatientForUser(req.user.id);
+      if (!patient) return res.json([]);
+      conditions.push(`lr.patient_id = $${params.length + 1}`);
+      params.push(patient.id);
+    } else if (patient_id) {
+      if (!(await canAccessPatient(req.user, patient_id))) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      conditions.push(`lr.patient_id = $${params.length + 1}`);
+      params.push(patient_id);
+    } else if (!['doctor', 'admin', 'medical_ops', 'nurse', 'lab_technician'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
     if (status) { conditions.push(`lr.status = $${params.length + 1}`); params.push(status); }
     if (req.user.role === 'lab_technician') {
       const staff = await query(
@@ -1177,7 +1170,20 @@ app.get('/api/scans', authenticate, async (req: any, res) => {
     const conditions: string[] = [];
     const params: any[] = [];
     
-    if (patient_id) { conditions.push(`sr.patient_id = $${params.length + 1}`); params.push(patient_id); }
+    if (req.user.role === 'patient') {
+      const patient = await getPatientForUser(req.user.id);
+      if (!patient) return res.json([]);
+      conditions.push(`sr.patient_id = $${params.length + 1}`);
+      params.push(patient.id);
+    } else if (patient_id) {
+      if (!(await canAccessPatient(req.user, patient_id))) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      conditions.push(`sr.patient_id = $${params.length + 1}`);
+      params.push(patient_id);
+    } else if (!['doctor', 'admin', 'medical_ops', 'nurse', 'imaging', 'lab_technician'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
     if (status) { conditions.push(`sr.status = $${params.length + 1}`); params.push(status); }
     if (req.user.role === 'imaging' || req.user.role === 'lab_technician') {
       const staff = await query(
@@ -1255,6 +1261,9 @@ app.put('/api/scans/:id', authenticate, async (req: any, res) => {
 // --- Patient History (Aggregated Timeline) ---
 app.get('/api/patients/:id/history', authenticate, async (req: any, res) => {
   const patientId = req.params.id;
+  if (!(await canAccessPatient(req.user, patientId))) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
   try {
     const [consultations, labs, scans, prescriptions] = await Promise.all([
       query(`
@@ -1303,6 +1312,8 @@ app.get('/api/patients/:id/history', authenticate, async (req: any, res) => {
 // Also support history lookup by appointment (for walk-in patients without patient_id)
 app.get('/api/appointments/:id/history', authenticate, async (req: any, res) => {
   const appointmentId = req.params.id;
+  const apt = await assertAppointmentAccess(req, res, appointmentId);
+  if (!apt) return;
   try {
     const [consultations, labs, scans, prescriptions] = await Promise.all([
       query('SELECT c.*, u.name as doctor_name FROM consultations c LEFT JOIN users u ON c.doctor_id = u.id WHERE c.appointment_id = $1 ORDER BY c.created_at DESC', [appointmentId]),
@@ -1325,7 +1336,7 @@ app.get('/api/appointments/:id/history', authenticate, async (req: any, res) => 
 
 
 // --- Doctor Routes ---
-app.get('/api/doctors', async (req, res) => {
+app.get('/api/doctors', authenticate, async (req, res) => {
   try {
     const result = await query('SELECT * FROM doctors ORDER BY name');
     res.json(result.rows);
@@ -1334,7 +1345,7 @@ app.get('/api/doctors', async (req, res) => {
   }
 });
 
-app.post('/api/doctors', async (req, res) => {
+app.post('/api/doctors', authenticate, requireRoles(...ADMIN_OPS), async (req, res) => {
   const { name, specialization, slot_duration, working_days, start_time, end_time, is_active } = req.body;
   try {
     const result = await query(`
@@ -1347,7 +1358,7 @@ app.post('/api/doctors', async (req, res) => {
   }
 });
 
-app.put('/api/doctors/:id', async (req, res) => {
+app.put('/api/doctors/:id', authenticate, requireRoles(...ADMIN_OPS), async (req, res) => {
   const { id } = req.params;
   const { name, specialization, slot_duration, working_days, start_time, end_time, is_active } = req.body;
   try {
@@ -1362,7 +1373,7 @@ app.put('/api/doctors/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/doctors/:id/status', async (req, res) => {
+app.patch('/api/doctors/:id/status', authenticate, requireRoles(...ADMIN_OPS), async (req, res) => {
   const { id } = req.params;
   const { is_active } = req.body;
   try {
@@ -1377,7 +1388,7 @@ app.patch('/api/doctors/:id/status', async (req, res) => {
 });
 
 // --- Analytics Routes ---
-app.get('/api/analytics/dashboard', authenticate, async (req: any, res) => {
+app.get('/api/analytics/dashboard', authenticate, requireRoles(...CLINICAL_STAFF), async (req: any, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     let doctorId = null;
@@ -1531,6 +1542,8 @@ app.get('/api/analytics/dashboard', authenticate, async (req: any, res) => {
 registerPhase1Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerPhase2Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerPhase3Routes(app, { authenticate, sendSMS, sendPushNotification });
+registerClinicalRoutes(app);
+registerPhase4Routes(app);
 
 // Initialize Database
 initDb().then(() => {

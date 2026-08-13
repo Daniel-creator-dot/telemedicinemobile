@@ -116,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await repo.forgotPassword(_username.text);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('OTP sent to registered phone number.')),
+            const SnackBar(content: Text('If an account exists, a reset code has been sent.')),
           );
           _setMode(_AuthMode.reset);
           break;
