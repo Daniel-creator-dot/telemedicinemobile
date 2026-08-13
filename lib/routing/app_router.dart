@@ -14,6 +14,7 @@ import '../features/imaging/imaging_home_screen.dart';
 import '../features/corporate/corporate_home_screen.dart';
 import '../features/insurance/insurance_home_screen.dart';
 import '../features/finance/finance_home_screen.dart';
+import '../features/hospital/hospital_home_screen.dart';
 import '../features/consult/video_consult_screen.dart';
 import '../features/patient/chat_screen.dart';
 import '../features/patient/consult_now_screen.dart';
@@ -27,6 +28,15 @@ import '../features/patient/notifications_inbox_screen.dart';
 import '../features/patient/patient_home_screen.dart';
 import '../features/patient/records_vault_screen.dart';
 import '../features/patient/symptom_helper_screen.dart';
+import '../features/patient/national_network_screen.dart';
+import '../features/patient/family_chart_screen.dart';
+import '../features/patient/payments_screen.dart';
+import '../features/patient/membership_screen.dart';
+import '../features/patient/phases_screen.dart';
+import '../features/patient/support_screen.dart';
+import '../features/patient/consents_screen.dart';
+import '../features/patient/followups_screen.dart';
+import '../features/ops/national_coverage_screen.dart';
 import '../models/appointment.dart';
 
 GoRouter createAppRouter(Session session) {
@@ -81,6 +91,9 @@ GoRouter createAppRouter(Session session) {
       if (path.startsWith('/finance') && role != 'finance' && role != 'admin') {
         return _homePathFor(role);
       }
+      if (path.startsWith('/hospital') && role != 'hospital' && role != 'admin' && role != 'medical_ops') {
+        return _homePathFor(role);
+      }
 
       return null;
     },
@@ -105,6 +118,21 @@ GoRouter createAppRouter(Session session) {
           GoRoute(path: 'family', builder: (context, state) => const FamilyScreen()),
           GoRoute(path: 'programs', builder: (context, state) => const CareProgramsScreen()),
           GoRoute(path: 'symptom-helper', builder: (context, state) => const SymptomHelperScreen()),
+          GoRoute(path: 'network', builder: (context, state) => const NationalNetworkScreen()),
+          GoRoute(path: 'payments', builder: (context, state) => const PaymentsScreen()),
+          GoRoute(path: 'membership', builder: (context, state) => const MembershipScreen()),
+          GoRoute(path: 'phases', builder: (context, state) => const PhasesScreen()),
+          GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
+          GoRoute(path: 'consents', builder: (context, state) => const ConsentsScreen()),
+          GoRoute(path: 'followups', builder: (context, state) => const FollowupsScreen()),
+          GoRoute(
+            path: 'family/:id',
+            builder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+              final name = state.uri.queryParameters['name'];
+              return FamilyChartScreen(patientId: id, name: name);
+            },
+          ),
           GoRoute(path: 'notifications', builder: (context, state) => const NotificationsInboxScreen()),
           GoRoute(path: 'tracker', builder: (context, state) => const HealthTrackerScreen()),
           GoRoute(
@@ -141,15 +169,30 @@ GoRouter createAppRouter(Session session) {
           ),
         ],
       ),
-      GoRoute(path: '/admin', builder: (context, state) => const AdminHomeScreen()),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminHomeScreen(),
+        routes: [
+          GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
+          GoRoute(path: 'network', builder: (context, state) => const NationalCoverageScreen()),
+        ],
+      ),
       GoRoute(path: '/lab-technician', builder: (context, state) => const LabTechnicianHomeScreen()),
       GoRoute(path: '/nurse', builder: (context, state) => const NurseHomeScreen()),
-      GoRoute(path: '/ops', builder: (context, state) => const OpsHomeScreen()),
+      GoRoute(
+        path: '/ops',
+        builder: (context, state) => const OpsHomeScreen(),
+        routes: [
+          GoRoute(path: 'network', builder: (context, state) => const NationalCoverageScreen()),
+          GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
+        ],
+      ),
       GoRoute(path: '/pharmacy', builder: (context, state) => const PharmacyHomeScreen()),
       GoRoute(path: '/imaging', builder: (context, state) => const ImagingHomeScreen()),
       GoRoute(path: '/corporate', builder: (context, state) => const CorporateHomeScreen()),
       GoRoute(path: '/insurance', builder: (context, state) => const InsuranceHomeScreen()),
       GoRoute(path: '/finance', builder: (context, state) => const FinanceHomeScreen()),
+      GoRoute(path: '/hospital', builder: (context, state) => const HospitalHomeScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -184,6 +227,8 @@ String _homePathFor(String role) {
       return '/insurance';
     case 'finance':
       return '/finance';
+    case 'hospital':
+      return '/hospital';
     default:
       return '/patient';
   }

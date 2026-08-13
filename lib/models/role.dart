@@ -9,7 +9,8 @@ enum AppRole {
   imaging,
   corporate,
   insurance,
-  finance;
+  finance,
+  hospital;
 
   static AppRole fromString(String? value) {
     switch (value?.toLowerCase()) {
@@ -35,6 +36,8 @@ enum AppRole {
         return AppRole.insurance;
       case 'finance':
         return AppRole.finance;
+      case 'hospital':
+        return AppRole.hospital;
       case 'patient':
       default:
         return AppRole.patient;
@@ -65,6 +68,8 @@ enum AppRole {
         return 'insurance';
       case AppRole.finance:
         return 'finance';
+      case AppRole.hospital:
+        return 'hospital';
     }
   }
 
@@ -92,6 +97,8 @@ enum AppRole {
         return 'Insurance';
       case AppRole.finance:
         return 'Finance';
+      case AppRole.hospital:
+        return 'Hospital / Clinic';
     }
   }
 }

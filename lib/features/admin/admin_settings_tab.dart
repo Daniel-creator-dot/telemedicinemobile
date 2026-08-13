@@ -8,6 +8,8 @@ class AdminSettingsTab extends StatelessWidget {
     required this.smsBaseUrl,
     required this.smsSenderId,
     required this.smsApiKey,
+    required this.paystackPublicKey,
+    required this.paystackSecretKey,
     required this.onSave,
     required this.fieldDecoration,
     this.opsSummary,
@@ -17,6 +19,8 @@ class AdminSettingsTab extends StatelessWidget {
   final TextEditingController smsBaseUrl;
   final TextEditingController smsSenderId;
   final TextEditingController smsApiKey;
+  final TextEditingController paystackPublicKey;
+  final TextEditingController paystackSecretKey;
   final VoidCallback onSave;
   final InputDecoration Function(String, IconData) fieldDecoration;
   final Map<String, dynamic>? opsSummary;
@@ -73,6 +77,17 @@ class AdminSettingsTab extends StatelessWidget {
                 TextField(controller: smsSenderId, decoration: fieldDecoration('Sender ID', Icons.abc_outlined)),
                 const SizedBox(height: 10),
                 TextField(controller: smsApiKey, obscureText: true, decoration: fieldDecoration('Gateway API token', Icons.key_rounded)),
+                const SizedBox(height: 24),
+                Text('Paystack (same keys as Bytz Go)', style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text(
+                  'Use a matching pair: pk_test_ with sk_test_, or pk_live_ with sk_live_. Secret is never returned in full.',
+                  style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                TextField(controller: paystackPublicKey, decoration: fieldDecoration('Paystack public key (pk_…)', Icons.public_rounded)),
+                const SizedBox(height: 10),
+                TextField(controller: paystackSecretKey, obscureText: true, decoration: fieldDecoration('Paystack secret key (sk_…)', Icons.lock_rounded)),
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: onSave,

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../nurse/nurse_home_screen.dart';
 import '../patient/care_repository.dart';
 
@@ -40,21 +41,15 @@ class _OpsHomeScreenState extends State<OpsHomeScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text('Medical Operations', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F172A),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-          IconButton(
-            onPressed: () async {
-              await session.clear();
-              if (context.mounted) context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
+      backgroundColor: const Color(0xFFF6F3EE),
+      appBar: RoleChrome(
+        title: 'Medical operations',
+        subtitle: 'Clinical quality — not commercial contracts',
+        onRefresh: _load,
+        onLogout: () async {
+          await session.clear();
+          if (context.mounted) context.go('/login');
+        },
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -94,6 +89,18 @@ class _OpsHomeScreenState extends State<OpsHomeScreen> {
                   },
                   icon: const Icon(Icons.monitor_heart_outlined),
                   label: const Text('Open live triage queue'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/ops/network'),
+                  icon: const Icon(Icons.public),
+                  label: const Text('National coverage, alerts, audit'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/ops/support'),
+                  icon: const Icon(Icons.support_agent_outlined),
+                  label: const Text('Support desk'),
                 ),
               ],
             ),

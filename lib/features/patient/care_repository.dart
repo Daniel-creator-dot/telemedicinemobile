@@ -18,12 +18,14 @@ class CareRepository {
     return PatientProfile.fromJson(res.data ?? {});
   }
 
-  Future<List<DoctorProfile>> getDirectory({String? specialty, String? q}) async {
+  Future<List<DoctorProfile>> getDirectory({String? specialty, String? q, String? language, String? region}) async {
     final res = await _api.dio.get<List<dynamic>>(
       '/api/doctors/directory',
       queryParameters: {
         if (specialty != null && specialty.isNotEmpty) 'specialty': specialty,
         if (q != null && q.isNotEmpty) 'q': q,
+        if (language != null && language.isNotEmpty) 'language': language,
+        if (region != null && region.isNotEmpty) 'region': region,
       },
     );
     return (res.data ?? [])
@@ -214,6 +216,11 @@ class CareRepository {
     await _api.dio.patch('/api/notifications/me/read');
   }
 
+  Future<Map<String, dynamic>> phasesMe() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/phases/me');
+    return res.data ?? {};
+  }
+
   Future<Map<String, dynamic>> healthJourney() async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/journey/me');
     return res.data ?? {};
@@ -288,6 +295,120 @@ class CareRepository {
 
   Future<Map<String, dynamic>> adminOpsSummary() async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/admin/ops-summary');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> networkCoverage() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/network/coverage');
+    return res.data ?? {};
+  }
+
+  Future<List<Map<String, dynamic>>> nationalNearby({String? type, double? lat, double? lng}) async {
+    final res = await _api.dio.get('/api/network/nearby', queryParameters: {
+      if (type != null) 'type': type,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+    });
+    final data = res.data;
+    if (data is Map && data['results'] is List) {
+      return (data['results'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    if (data is List) {
+      return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  Future<Map<String, dynamic>> nationalOps() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/network/national');
+    return res.data ?? {};
+  }
+
+  Future<List<Map<String, dynamic>>> auditLog() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/audit');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> riskAlerts({int? patientId}) async {
+    final res = await _api.dio.get<List<dynamic>>(
+      '/api/risk-alerts',
+      queryParameters: {if (patientId != null) 'patient_id': patientId},
+    );
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<void> scanRiskAlerts({int? patientId}) async {
+    await _api.dio.post('/api/risk-alerts/scan', data: {if (patientId != null) 'patient_id': patientId});
+  }
+
+  Future<Map<String, dynamic>> familyChart(int patientId) async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/family/$patientId/chart');
+    return res.data ?? {};
+  }
+
+  Future<void> saveConsent(String type, {bool accepted = true}) async {
+    await _api.dio.post('/api/consents/me', data: {'consent_type': type, 'accepted': accepted});
+  }
+
+  Future<List<Map<String, dynamic>>> myConsents() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/consents/me');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> myBilling() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/billing/me');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> membershipMe() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/membership/me');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> initializeMembership({
+    required String tier,
+    required String period,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/membership/initialize',
+      data: {'tier': tier, 'period': period},
+    );
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> activateMembership({
+    required String tier,
+    required String period,
+    required String reference,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/membership/activate',
+      data: {'tier': tier, 'period': period, 'reference': reference},
+    );
+    return res.data ?? {};
+  }
+
+  Future<List<Map<String, dynamic>>> myFollowups() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/followups/me');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> supportTickets() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/support/tickets');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> openSupportTicket(Map<String, dynamic> payload) async {
+    final res = await _api.dio.post<Map<String, dynamic>>('/api/support/tickets', data: payload);
+    return res.data ?? {};
+  }
+
+  Future<void> updateSupportTicket(int id, Map<String, dynamic> payload) async {
+    await _api.dio.patch('/api/support/tickets/$id', data: payload);
+  }
+
+  Future<Map<String, dynamic>> hospitalDesk() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/hospital/desk');
     return res.data ?? {};
   }
 }

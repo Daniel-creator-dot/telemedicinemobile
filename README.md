@@ -28,6 +28,9 @@ Required environment:
 | `NODE_ENV` | Set `production` to hide debug OTPs |
 | `OPENAI_API_KEY` | Optional. If unset, clinical AI assist uses rule-based drafts |
 | `OPENAI_MODEL` | Optional model name (default `gpt-4o-mini`) |
+| `PAYSTACK_PUBLIC_KEY` | Same `pk_test_` / `pk_live_` as Bytz Go (or set in Admin → Settings) |
+| `PAYSTACK_SECRET_KEY` | Matching `sk_test_` / `sk_live_` secret |
+| `PAYSTACK_CALLBACK_URL` | Optional API origin for Paystack return (`/api/paystack/callback`) |
 
 SMS credentials live in the `settings` table and are never returned to non-admin clients. Configure them from the admin console after login.
 
@@ -65,15 +68,29 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Corporate | scheme admin | Eligibility and utilization (no clinical notes) |
 | Insurance | insurer desk | Preauth and claims |
 | Finance | finance | Collections and settlements |
-| Admin | `admin` | Staff, doctors, settings, analytics |
+| Hospital | `hospital` / `hosp123` | Inbound specialist referrals |
+| Admin | `admin` | Staff, doctors, settings, analytics, support, national net |
+| Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
 
-Default local passwords (change in production): `admin` / `admin`, `nurse` / `nurse123`, `medops` / `ops123`, `labtech` / `labtech123`.
+Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `hospital`/`hosp123`, `support`/`support123`.
+
+## Five phases (one record)
+
+| Phase | What it is | In the app |
+| --- | --- | --- |
+| 1 Consult | Book, Consult Now, video, chat, SOAP | Patient home, doctor queue |
+| 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient → Care phases |
+| 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership | Payments, Membership |
+| 4 Household | Family, programs, vault, assistive helper | Family, Care programs |
+| 5 Nation | 16 regions, follow-up, risk alerts, audit | Ghana network, Care phases |
+
+Open **Patient → Care phases** for live counts on all five.
 
 ## Product surface
 
-- **Patient:** OTP onboarding, medical profile, doctor directory, book + Consult Now, Jitsi video, in-visit chat, prescriptions, labs/imaging, health journey, document vault, health tracker, notifications, family/dependents, chronic care programs, assistive symptom helper
+- **Patient:** OTP onboarding, medical profile, doctor directory, book + Consult Now, Jitsi video, in-visit chat, prescriptions, labs/imaging, health journey, document vault, health tracker, notifications, family/dependents, chronic care programs, assistive symptom helper, Ghana partner network
 - **Clinician:** queue cockpit (next patient, SOAP, Rx, chat, video, end visit), assistive SOAP draft, referrals
-- **Network:** nurse triage, lab, pharmacy, imaging, medical operations
+- **Network:** nurse triage, lab, pharmacy, imaging, hospital desk, medical operations
 - **Business:** corporate, insurance, finance/billing (phase 3 APIs)
 - **Admin:** staff registry, clinic/SMS settings (API key masked), ops snapshot from authenticated APIs
 
@@ -84,12 +101,39 @@ Default local passwords (change in production): `admin` / `admin`, `nurse` / `nu
 - **Clinical AI assist:** Doctor SOAP dialog → “Draft SOAP (assistive)”. Patient → Symptom helper. Works without an LLM key (templated from notes/vitals). If `OPENAI_API_KEY` is set, a richer draft is attempted. Always labeled assistive; never a diagnosis; no HIPAA claim.
 - **Vault:** Rx, labs, imaging, letters, plus document *metadata* you add (title, source, notes). This API does not store file bytes (Render disk is ephemeral).
 
-Video rooms use unguessable Jitsi names (`digihealth-` + random hex). Visit pay is **simulated** and labeled as such. SMS never includes diagnoses. Settings GET never returns a raw SMS API key.
+Video rooms use unguessable Jitsi names (`digihealth-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, GHS, card / MoMo / bank). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
 
 This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRET` private, and treat all clinical data as confidential.
 
 ## Layout
 
 - `lib/` — Digi Health Flutter app
-- `server/` — Express API (`index.ts` plus `phase1.ts` / `phase2.ts` / `phase3.ts` / `clinical.ts` / `phase4.ts` / `authz.ts`)
+- `server/` — Express API (`index.ts` plus `phase1.ts`–`phase5.ts`, `phases.ts`, `clinical.ts`, `authz.ts`, `paystack.ts`, `membership.ts`)
 - `mobile/` — leftover delivery prototype; not the telemedicine product
+
+### Phase 5 — national scale
+
+- **Ghana network:** Patient → Ghana network. Coverage across all 16 regions, nearest pharmacy/lab/imaging/hospital (region centroid or `lat`/`lng` query).
+- **Medical ops:** National coverage, open risk alerts, append-only audit of mutating API calls.
+- **Matching:** Lab/imaging/pharmacy assignment uses region plus GPS distance when coordinates exist.
+- **Tenant isolation:** Corporate and insurance desks only see their linked organisation (`org_accounts`).
+- **Family charts:** Open a dependent’s visits, programs, vault, and alerts (guardian-scoped).
+- **Doctor enroll:** SOAP dialog → Enroll in care program.
+- **Risk alerts:** Rule-based from tracker (high BP/glucose) and overdue program tasks. Labeled assistive, not a diagnosis.
+- **Consents:** `POST /api/consents/me` for telemedicine, data, communication, sharing, AI assist.
+
+This is still not a production national deployment: vault is metadata-only, and Jitsi is public-hosted with unguessable room names. Paystack keys must be set (env or Admin → Settings) before live collection.
+
+### Completeness pass
+
+- **Payments & cover:** Patient → Payments. Eligibility plus Paystack receipts (GHS). Same initialize + verify flow as Bytz Go.
+- **Membership:** Patient → Membership. Classic, Premium, Gold, Diamond (monthly or yearly). Lowers visit copay, adds household dependents, and shortens the live queue. Paid with the same Paystack API.
+- **Follow-up care:** Closed-loop review dates from SOAP.
+- **Help / support desk:** Patients open tickets; ops and admin resolve them.
+- **Consents:** Toggle telemedicine, data, messaging, sharing, and assistive AI — timestamped.
+- **Visual system:** Paper canvas, forest primary, gold secondary, Source Serif headlines + DM Sans UI. Quiet bottom navigation. Editorial login and launch copy. Nurse, pharmacy, imaging, and ops desks use the same chrome.
+- **Directory:** Filter clinicians by language (English, Twi, Ga, Ewe, Hausa).
+- **Hospital desk:** `hospital` / `hosp123` sees inbound network referrals.
+- **Follow-up:** Book the review visit from the follow-up list.
+
+Default local extra: `support` / `support123`.

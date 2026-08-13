@@ -9,6 +9,7 @@ import {
   requireRoles,
 } from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
+import { getActiveMembership } from './membership';
 
 const AI_DISCLAIMER =
   'Assistive draft only. Not a diagnosis, not medical advice, and not a substitute for a licensed clinician. Digi Health does not claim HIPAA certification.';
@@ -260,6 +261,17 @@ export function registerPhase4Routes(app: Express) {
       const { full_name, date_of_birth, sex, relationship, phone_number } = req.body || {};
       if (!full_name || !relationship) {
         return res.status(400).json({ message: 'Name and relationship are required' });
+      }
+      const membership = await getActiveMembership(guardian.id);
+      const allowed = membership?.plan?.dependents ?? 1;
+      const count = await query(
+        'SELECT COUNT(*)::int AS n FROM dependents WHERE guardian_patient_id = $1',
+        [guardian.id]
+      );
+      if (Number(count.rows[0]?.n || 0) >= allowed) {
+        return res.status(400).json({
+          message: `${membership?.plan?.name || 'Classic'} includes ${allowed} dependent${allowed === 1 ? '' : 's'}. Upgrade membership to add more of the household.`,
+        });
       }
       const codeRow = await query(`SELECT nextval('patient_code_seq') AS n`);
       const patientCode = `DH-${String(codeRow.rows[0].n).padStart(6, '0')}`;

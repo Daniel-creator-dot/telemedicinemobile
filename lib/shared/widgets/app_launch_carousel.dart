@@ -27,14 +27,14 @@ class AppLaunchCarousel extends StatefulWidget {
   static const _slides = [
     _LaunchSlide(
       asset: 'assets/branding/onboarding_1.png',
-      title: 'Seamless Telehealth',
-      subtitle: 'Consult with certified doctors from the comfort of your home',
+      title: 'A quiet place to begin',
+      subtitle: 'See a clinician from home — then keep every next step in one record',
       accent: Color(0xFF00D2C4),
     ),
     _LaunchSlide(
       asset: 'assets/branding/onboarding_2.png',
-      title: 'Real-time Diagnostics',
-      subtitle: 'Monitor your health stats and sync with your clinical portal',
+      title: 'Labs and images, returned',
+      subtitle: 'Nearby partners collect the work. Results come back to your clinician.',
       accent: Color(0xFF8B5CF6),
     ),
     _LaunchSlide(
@@ -45,8 +45,8 @@ class AppLaunchCarousel extends StatefulWidget {
     ),
     _LaunchSlide(
       asset: 'assets/branding/onboarding_4.png',
-      title: '24/7 Medical Care',
-      subtitle: 'Access general physicians and specialists anytime, anywhere',
+      title: 'One continuous journey',
+      subtitle: 'From first consult through pharmacy and follow-up — never fragmented',
       accent: Color(0xFF8B5CF6),
     ),
   ];

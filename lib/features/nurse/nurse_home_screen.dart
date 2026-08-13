@@ -57,21 +57,15 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text('Triage · ${session.user?.name ?? 'Nurse'}', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F172A),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-          IconButton(
-            onPressed: () async {
-              await session.clear();
-              if (context.mounted) context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
+      backgroundColor: const Color(0xFFF6F3EE),
+      appBar: RoleChrome(
+        title: 'Triage',
+        subtitle: session.user?.name ?? 'Nurse',
+        onRefresh: _load,
+        onLogout: () async {
+          await session.clear();
+          if (context.mounted) context.go('/login');
+        },
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -6,6 +6,7 @@ import '../../models/appointment.dart';
 import '../consult/open_video_consult.dart';
 import 'care_repository.dart';
 import 'chat_screen.dart';
+import 'pay_visit.dart';
 
 class ConsultNowScreen extends StatefulWidget {
   const ConsultNowScreen({super.key, this.dependentPatientId});
@@ -29,6 +30,7 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
   final _spo2 = TextEditingController();
   String _consultType = 'general consultation';
   bool _submitting = false;
+  bool _paying = false;
   Appointment? _queued;
   String? _error;
 
@@ -44,6 +46,20 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _payQueued() async {
+    final q = _queued;
+    if (q == null) return;
+    setState(() => _paying = true);
+    final result = await payVisitWithPaystack(context, appointmentId: q.id);
+    if (!mounted) return;
+    setState(() => _paying = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+    if (result.success) {
+      setState(() => _queued = q.copyWith(paymentStatus: 'paid'));
+      _checkQueue();
+    }
   }
 
   Future<void> _checkQueue() async {
@@ -114,18 +130,34 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
           Text('Status: ${q.status}'),
           if (q.doctorName != null) Text('Assigned clinician: ${q.doctorName}'),
           const SizedBox(height: 16),
-          const Text('A nurse will review your triage. You will be notified when a doctor is ready.'),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => openVideoConsult(context, q),
-            icon: const Icon(Icons.videocam_rounded),
-            label: const Text('Enter video consultation'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00D2C4),
-              foregroundColor: Colors.black,
-              minimumSize: const Size.fromHeight(48),
-            ),
+          Text(
+            q.paymentStatus == 'paid'
+                ? 'Copay received. A nurse will review your triage. You will be notified when a doctor is ready.'
+                : 'Pay the visit copay with MoMo or card (same Paystack checkout as Bytz Go), then wait for a clinician.',
           ),
+          const SizedBox(height: 24),
+          if (q.paymentStatus != 'paid')
+            ElevatedButton.icon(
+              onPressed: _paying ? null : _payQueued,
+              icon: const Icon(Icons.payment_rounded),
+              label: Text(_paying ? 'Opening Paystack…' : 'Pay with MoMo or card'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D2C4),
+                foregroundColor: Colors.black,
+                minimumSize: const Size.fromHeight(48),
+              ),
+            )
+          else
+            ElevatedButton.icon(
+              onPressed: () => openVideoConsult(context, q),
+              icon: const Icon(Icons.videocam_rounded),
+              label: const Text('Enter video consultation'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D2C4),
+                foregroundColor: Colors.black,
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
           const SizedBox(height: 10),
           OutlinedButton(
             onPressed: () {

@@ -1,6 +1,8 @@
 import type { Express, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from './db';
+import { haversineKm, regionCentroid } from './phase5';
+import { getAccessiblePatientIds, getPatientForUser } from './patients';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -177,9 +179,16 @@ export async function assignNearestPartner(kind: 'laboratory' | 'imaging' | 'pha
     region: patient.rows[0].region || patient.rows[0].preferred_location,
     town: patient.rows[0].town,
   };
+  const origin = regionCentroid(loc.region || loc.town);
   const ranked = partners.rows
-    .map((p: any) => ({ p, score: scoreLocation(loc, p) }))
-    .sort((a: any, b: any) => b.score - a.score);
+    .map((p: any) => {
+      let distance = 9999;
+      if (origin && p.lat != null && p.lng != null) {
+        distance = haversineKm(origin, { lat: Number(p.lat), lng: Number(p.lng) });
+      }
+      return { p, score: scoreLocation(loc, p), distance };
+    })
+    .sort((a: any, b: any) => b.score - a.score || a.distance - b.distance);
   return ranked[0]?.p ?? null;
 }
 
@@ -558,36 +567,37 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
 
   app.get('/api/network/mine', authenticate, async (req: AuthedRequest, res) => {
     try {
-      const patient = await query('SELECT id FROM patients WHERE user_id = $1', [req.user!.id]);
-      const patientId = patient.rows[0]?.id;
-      if (!patientId) return res.json({ labs: [], scans: [], referrals: [], prescriptions: [] });
+      const patient = await getPatientForUser(req.user!.id);
+      const ids = await getAccessiblePatientIds(req.user!.id);
+      const idList = ids.length ? ids : patient?.id ? [patient.id] : [];
+      if (!idList.length) return res.json({ labs: [], scans: [], referrals: [], prescriptions: [] });
 
       const [labs, scans, referrals, prescriptions] = await Promise.all([
         query(
           `SELECT lr.*, o.name as partner_name
            FROM lab_requests lr LEFT JOIN partner_orgs o ON lr.partner_id = o.id
-           WHERE lr.patient_id = $1 ORDER BY lr.created_at DESC`,
-          [patientId]
+           WHERE lr.patient_id = ANY($1) ORDER BY lr.created_at DESC`,
+          [idList]
         ),
         query(
           `SELECT sr.*, o.name as partner_name
            FROM scan_requests sr LEFT JOIN partner_orgs o ON sr.partner_id = o.id
-           WHERE sr.patient_id = $1 ORDER BY sr.created_at DESC`,
-          [patientId]
+           WHERE sr.patient_id = ANY($1) ORDER BY sr.created_at DESC`,
+          [idList]
         ),
         query(
           `SELECT r.*, td.name as to_doctor_name, o.name as org_name
            FROM referrals r
            LEFT JOIN users td ON r.to_doctor_id = td.id
            LEFT JOIN partner_orgs o ON r.to_org_id = o.id
-           WHERE r.patient_id = $1 ORDER BY r.created_at DESC`,
-          [patientId]
+           WHERE r.patient_id = ANY($1) ORDER BY r.created_at DESC`,
+          [idList]
         ),
         query(
           `SELECT pr.*, o.name as pharmacy_name
            FROM prescriptions pr LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
-           WHERE pr.patient_id = $1 ORDER BY pr.created_at DESC`,
-          [patientId]
+           WHERE pr.patient_id = ANY($1) ORDER BY pr.created_at DESC`,
+          [idList]
         ),
       ]);
       res.json({

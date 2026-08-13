@@ -5,6 +5,7 @@ import { query } from './db';
 import { checkOtpRateLimit, recordOtpFailure, assertAppointmentAccess } from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { createSecureJitsiLink } from './jitsi';
+import { getActiveMembership } from './membership';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -549,7 +550,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
 
   app.get('/api/doctors/directory', authenticate, async (req, res) => {
     try {
-      const { specialty, q } = req.query;
+      const { specialty, q, language, region } = req.query;
       let sql = `
         SELECT d.*, u.name as user_name, u.phone_number
         FROM doctors d
@@ -561,9 +562,17 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         params.push(`%${specialty}%`);
         sql += ` AND d.specialization ILIKE $${params.length}`;
       }
+      if (language) {
+        params.push(`%${language}%`);
+        sql += ` AND COALESCE(d.languages, '') ILIKE $${params.length}`;
+      }
+      if (region) {
+        params.push(`%${region}%`);
+        sql += ` AND (COALESCE(d.facility, '') ILIKE $${params.length} OR COALESCE(d.name, '') ILIKE $${params.length})`;
+      }
       if (q) {
         params.push(`%${q}%`);
-        sql += ` AND (d.name ILIKE $${params.length} OR d.specialization ILIKE $${params.length})`;
+        sql += ` AND (d.name ILIKE $${params.length} OR d.specialization ILIKE $${params.length} OR COALESCE(d.languages,'') ILIKE $${params.length} OR COALESCE(d.facility,'') ILIKE $${params.length})`;
       }
       sql += ' ORDER BY d.is_online DESC, d.name ASC';
       const result = await query(sql, params);
@@ -705,7 +714,9 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
          FROM appointments WHERE preferred_date = CURRENT_DATE AND booking_type = 'consult_now'`
       );
       const queueNumber = qn.rows[0].n;
-      const eta = queueNumber * 12;
+      const membership = await getActiveMembership(guardian.id);
+      const priority = membership?.plan?.queuePriority || 'High';
+      const eta = membership?.plan?.etaMinutes ?? queueNumber * 12;
 
       const online = await query(
         `SELECT id FROM doctors WHERE is_active = TRUE AND is_online = TRUE ORDER BY id LIMIT 1`
@@ -724,7 +735,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
           appointment_id, patient_id, full_name, phone_number, email, doctor_id,
           preferred_date, preferred_time, status, priority, notes, service,
           is_telemedicine, booking_type, consult_type, queue_number, eta_minutes, meeting_link
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'queued','High',$9,$10, TRUE, 'consult_now', $11, $12, $13, $14)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'queued',$9,$10,$11, TRUE, 'consult_now', $12, $13, $14, $15)
         RETURNING *`,
         [
           appointmentId,
@@ -735,6 +746,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
           doctorId,
           date,
           time,
+          priority,
           reason || complaint || 'Consult Now',
           consult_type || 'general consultation',
           consult_type || 'general consultation',

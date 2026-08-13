@@ -63,8 +63,17 @@ class AppointmentsRepository {
     return Appointment.fromJson(res.data!);
   }
 
-  Future<void> payForAppointment(int id) async {
-    await _api.dio.post<Map<String, dynamic>>('/api/appointments/$id/pay');
+  Future<Map<String, dynamic>> initializePay(int id) async {
+    final res = await _api.dio.post<Map<String, dynamic>>('/api/appointments/$id/pay/initialize');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> verifyPay(int id, String reference) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/appointments/$id/pay',
+      data: {'reference': reference},
+    );
+    return res.data ?? {};
   }
 
   Future<List<AuthUser>> getAvailableDoctors() async {

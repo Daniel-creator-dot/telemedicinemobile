@@ -162,6 +162,8 @@ class _LoginScreenState extends State<LoginScreen> {
       context.go('/insurance');
     } else if (role == 'finance') {
       context.go('/finance');
+    } else if (role == 'hospital') {
+      context.go('/hospital');
     } else {
       context.go('/patient');
     }
@@ -232,22 +234,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.85, 0.85)),
                     const SizedBox(height: 20),
                     Text(
-                      'DIGI HEALTH',
-                      style: GoogleFonts.roboto(
-                        fontSize: 48,
-                        fontWeight: FontWeight.w900,
+                      'Digi Health',
+                      style: GoogleFonts.sourceSerif4(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
-                        letterSpacing: 2,
+                        height: 1.05,
                       ),
                       textAlign: TextAlign.center,
                     ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1, end: 0),
                     Text(
-                      'Universal Telehealth Portal',
-                      style: GoogleFonts.roboto(
+                      'Connected care for Ghana',
+                      style: GoogleFonts.dmSans(
                         fontSize: 14,
-                        color: const Color(0xFF00D2C4),
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
+                        color: const Color(0xFFD4C4A8),
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
                       ),
                       textAlign: TextAlign.center,
                     ).animate().fadeIn(delay: 100.ms),

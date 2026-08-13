@@ -143,6 +143,49 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
     }
   }
 
+  Future<void> _enrollCareProgram() async {
+    if (_patientId == 0) return;
+    try {
+      final catalog = await context.read<CareRepository>().chronicCatalog();
+      if (!mounted) return;
+      final key = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Enroll in care program'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                'Assistive chronic-care pathway. Not a diagnosis.',
+                style: GoogleFonts.roboto(fontSize: 12, color: const Color(0xFF94A3B8)),
+              ),
+            ),
+            ...catalog.map(
+              (p) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, p['key']?.toString()),
+                child: Text(p['name']?.toString() ?? p['key']?.toString() ?? 'Program'),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (key == null || !mounted) return;
+      await context.read<CareRepository>().enrollChronic({
+        'program_key': key,
+        'patient_id': _patientId,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Patient enrolled. Tasks and reminders are on their list.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not enroll: $e')));
+      }
+    }
+  }
+
   Future<void> _draftSoapAssist() async {
     setState(() => _saving = true);
     try {
@@ -523,6 +566,19 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF00D2C4),
                     side: const BorderSide(color: Color(0xFF00D2C4)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _patientId == 0 || _saving ? null : _enrollCareProgram,
+                  icon: const Icon(Icons.favorite_outline, size: 16),
+                  label: const Text('Enroll in care program'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFF59E0B),
+                    side: const BorderSide(color: Color(0xFFF59E0B)),
                   ),
                 ),
               ),

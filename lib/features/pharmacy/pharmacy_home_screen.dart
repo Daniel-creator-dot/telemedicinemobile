@@ -52,24 +52,15 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(
-          _org?['name']?.toString() ?? 'Pharmacy',
-          style: GoogleFonts.roboto(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: const Color(0xFF0F172A),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-          IconButton(
-            onPressed: () async {
-              await session.clear();
-              if (context.mounted) context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
+      backgroundColor: const Color(0xFFF6F3EE),
+      appBar: RoleChrome(
+        title: _org?['name']?.toString() ?? 'Pharmacy',
+        subtitle: 'Accept, prepare, dispense',
+        onRefresh: _load,
+        onLogout: () async {
+          await session.clear();
+          if (context.mounted) context.go('/login');
+        },
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

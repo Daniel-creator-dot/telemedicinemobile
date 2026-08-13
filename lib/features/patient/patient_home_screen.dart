@@ -11,6 +11,7 @@ import 'appointments_repository.dart';
 import 'book_appointment_dialog.dart';
 import 'care_repository.dart';
 import 'chat_screen.dart';
+import 'pay_visit.dart';
 import '../../models/appointment.dart';
 import '../../models/auth_user.dart';
 import '../../models/prescription.dart';
@@ -35,8 +36,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
       body: SafeArea(
         child: AnimatedSwitcher(
@@ -45,75 +44,49 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ),
       ),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            )
-          ],
+        decoration: const BoxDecoration(
+          color: Color(0xFFF6F3EE),
+          border: Border(top: BorderSide(color: Color(0xFFE8E4DC))),
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(4, (index) {
                 const icons = [
-                  Icons.grid_view_rounded,
-                  Icons.calendar_month_rounded,
-                  Icons.chat_bubble_outline_rounded,
-                  Icons.person_outline_rounded,
+                  Icons.home_outlined,
+                  Icons.calendar_today_outlined,
+                  Icons.forum_outlined,
+                  Icons.person_outline,
                 ];
                 const activeIcons = [
-                  Icons.grid_view_rounded,
-                  Icons.calendar_month_rounded,
-                  Icons.chat_bubble_rounded,
-                  Icons.person_rounded,
+                  Icons.home_filled,
+                  Icons.calendar_today,
+                  Icons.forum,
+                  Icons.person,
                 ];
-                const labels = ['Overview', 'Schedule', 'Chats', 'Profile'];
+                const labels = ['Home', 'Visits', 'Messages', 'You'];
                 final isActive = _currentIndex == index;
                 return GestureDetector(
                   onTap: () => setState(() => _currentIndex = index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: isActive
-                          ? const LinearGradient(
-                              colors: [Color(0xFF8B5CF6), Color(0xFF00D2C4)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            )
-                          : null,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: isActive
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF8B5CF6).withOpacity(0.4),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              )
-                            ]
-                          : null,
-                    ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           isActive ? activeIcons[index] : icons[index],
-                          color: isActive ? theme.colorScheme.primary : const Color(0xFF64748B),
+                          color: isActive ? const Color(0xFF1F4A3A) : const Color(0xFF8A847C),
                           size: 22,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           labels[index],
-                          style: GoogleFonts.roboto(
-                            color: isActive ? theme.colorScheme.primary : const Color(0xFF64748B),
-                            fontSize: 10,
-                            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                          style: GoogleFonts.dmSans(
+                            color: isActive ? const Color(0xFF1F4A3A) : const Color(0xFF8A847C),
+                            fontSize: 11,
+                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                           ),
                         ),
                       ],
@@ -335,19 +308,19 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Your Health in Safe Hands',
-                            style: GoogleFonts.roboto(
+                            'Care that stays with you',
+                            style: GoogleFonts.sourceSerif4(
                               color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Access 24/7 medical consultation instantly',
-                            style: GoogleFonts.roboto(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 11,
+                            'Consult, investigate, treat, and follow up — one record.',
+                            style: GoogleFonts.dmSans(
+                              color: Colors.white.withOpacity(0.78),
+                              fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -383,8 +356,14 @@ class _DashboardViewState extends State<DashboardView> {
                     : null,
               ),
               child: TextField(
-                onTap: () => setState(() => _isSearchFocused = true),
-                onSubmitted: (_) => setState(() => _isSearchFocused = false),
+                onTap: () {
+                  setState(() => _isSearchFocused = true);
+                  context.push('/patient/doctors');
+                },
+                onSubmitted: (_) {
+                  setState(() => _isSearchFocused = false);
+                  context.push('/patient/doctors');
+                },
                 style: GoogleFonts.roboto(color: const Color(0xFF0F172A)),
                 decoration: InputDecoration(
                   icon: Icon(
@@ -478,6 +457,7 @@ class _DashboardViewState extends State<DashboardView> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                _CareChip(label: 'Care phases', icon: Icons.account_tree_outlined, onTap: () => context.push('/patient/phases')),
                 _CareChip(label: 'Health journey', icon: Icons.timeline, onTap: () => context.push('/patient/journey')),
                 _CareChip(label: 'Records vault', icon: Icons.folder_shared_outlined, onTap: () => context.push('/patient/records')),
                 _CareChip(label: 'Health tracker', icon: Icons.monitor_heart_outlined, onTap: () => context.push('/patient/tracker')),
@@ -485,6 +465,12 @@ class _DashboardViewState extends State<DashboardView> {
                 _CareChip(label: 'Care programs', icon: Icons.favorite_outline, onTap: () => context.push('/patient/programs')),
                 _CareChip(label: 'Symptom helper', icon: Icons.psychology_outlined, onTap: () => context.push('/patient/symptom-helper')),
                 _CareChip(label: 'Find a doctor', icon: Icons.medical_services_outlined, onTap: () => context.push('/patient/doctors')),
+                _CareChip(label: 'Ghana network', icon: Icons.map_outlined, onTap: () => context.push('/patient/network')),
+                _CareChip(label: 'Payments', icon: Icons.receipt_long_outlined, onTap: () => context.push('/patient/payments')),
+                _CareChip(label: 'Membership', icon: Icons.workspace_premium_outlined, onTap: () => context.push('/patient/membership')),
+                _CareChip(label: 'Follow-up', icon: Icons.event_available_outlined, onTap: () => context.push('/patient/followups')),
+                _CareChip(label: 'Help', icon: Icons.support_agent_outlined, onTap: () => context.push('/patient/support')),
+                _CareChip(label: 'Consents', icon: Icons.verified_user_outlined, onTap: () => context.push('/patient/consents')),
                 _CareChip(label: 'Medical profile', icon: Icons.badge_outlined, onTap: () => context.push('/patient/profile')),
               ],
             ),
@@ -1221,20 +1207,10 @@ class _AppointmentsViewState extends State<AppointmentsView> {
   }
 
   Future<void> _payCopay(Appointment apt) async {
-    try {
-      final repo = context.read<AppointmentsRepository>();
-      await repo.payForAppointment(apt.id);
-      final copay = _eligibility['copay'] ?? 50;
-      final payer = _eligibility['payer_name'] ?? 'self pay';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Simulated payment recorded (no card charged). Copay GHS $copay · $payer.')),
-      );
-      _fetchAppointments();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment failed: ${e.toString()}')),
-      );
-    }
+    final result = await payVisitWithPaystack(context, appointmentId: apt.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+    if (result.success) _fetchAppointments();
   }
 
   // Helper: get the set of date strings ('yyyy-MM-dd') that have appointments in the current month
@@ -1719,25 +1695,25 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             ],
           ),
           
-          if (apt.status == 'approved' && apt.isTelemedicine) ...[
+          if (isUnpaid && apt.status != 'cancelled' && apt.status != 'completed') ...[
             const SizedBox(height: 15),
-            if (isUnpaid)
-              ElevatedButton.icon(
-                onPressed: () => _payCopay(apt),
-                icon: const Icon(Icons.payment, size: 16),
-                label: Text(
-                  _eligibility['eligible'] == true
-                      ? 'Simulated copay GHS ${_eligibility['copay'] ?? 50} (${_eligibility['payer_name'] ?? 'cover'})'
-                      : 'Simulated pay GHS 50.00',
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00D2C4),
-                  foregroundColor: Colors.black,
-                  minimumSize: const Size.fromHeight(40),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              )
-            else if (apt.meetingLink != null)
+            ElevatedButton.icon(
+              onPressed: () => _payCopay(apt),
+              icon: const Icon(Icons.payment, size: 16),
+              label: Text(
+                _eligibility['eligible'] == true
+                    ? 'Pay copay GHS ${_eligibility['copay'] ?? 50} (${_eligibility['payer_name'] ?? 'cover'})'
+                    : 'Pay GHS ${_eligibility['consult_fee'] ?? _eligibility['copay'] ?? 50} with MoMo or card',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00D2C4),
+                foregroundColor: Colors.black,
+                minimumSize: const Size.fromHeight(40),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ] else if (apt.isTelemedicine && apt.meetingLink != null &&
+              (apt.status == 'approved' || apt.status == 'consulting' || apt.isConsultNow)) ...[
               Column(
                 children: [
                   Container(

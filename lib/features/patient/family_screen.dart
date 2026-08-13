@@ -152,6 +152,15 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                       onPressed: () => context.push('/patient/consult-now', extra: (m['patient_id'] as num?)?.toInt()),
                                       child: const Text('Consult Now'),
                                     ),
+                                    OutlinedButton(
+                                      onPressed: () {
+                                        final id = (m['patient_id'] as num?)?.toInt();
+                                        if (id == null) return;
+                                        final name = Uri.encodeQueryComponent(m['full_name']?.toString() ?? '');
+                                        context.push('/patient/family/$id?name=$name');
+                                      },
+                                      child: const Text('Open chart'),
+                                    ),
                                     TextButton(
                                       onPressed: () async {
                                         await context.read<CareRepository>().removeDependent(m['id'] as int);

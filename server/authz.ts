@@ -146,9 +146,16 @@ export function publicSettings(rows: { key: string; value: string }[], role?: st
   if (role !== 'admin') {
     delete settings.sms_api_key;
     delete settings.sms_base_url;
-  } else if (settings.sms_api_key) {
-    settings.sms_api_key_set = 'true';
-    settings.sms_api_key = '********';
+    delete settings.paystack_secret_key;
+  } else {
+    if (settings.sms_api_key) {
+      settings.sms_api_key_set = 'true';
+      settings.sms_api_key = '********';
+    }
+    if (settings.paystack_secret_key) {
+      settings.paystack_secret_key_set = 'true';
+      settings.paystack_secret_key = '********';
+    }
   }
   return settings;
 }

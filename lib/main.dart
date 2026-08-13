@@ -101,47 +101,33 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
         useMaterial3: true,
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
-          primary: Color(0xFF8B5CF6), // Electric Violet
-          secondary: Color(0xFF00D2C4), // Emerald Mint
-          surface: Colors.white,
-          background: Color(0xFFF8FAFC), // Light Slate
+          primary: Color(0xFF1F4A3A),
+          secondary: Color(0xFFC4A574),
+          surface: Color(0xFFF6F3EE),
           onPrimary: Colors.white,
-          onSecondary: Colors.white,
-          onSurface: Color(0xFF0F172A),
+          onSecondary: Color(0xFF1A1814),
+          onSurface: Color(0xFF1A1814),
         ),
-        scaffoldBackgroundColor: Colors.white,
-        textTheme: GoogleFonts.robotoTextTheme(
+        scaffoldBackgroundColor: const Color(0xFFF6F3EE),
+        appBarTheme: AppBarTheme(
+          backgroundColor: const Color(0xFFF6F3EE),
+          foregroundColor: const Color(0xFF1A1814),
+          elevation: 0,
+          titleTextStyle: GoogleFonts.sourceSerif4(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF1A1814),
+          ),
+        ),
+        textTheme: GoogleFonts.dmSansTextTheme(
           ThemeData.light().textTheme.copyWith(
-            titleLarge: GoogleFonts.roboto(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF0F172A),
-            ),
-            headlineMedium: GoogleFonts.roboto(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF0F172A),
-            ),
-            headlineLarge: GoogleFonts.roboto(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF0F172A),
-            ),
-            bodyLarge: GoogleFonts.roboto(
-              color: const Color(0xFF0F172A),
-            ),
-            bodyMedium: GoogleFonts.roboto(
-              color: const Color(0xFF0F172A),
-            ),
-            bodySmall: GoogleFonts.roboto(
-              color: const Color(0xFF64748B),
-            ),
-            labelLarge: GoogleFonts.roboto(
-              color: const Color(0xFF0F172A),
-            ),
-            labelMedium: GoogleFonts.roboto(
-              color: const Color(0xFF64748B),
-            ),
-            labelSmall: GoogleFonts.roboto(
-              color: const Color(0xFF64748B),
-            ),
+            headlineLarge: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: const Color(0xFF1A1814), fontSize: 32),
+            headlineMedium: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: const Color(0xFF1A1814), fontSize: 26),
+            titleLarge: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: const Color(0xFF1A1814), fontSize: 20),
+            bodyLarge: GoogleFonts.dmSans(color: const Color(0xFF1A1814), height: 1.45),
+            bodyMedium: GoogleFonts.dmSans(color: const Color(0xFF1A1814), height: 1.4),
+            bodySmall: GoogleFonts.dmSans(color: const Color(0xFF6B6560)),
+            labelLarge: GoogleFonts.dmSans(color: const Color(0xFF1A1814), fontWeight: FontWeight.w600),
           ),
         ),
       ),

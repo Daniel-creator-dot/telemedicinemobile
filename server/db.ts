@@ -194,7 +194,9 @@ export const initDb = async () => {
       ['clinic_name', 'Digi Health'],
       ['sms_base_url', ''],
       ['sms_sender_id', 'DigiHealth'],
-      ['sms_api_key', '']
+      ['sms_api_key', ''],
+      ['paystack_public_key', ''],
+      ['paystack_secret_key', ''],
     ];
 
     for (const [key, value] of defaultSettings) {
@@ -203,6 +205,21 @@ export const initDb = async () => {
         VALUES ($1, $2) 
         ON CONFLICT (key) DO NOTHING
       `, [key, value]);
+    }
+
+    if (process.env.PAYSTACK_PUBLIC_KEY?.trim()) {
+      await query(
+        `INSERT INTO settings (key, value) VALUES ('paystack_public_key', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [process.env.PAYSTACK_PUBLIC_KEY.trim()]
+      );
+    }
+    if (process.env.PAYSTACK_SECRET_KEY?.trim()) {
+      await query(
+        `INSERT INTO settings (key, value) VALUES ('paystack_secret_key', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [process.env.PAYSTACK_SECRET_KEY.trim()]
+      );
     }
 
     // Create OTPs table
@@ -342,6 +359,12 @@ export const initDb = async () => {
     await initClinicalSchema();
     const { initPhase4Schema } = require('./phase4') as typeof import('./phase4');
     await initPhase4Schema();
+    const { initPhase5Schema } = require('./phase5') as typeof import('./phase5');
+    await initPhase5Schema();
+    const { initCompleteSchema } = require('./complete') as typeof import('./complete');
+    await initCompleteSchema();
+    const { initMembershipSchema } = require('./membership') as typeof import('./membership');
+    await initMembershipSchema();
 
     await query(`UPDATE settings SET value = 'Digi Health' WHERE key = 'clinic_name' AND value ILIKE '%prime%'`);
     await query(`UPDATE settings SET value = 'DigiHealth' WHERE key = 'sms_sender_id' AND value ILIKE '%prime%'`);

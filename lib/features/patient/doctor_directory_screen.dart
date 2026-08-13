@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/doctor_profile.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../patient/book_appointment_dialog.dart';
 import 'care_repository.dart';
 
@@ -18,6 +19,7 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
   bool _loading = true;
   final _search = TextEditingController();
   String? _specialty;
+  String? _language;
 
   @override
   void initState() {
@@ -37,6 +39,7 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
       final list = await context.read<CareRepository>().getDirectory(
         q: _search.text.trim(),
         specialty: _specialty,
+        language: _language,
       );
       setState(() {
         _doctors = list;
@@ -50,56 +53,66 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF6F3EE),
       appBar: AppBar(
-        title: Text('Doctors & Specialists', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
+        title: Text('Doctors & specialists', style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600)),
+        backgroundColor: const Color(0xFFF6F3EE),
+        foregroundColor: digiInk,
+        elevation: 0,
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
               controller: _search,
               onSubmitted: (_) => _load(),
               decoration: InputDecoration(
-                hintText: 'Search name or specialty',
+                hintText: 'Name, specialty, language, or clinic',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE8E4DC))),
               ),
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            child: Row(
+              children: [
+                for (final lang in const ['English', 'Twi', 'Ga', 'Ewe', 'Hausa'])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(lang),
+                      selected: _language == lang,
+                      onSelected: (on) {
+                        setState(() => _language = on ? lang : null);
+                        _load();
+                      },
+                    ),
+                  ),
+              ],
             ),
           ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _doctors.isEmpty
-                    ? const Center(child: Text('No doctors available.'))
+                    ? const ClinicalEmptyState(
+                        icon: Icons.medical_services_outlined,
+                        title: 'No matching clinicians',
+                        message: 'Try another language or clear the search. Availability is shown in real time.',
+                      )
                     : ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: _doctors.length,
                         itemBuilder: (_, i) {
                           final d = _doctors[i];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              title: Text('${d.title ?? 'Dr'} ${d.name}', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-                              subtitle: Text([
-                                d.specialization ?? 'General Physician',
-                                d.facility,
-                                if (d.yearsExperience != null) '${d.yearsExperience} yrs',
-                                d.languages,
-                                if (d.consultationFee != null) 'GHS ${d.consultationFee!.toStringAsFixed(0)}',
-                              ].whereType<String>().join(' · ')),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.circle, size: 10, color: d.isOnline ? const Color(0xFF22C55E) : Colors.grey),
-                                  Text(d.isOnline ? 'Online' : 'Offline', style: const TextStyle(fontSize: 10)),
-                                ],
-                              ),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: DigiCard(
                               onTap: () {
                                 showDialog(
                                   context: context,
@@ -110,6 +123,35 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
                                   ),
                                 );
                               },
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${d.title ?? 'Dr'} ${d.name}', style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600)),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          [
+                                            d.specialization ?? 'General physician',
+                                            d.facility,
+                                            if (d.yearsExperience != null) '${d.yearsExperience} yrs',
+                                            d.languages,
+                                            if (d.consultationFee != null) 'GHS ${d.consultationFee!.toStringAsFixed(0)}',
+                                          ].whereType<String>().where((s) => s.isNotEmpty).join(' · '),
+                                          style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, height: 1.35),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    children: [
+                                      Icon(Icons.circle, size: 10, color: d.isOnline ? const Color(0xFF1F4A3A) : const Color(0xFFC4BEB4)),
+                                      Text(d.isOnline ? 'Online' : 'Off', style: GoogleFonts.dmSans(fontSize: 10, color: digiSlate)),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },

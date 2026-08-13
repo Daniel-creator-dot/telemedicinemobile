@@ -4,9 +4,20 @@ import dotenv from 'dotenv';
 import { initDb, query } from './db';
 import { registerPhase1Routes, getPatientForUser } from './phase1';
 import { registerPhase2Routes, assignNearestPartner, notifyDiagnosticClosedLoop } from './phase2';
-import { registerPhase3Routes, recordVisitPayment } from './phase3';
+import { registerPhase3Routes, recordVisitPayment, getEligibility } from './phase3';
+import {
+  getPaystackPublicKey,
+  getPaystackSecretKey,
+  initializePaystackCheckout,
+  paystackPaymentEmail,
+  verifyPaystackTransaction,
+} from './paystack';
 import { registerClinicalRoutes } from './clinical';
 import { registerPhase4Routes } from './phase4';
+import { registerPhase5Routes, registerAuditMiddleware } from './phase5';
+import { registerCompleteRoutes } from './complete';
+import { registerMembershipRoutes } from './membership';
+import { registerPhaseOverviewRoutes } from './phases';
 import { createSecureJitsiLink } from './jitsi';
 import {
   authenticate,
@@ -87,6 +98,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+registerAuditMiddleware(app);
 
 // Auth middleware lives in ./authz (no token / JWT payload logging).
 
@@ -213,7 +225,7 @@ app.patch('/api/settings', authenticate, requireRoles('admin'), async (req, res)
   const updates = req.body || {};
   try {
     for (const [key, value] of Object.entries(updates)) {
-      if (key === 'sms_api_key' && (value === '********' || value === '')) continue;
+      if ((key === 'sms_api_key' || key === 'paystack_secret_key') && (value === '********' || value === '')) continue;
       await query(
         'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
         [key, value]
@@ -223,6 +235,32 @@ app.patch('/api/settings', authenticate, requireRoles('admin'), async (req, res)
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
+});
+
+app.get('/api/config/paystack', async (_req, res) => {
+  try {
+    const publicKey = await getPaystackPublicKey();
+    res.json({ publicKey, configured: Boolean(await getPaystackSecretKey()) });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch config' });
+  }
+});
+
+function paystackReturnHtml() {
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digi Health</title>
+<style>body{font-family:system-ui,sans-serif;background:#F6F3EE;color:#1F4A3A;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+.card{background:#fff;padding:28px 24px;border-radius:16px;max-width:360px;text-align:center;box-shadow:0 8px 30px rgba(31,74,58,.08)}
+h1{font-size:20px;margin:0 0 8px}p{margin:0;color:#5C6B66;line-height:1.45}</style></head>
+<body><div class="card"><h1>Payment received</h1><p>Return to the Digi Health app to confirm your visit. You can close this page.</p></div></body></html>`;
+}
+
+app.get('/api/paystack/callback', (_req, res) => {
+  res.type('html').send(paystackReturnHtml());
+});
+app.get('/paystack/callback', (_req, res) => {
+  res.type('html').send(paystackReturnHtml());
 });
 
 // --- SMS Utility ---
@@ -647,54 +685,142 @@ app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CL
   }
 });
 
-app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
+async function markAppointmentPaid(apt: any, paymentRef: string, gateway = 'paystack') {
+  let meetingLink = apt.meeting_link || null;
+  if (apt.is_telemedicine) {
+    meetingLink = meetingLink || createSecureJitsiLink();
+  }
+
+  await query(
+    `UPDATE appointments
+     SET payment_status = 'paid', payment_ref = $1, meeting_link = $2, status = 'approved'
+     WHERE id = $3`,
+    [paymentRef, meetingLink, apt.id]
+  );
+
+  let doctorUserId: number | null = null;
+  if (apt.doctor_id) {
+    const doc = await query('SELECT user_id FROM doctors WHERE id = $1', [apt.doctor_id]);
+    doctorUserId = doc.rows[0]?.user_id || null;
+  }
+  const billed = await recordVisitPayment(
+    Number(apt.id),
+    apt.patient_id || null,
+    doctorUserId,
+    paymentRef,
+    gateway
+  ).catch((e) => {
+    console.error('Coverage payment row failed:', e);
+    return { paymentRef, eligibility: { copay: 50, source: 'self_pay' } };
+  });
+
+  if (apt.is_telemedicine && meetingLink) {
+    const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
+    await sendSMS(
+      apt.phone_number,
+      `Digi Health: payment confirmed for your visit on ${scheduledInfo}. Open the app to join.`
+    ).catch((e) => console.error('SMS Error after pay:', e));
+  }
+
+  return { billed, meetingLink };
+}
+
+app.post('/api/appointments/:id/pay/initialize', authenticate, async (req: any, res) => {
   const { id } = req.params;
   try {
     const apt = await assertAppointmentAccess(req, res, id);
     if (!apt) return;
-
-    const paymentRef = 'PAY-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-    const status = 'paid'; 
-    
-    let meetingLink = null;
-    if (apt.is_telemedicine) {
-      meetingLink = apt.meeting_link || createSecureJitsiLink();
+    if (apt.payment_status === 'paid') {
+      return res.json({
+        alreadyProcessed: true,
+        paymentRef: apt.payment_ref,
+        meetingLink: apt.meeting_link,
+      });
     }
 
-    await query(`
-      UPDATE appointments 
-      SET payment_status = $1, 
-          payment_ref = $2, 
-          meeting_link = $3,
-          status = 'approved'
-      WHERE id = $4
-    `, [status, paymentRef, meetingLink, id]);
-
-    let doctorUserId: number | null = null;
-    if (apt.doctor_id) {
-      const doc = await query('SELECT user_id FROM doctors WHERE id = $1', [apt.doctor_id]);
-      doctorUserId = doc.rows[0]?.user_id || null;
+    const elig = await getEligibility(apt.patient_id || 0);
+    const amountGhs = Number(elig.copay);
+    if (!Number.isFinite(amountGhs) || amountGhs < 1) {
+      const { billed, meetingLink } = await markAppointmentPaid(apt, `COVER-${apt.id}`, 'coverage');
+      return res.json({
+        alreadyProcessed: true,
+        paymentRef: billed.paymentRef,
+        meetingLink,
+        eligibility: billed.eligibility,
+        message: 'No copay due. Visit is covered.',
+      });
     }
-    const billed = await recordVisitPayment(Number(id), apt.patient_id || null, doctorUserId, paymentRef).catch((e) => {
-      console.error('Coverage payment row failed:', e);
-      return { paymentRef, eligibility: { copay: 50, source: 'self_pay' } };
+
+    const user = await query('SELECT id, email, phone_number FROM users WHERE id = $1', [req.user.id]);
+    const checkout = await initializePaystackCheckout({
+      amountGhs,
+      email: paystackPaymentEmail({
+        id: req.user.id,
+        email: user.rows[0]?.email || apt.email,
+        phone: user.rows[0]?.phone_number || apt.phone_number,
+      }),
+      appointmentId: Number(id),
+      patientId: apt.patient_id || null,
+      userId: Number(req.user.id),
     });
-
-    if (apt.is_telemedicine && meetingLink) {
-      const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
-      await sendSMS(apt.phone_number, `Digi Health: payment confirmed for your visit on ${scheduledInfo}. Open the app to join.`);
-    }
 
     res.json({
-      message: 'Simulated payment recorded. No card was charged.',
-      simulated: true,
-      paymentRef: billed.paymentRef || paymentRef,
+      reference: checkout.reference,
+      authorization_url: checkout.authorizationUrl,
+      access_code: checkout.accessCode,
+      amount: checkout.amountGhs,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Could not start payment';
+    console.error('Paystack initialize error:', message);
+    const status = message.includes('not configured') ? 503 : 400;
+    res.status(status).json({ message });
+  }
+});
+
+app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
+  const { id } = req.params;
+  const reference = typeof req.body?.reference === 'string' ? req.body.reference.trim() : '';
+  if (!reference) {
+    return res.status(400).json({ message: 'Payment reference is required' });
+  }
+
+  try {
+    const apt = await assertAppointmentAccess(req, res, id);
+    if (!apt) return;
+    if (apt.payment_status === 'paid') {
+      return res.json({
+        alreadyProcessed: true,
+        paymentRef: apt.payment_ref,
+        meetingLink: apt.meeting_link,
+      });
+    }
+
+    const verified = await verifyPaystackTransaction(reference);
+    if (verified.currency && verified.currency !== 'GHS') {
+      return res.status(400).json({ message: `Unexpected currency: ${verified.currency}` });
+    }
+
+    const elig = await getEligibility(apt.patient_id || 0);
+    if (Math.abs(verified.amountGhs - Number(elig.copay)) > 0.05) {
+      return res.status(400).json({
+        message: `Paid amount GHS ${verified.amountGhs} does not match copay GHS ${elig.copay}`,
+      });
+    }
+
+    const { billed, meetingLink } = await markAppointmentPaid(apt, verified.reference, 'paystack');
+    res.json({
+      message: 'Payment confirmed.',
+      paymentRef: billed.paymentRef || verified.reference,
       meetingLink,
       eligibility: billed.eligibility,
+      alreadyProcessed: (billed as { alreadyProcessed?: boolean }).alreadyProcessed || false,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Payment processing failed' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Payment processing failed';
+    console.error('Paystack verify error:', message);
+    const status = message.includes('not configured') ? 503 : 400;
+    res.status(status).json({ message });
   }
 });
 
@@ -1544,6 +1670,10 @@ registerPhase2Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerPhase3Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerClinicalRoutes(app);
 registerPhase4Routes(app);
+registerPhase5Routes(app);
+registerCompleteRoutes(app);
+registerMembershipRoutes(app, authenticate);
+registerPhaseOverviewRoutes(app);
 
 // Initialize Database
 initDb().then(() => {

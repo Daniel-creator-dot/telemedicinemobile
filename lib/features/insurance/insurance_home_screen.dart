@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../patient/care_repository.dart';
 
 class InsuranceHomeScreen extends StatefulWidget {
@@ -46,20 +47,14 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     final insurer = _data['insurer'] as Map<String, dynamic>? ?? {};
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(insurer['name']?.toString() ?? 'Insurance', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F172A),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-          IconButton(
-            onPressed: () async {
-              await session.clear();
-              if (context.mounted) context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
+      appBar: RoleChrome(
+        title: insurer['name']?.toString() ?? 'Insurance',
+        subtitle: 'Preauth, claims, and policy desk',
+        onRefresh: _load,
+        onLogout: () async {
+          await session.clear();
+          if (context.mounted) context.go('/login');
+        },
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

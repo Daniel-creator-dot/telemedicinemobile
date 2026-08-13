@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-const digiViolet = Color(0xFF8B5CF6);
-const digiMint = Color(0xFF00D2C4);
-const digiInk = Color(0xFF0F172A);
-const digiSlate = Color(0xFF64748B);
-const digiCanvas = Color(0xFFF8FAFC);
+const digiForest = Color(0xFF1F4A3A);
+const digiGold = Color(0xFFC4A574);
+const digiPaper = Color(0xFFF6F3EE);
+const digiInk = Color(0xFF1A1814);
+const digiSlate = Color(0xFF6B6560);
+const digiLine = Color(0xFFE8E4DC);
+
+/// Legacy aliases — same clinic palette.
+const digiViolet = digiForest;
+const digiMint = digiGold;
+const digiCanvas = digiPaper;
 
 class DigiBrandMark extends StatelessWidget {
   const DigiBrandMark({super.key, this.size = 22, this.light = false});
@@ -20,18 +26,18 @@ class DigiBrandMark extends StatelessWidget {
         children: [
           TextSpan(
             text: 'Digi',
-            style: GoogleFonts.roboto(
+            style: GoogleFonts.sourceSerif4(
               fontSize: size,
-              fontWeight: FontWeight.w800,
-              color: light ? Colors.white : digiViolet,
+              fontWeight: FontWeight.w600,
+              color: light ? Colors.white : digiForest,
             ),
           ),
           TextSpan(
             text: ' Health',
-            style: GoogleFonts.roboto(
+            style: GoogleFonts.sourceSerif4(
               fontSize: size,
-              fontWeight: FontWeight.w800,
-              color: light ? const Color(0xFF5EEAD4) : digiMint,
+              fontWeight: FontWeight.w600,
+              color: light ? const Color(0xFFE8D5A3) : digiGold,
             ),
           ),
         ],
@@ -68,24 +74,24 @@ class ClinicalEmptyState extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: digiMint.withValues(alpha: 0.12),
+                color: digiForest.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: digiMint, size: 32),
+              child: Icon(icon, color: digiForest, size: 32),
             ),
             const SizedBox(height: 16),
-            Text(title, style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.w800, color: digiInk)),
+            Text(title, style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk)),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: GoogleFonts.roboto(color: digiSlate, height: 1.4),
+              style: GoogleFonts.dmSans(color: digiSlate, height: 1.45),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 18),
               FilledButton(
                 onPressed: onAction,
-                style: FilledButton.styleFrom(backgroundColor: digiInk),
+                style: FilledButton.styleFrom(backgroundColor: digiForest, foregroundColor: Colors.white),
                 child: Text(actionLabel!),
               ),
             ],
@@ -115,7 +121,7 @@ class ClinicalErrorState extends StatelessWidget {
 }
 
 class StatTile extends StatelessWidget {
-  const StatTile({super.key, required this.label, required this.value, this.accent = digiMint});
+  const StatTile({super.key, required this.label, required this.value, this.accent = digiForest});
 
   final String label;
   final Object? value;
@@ -129,14 +135,14 @@ class StatTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: digiLine),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$value', style: GoogleFonts.roboto(fontSize: 22, fontWeight: FontWeight.w800, color: accent)),
+          Text('$value', style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: accent)),
           const SizedBox(height: 4),
-          Text(label, style: GoogleFonts.roboto(fontSize: 12, color: digiSlate, fontWeight: FontWeight.w600)),
+          Text(label, style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -163,19 +169,90 @@ class RoleChrome extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: digiInk,
-      foregroundColor: Colors.white,
+      backgroundColor: digiPaper,
+      foregroundColor: digiInk,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.roboto(fontWeight: FontWeight.w800, fontSize: 16)),
-          Text(subtitle, style: GoogleFonts.roboto(fontSize: 11, color: const Color(0xFF94A3B8))),
+          Text(title, style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, fontSize: 18, color: digiInk)),
+          Text(subtitle, style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate)),
         ],
       ),
       actions: [
-        if (onRefresh != null) IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh)),
-        if (onLogout != null) IconButton(onPressed: onLogout, icon: const Icon(Icons.logout)),
+        if (onRefresh != null) IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: digiForest)),
+        if (onLogout != null) IconButton(onPressed: onLogout, icon: const Icon(Icons.logout, color: digiSlate)),
       ],
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Divider(height: 1, color: digiLine),
+      ),
+    );
+  }
+}
+
+class DigiCard extends StatelessWidget {
+  const DigiCard({super.key, required this.child, this.onTap, this.padding});
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: digiLine),
+      ),
+      child: child,
+    );
+    if (onTap == null) return body;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(18), child: body),
+    );
+  }
+}
+
+class SectionLabel extends StatelessWidget {
+  const SectionLabel(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.sourceSerif4(
+        fontSize: 22,
+        fontWeight: FontWeight.w600,
+        color: digiInk,
+        height: 1.2,
+      ),
+    );
+  }
+}
+
+class QuietChip extends StatelessWidget {
+  const QuietChip({super.key, required this.label, required this.icon, required this.onTap});
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      onPressed: onTap,
+      avatar: Icon(icon, size: 16, color: digiInk),
+      label: Text(label, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: digiInk)),
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: digiLine),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
   }
 }

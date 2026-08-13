@@ -45,6 +45,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   final _smsBaseUrl = TextEditingController();
   final _smsSenderId = TextEditingController();
   final _smsApiKey = TextEditingController();
+  final _paystackPublicKey = TextEditingController();
+  final _paystackSecretKey = TextEditingController();
 
   // Create User Controllers
   final _regName = TextEditingController();
@@ -65,6 +67,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     _smsBaseUrl.dispose();
     _smsSenderId.dispose();
     _smsApiKey.dispose();
+    _paystackPublicKey.dispose();
+    _paystackSecretKey.dispose();
     _regName.dispose();
     _regUsername.dispose();
     _regPassword.dispose();
@@ -101,6 +105,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         _smsBaseUrl.text = _settings['sms_base_url']?.toString() ?? '';
         _smsSenderId.text = _settings['sms_sender_id']?.toString() ?? '';
         _smsApiKey.text = _settings['sms_api_key']?.toString() ?? '';
+        _paystackPublicKey.text = _settings['paystack_public_key']?.toString() ?? '';
+        _paystackSecretKey.text = _settings['paystack_secret_key']?.toString() ?? '';
       }
       _doctors = responses[3].data as List<dynamic>? ?? [];
       
@@ -147,6 +153,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           'sms_base_url': _smsBaseUrl.text.trim(),
           'sms_sender_id': _smsSenderId.text.trim(),
           'sms_api_key': _smsApiKey.text.trim(),
+          'paystack_public_key': _paystackPublicKey.text.trim(),
+          'paystack_secret_key': _paystackSecretKey.text.trim(),
         },
       );
       ScaffoldMessenger.of(context).showSnackBar(
@@ -771,6 +779,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               _quickActionCard('Reports', 'Clinic analytics', Icons.bar_chart_rounded, const Color(0xFFF59E0B), () => setState(() => _currentTab = 4)),
               _quickActionCard('Staff Accounts', 'User registry', Icons.people_rounded, const Color(0xFF4F46E5), () => setState(() => _currentTab = 5)),
               _quickActionCard('SMS Settings', 'Clinic config', Icons.settings_rounded, const Color(0xFFF43F5E), () => setState(() => _currentTab = 6)),
+              _quickActionCard('Support desk', 'Patient messages', Icons.support_agent_outlined, const Color(0xFF1F4A3A), () => context.push('/admin/support')),
+              _quickActionCard('National net', 'Coverage & audit', Icons.public, const Color(0xFFC4A574), () => context.push('/admin/network')),
             ],
           ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.08, end: 0),
           const SizedBox(height: 20),
@@ -1535,6 +1545,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       smsBaseUrl: _smsBaseUrl,
       smsSenderId: _smsSenderId,
       smsApiKey: _smsApiKey,
+      paystackPublicKey: _paystackPublicKey,
+      paystackSecretKey: _paystackSecretKey,
       onSave: _saveSettings,
       fieldDecoration: _deco,
       opsSummary: _opsSummary,

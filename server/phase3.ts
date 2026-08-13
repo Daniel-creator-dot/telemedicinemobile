@@ -2,6 +2,8 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from './db';
 import { getPatientForUser } from './phase1';
+import { commercialOrgId } from './phase5';
+import { getActiveMembership, membershipEligibilityOverlay } from './membership';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -247,40 +249,54 @@ export async function getEligibility(patientId: number) {
   );
 
   const fee = CONSULT_FEE;
+  const membership = await getActiveMembership(patientId);
+  const mem = membershipEligibilityOverlay(membership);
+
   if (policy.rows[0]) {
     const copay = money(policy.rows[0].copay_amount, 10);
+    const best = mem && mem.copay < copay ? mem.copay : copay;
+    const usedMembership = Boolean(mem && mem.copay < copay);
     return {
-      source: 'insurance',
+      source: usedMembership ? 'membership' : 'insurance',
       eligible: true,
       consult_fee: fee,
-      copay,
-      covered_amount: Math.max(0, fee - copay),
-      coverage_percent: money(policy.rows[0].coverage_percent, 80),
-      payer_name: policy.rows[0].insurer_name,
-      plan_name: policy.rows[0].plan_name,
-      policy_number: policy.rows[0].policy_number,
-      policy_id: policy.rows[0].id,
+      copay: best,
+      covered_amount: Math.max(0, fee - best),
+      coverage_percent: usedMembership
+        ? mem!.coverage_percent
+        : money(policy.rows[0].coverage_percent, 80),
+      payer_name: usedMembership ? mem!.payer_name : policy.rows[0].insurer_name,
+      plan_name: usedMembership ? mem!.plan_name : policy.rows[0].plan_name,
+      policy_number: usedMembership ? mem!.policy_number : policy.rows[0].policy_number,
+      policy_id: usedMembership ? null : policy.rows[0].id,
       corporate_id: null,
       member: member.rows[0] || null,
+      membership_tier: mem?.membership_tier || null,
     };
   }
   if (member.rows[0]) {
     const copay = money(member.rows[0].copay_amount, 20);
+    const best = mem && mem.copay < copay ? mem.copay : copay;
+    const usedMembership = Boolean(mem && mem.copay < copay);
     return {
-      source: 'corporate',
+      source: usedMembership ? 'membership' : 'corporate',
       eligible: true,
       consult_fee: fee,
-      copay,
-      covered_amount: Math.max(0, fee - copay),
-      coverage_percent: money(member.rows[0].coverage_percent, 60),
-      payer_name: member.rows[0].corporate_name,
-      plan_name: 'Staff medical scheme',
-      policy_number: member.rows[0].staff_id,
+      copay: best,
+      covered_amount: Math.max(0, fee - best),
+      coverage_percent: usedMembership
+        ? mem!.coverage_percent
+        : money(member.rows[0].coverage_percent, 60),
+      payer_name: usedMembership ? mem!.payer_name : member.rows[0].corporate_name,
+      plan_name: usedMembership ? mem!.plan_name : 'Staff medical scheme',
+      policy_number: usedMembership ? mem!.policy_number : member.rows[0].staff_id,
       policy_id: null,
-      corporate_id: member.rows[0].corporate_id,
+      corporate_id: usedMembership ? null : member.rows[0].corporate_id,
       member: member.rows[0],
+      membership_tier: mem?.membership_tier || null,
     };
   }
+  if (mem) return mem;
   return {
     source: 'self_pay',
     eligible: false,
@@ -294,6 +310,7 @@ export async function getEligibility(patientId: number) {
     policy_id: null,
     corporate_id: null,
     member: null,
+    membership_tier: null,
   };
 }
 
@@ -301,14 +318,19 @@ export async function recordVisitPayment(
   appointmentId: number,
   patientId: number | null,
   doctorUserId: number | null,
-  paymentRef?: string
+  paymentRef?: string,
+  gateway = 'paystack'
 ) {
   const elig = patientId ? await getEligibility(patientId) : await getEligibility(0);
   const ref = paymentRef || 'PAY-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const existing = await query('SELECT id FROM payments WHERE reference = $1 LIMIT 1', [ref]);
+  if (existing.rows[0]) {
+    return { paymentRef: ref, eligibility: elig, alreadyProcessed: true };
+  }
   await query(
     `INSERT INTO payments (appointment_id, amount, currency, status, reference, gateway, coverage_source, covered_amount, copay_amount)
-     VALUES ($1, $2, 'GHS', 'paid', $3, 'simulated', $4, $5, $6)`,
-    [appointmentId, elig.copay, ref, elig.source, elig.covered_amount, elig.copay]
+     VALUES ($1, $2, 'GHS', 'paid', $3, $4, $5, $6, $7)`,
+    [appointmentId, elig.copay, ref, gateway, elig.source, elig.covered_amount, elig.copay]
   );
 
   if (elig.covered_amount > 0 && patientId) {
@@ -384,18 +406,35 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       return res.status(403).json({ message: 'Forbidden' });
     }
     try {
-      const corp = await query('SELECT * FROM corporates ORDER BY id LIMIT 1');
-      const members = await query(
-        `SELECT m.*, p.full_name, p.patient_code, p.phone_number
-         FROM corporate_members m JOIN patients p ON m.patient_id = p.id
-         ORDER BY m.enrolled_at DESC`
-      );
-      const spend = await query(
-        `SELECT COALESCE(SUM(amount),0) AS billed, COUNT(*) AS claims
-         FROM claims WHERE source = 'corporate' AND status != 'rejected'`
-      );
+      const scopedId =
+        req.user!.role === 'corporate' ? await commercialOrgId('corporate', req.user!.id) : null;
+      const corp = scopedId
+        ? await query('SELECT * FROM corporates WHERE id = $1', [scopedId])
+        : await query('SELECT * FROM corporates ORDER BY id');
+      const corpIds = corp.rows.map((c: { id: number }) => c.id);
+      if (req.user!.role === 'corporate' && !scopedId) {
+        return res.json({ corporate: null, members: [], billed: { billed: 0, claims: 0 } });
+      }
+      const members = corpIds.length
+        ? await query(
+            `SELECT m.*, p.full_name, p.patient_code, p.phone_number
+             FROM corporate_members m JOIN patients p ON m.patient_id = p.id
+             WHERE m.corporate_id = ANY($1)
+             ORDER BY m.enrolled_at DESC`,
+            [corpIds]
+          )
+        : { rows: [] as any[] };
+      const spend = corpIds.length
+        ? await query(
+            `SELECT COALESCE(SUM(amount),0) AS billed, COUNT(*) AS claims
+             FROM claims WHERE source = 'corporate' AND status != 'rejected'
+               AND corporate_id = ANY($1)`,
+            [corpIds]
+          )
+        : { rows: [{ billed: 0, claims: 0 }] };
       res.json({
         corporate: corp.rows[0] || null,
+        corporates: corp.rows,
         members: members.rows,
         billed: spend.rows[0],
       });
@@ -411,7 +450,13 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       const { patient_code, staff_id, department } = req.body;
       const patient = await query('SELECT * FROM patients WHERE patient_code = $1 OR staff_id = $1 LIMIT 1', [patient_code]);
       if (!patient.rows[0]) return res.status(404).json({ message: 'Patient not found' });
-      const corp = await query('SELECT id FROM corporates ORDER BY id LIMIT 1');
+      const scopedId =
+        req.user!.role === 'corporate'
+          ? await commercialOrgId('corporate', req.user!.id)
+          : null;
+      const corp = scopedId
+        ? await query('SELECT id FROM corporates WHERE id = $1', [scopedId])
+        : await query('SELECT id FROM corporates ORDER BY id LIMIT 1');
       if (!corp.rows[0]) return res.status(400).json({ message: 'No corporate account' });
       const row = await query(
         `INSERT INTO corporate_members (corporate_id, patient_id, staff_id, department, status)
@@ -445,14 +490,26 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       return res.status(403).json({ message: 'Forbidden' });
     }
     try {
-      const [insurer, policies, preauths, claims] = await Promise.all([
-        query('SELECT * FROM insurers ORDER BY id LIMIT 1'),
-        query(
-          `SELECT p.*, i.name as insurer_name, pt.full_name, pt.patient_code
-           FROM policies p JOIN insurers i ON p.insurer_id = i.id
-           JOIN patients pt ON p.patient_id = pt.id
-           ORDER BY p.created_at DESC`
-        ),
+      const scopedId =
+        req.user!.role === 'insurance' ? await commercialOrgId('insurer', req.user!.id) : null;
+      if (req.user!.role === 'insurance' && !scopedId) {
+        return res.json({ insurer: null, policies: [], preauths: [], claims: [] });
+      }
+      const insurer = scopedId
+        ? await query('SELECT * FROM insurers WHERE id = $1', [scopedId])
+        : await query('SELECT * FROM insurers ORDER BY id');
+      const insIds = insurer.rows.map((i: { id: number }) => i.id);
+      const [policies, preauths, claims] = await Promise.all([
+        insIds.length
+          ? query(
+              `SELECT p.*, i.name as insurer_name, pt.full_name, pt.patient_code
+               FROM policies p JOIN insurers i ON p.insurer_id = i.id
+               JOIN patients pt ON p.patient_id = pt.id
+               WHERE p.insurer_id = ANY($1)
+               ORDER BY p.created_at DESC`,
+              [insIds]
+            )
+          : Promise.resolve({ rows: [] as any[] }),
         query(
           `SELECT pa.*, pt.full_name, pt.patient_code
            FROM preauths pa JOIN patients pt ON pa.patient_id = pt.id
@@ -466,6 +523,7 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       ]);
       res.json({
         insurer: insurer.rows[0] || null,
+        insurers: insurer.rows,
         policies: policies.rows,
         preauths: preauths.rows,
         claims: claims.rows,
