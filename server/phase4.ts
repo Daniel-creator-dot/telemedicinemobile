@@ -89,6 +89,23 @@ export async function initPhase4Schema() {
   `);
 
   await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vault_documents' AND column_name='file_name') THEN
+        ALTER TABLE vault_documents ADD COLUMN file_name VARCHAR(200);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vault_documents' AND column_name='mime_type') THEN
+        ALTER TABLE vault_documents ADD COLUMN mime_type VARCHAR(80);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vault_documents' AND column_name='byte_size') THEN
+        ALTER TABLE vault_documents ADD COLUMN byte_size INTEGER;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='vault_documents' AND column_name='content') THEN
+        ALTER TABLE vault_documents ADD COLUMN content BYTEA;
+      END IF;
+    END $$;
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS chronic_program_tasks (
       id SERIAL PRIMARY KEY,
       program_id INTEGER REFERENCES chronic_programs(id) ON DELETE CASCADE,
@@ -467,7 +484,7 @@ export function registerPhase4Routes(app: Express) {
 
   app.post('/api/vault/documents', authenticate, async (req: AuthedRequest, res: Response) => {
     try {
-      const { title, kind, notes, source_label, patient_id } = req.body || {};
+      const { title, kind, notes, source_label, patient_id, file_base64, file_name, mime_type } = req.body || {};
       if (!title) return res.status(400).json({ message: 'Title is required' });
       const resolved = await resolveManagedPatient(req, patient_id ? Number(patient_id) : null);
       if (resolved.error || !resolved.patient) {
@@ -475,19 +492,71 @@ export function registerPhase4Routes(app: Express) {
       }
       const allowed = ['letter', 'lab', 'imaging', 'prescription', 'other'];
       const useKind = allowed.includes(kind) ? kind : 'other';
+
+      let content: Buffer | null = null;
+      let fileName: string | null = file_name ? String(file_name).slice(0, 200) : null;
+      let mime: string | null = mime_type ? String(mime_type).slice(0, 80) : null;
+      let byteSize: number | null = null;
+      if (file_base64) {
+        const raw = String(file_base64).replace(/^data:[^;]+;base64,/, '');
+        content = Buffer.from(raw, 'base64');
+        if (!content.length) return res.status(400).json({ message: 'File could not be read' });
+        if (content.length > 2 * 1024 * 1024) {
+          return res.status(413).json({ message: 'File must be 2 MB or smaller' });
+        }
+        byteSize = content.length;
+        if (!fileName) fileName = 'record.bin';
+        if (!mime) mime = 'application/octet-stream';
+      }
+
       const result = await query(
-        `INSERT INTO vault_documents (patient_id, title, kind, notes, source_label, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [resolved.patient.id, String(title).trim(), useKind, notes || null, source_label || null, req.user!.id]
+        `INSERT INTO vault_documents (patient_id, title, kind, notes, source_label, created_by, file_name, mime_type, byte_size, content)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, patient_id, title, kind, notes, source_label, created_by, created_at, file_name, mime_type, byte_size,
+                   (content IS NOT NULL) AS has_file`,
+        [
+          resolved.patient.id,
+          String(title).trim(),
+          useKind,
+          notes || null,
+          source_label || null,
+          req.user!.id,
+          fileName,
+          mime,
+          byteSize,
+          content,
+        ]
       );
       res.status(201).json({
         ...result.rows[0],
-        storage: 'metadata_only',
-        note: 'File bytes are not stored on this server. Record the source (clinic, date, paper copy) here.',
+        storage: content ? 'postgres' : 'metadata',
       });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Could not add vault record' });
+    }
+  });
+
+  app.get('/api/vault/documents/:id/file', authenticate, async (req: AuthedRequest, res: Response) => {
+    try {
+      const row = await query(
+        'SELECT patient_id, file_name, mime_type, content FROM vault_documents WHERE id = $1',
+        [req.params.id]
+      );
+      if (!row.rows[0]) return res.status(404).json({ message: 'Not found' });
+      if (!(await canAccessPatient(req.user!, row.rows[0].patient_id))) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      if (!row.rows[0].content) return res.status(404).json({ message: 'No file attached' });
+      res.setHeader('Content-Type', row.rows[0].mime_type || 'application/octet-stream');
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="${String(row.rows[0].file_name || 'record').replace(/"/g, '')}"`
+      );
+      res.send(row.rows[0].content);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Could not open file' });
     }
   });
 

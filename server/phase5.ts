@@ -658,7 +658,8 @@ export function registerPhase5Routes(app: Express) {
           patientId,
         ]),
         query(
-          `SELECT id, title, kind, source_label, created_at FROM vault_documents WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
+          `SELECT id, title, kind, source_label, created_at, file_name, byte_size, (content IS NOT NULL) AS has_file
+           FROM vault_documents WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
           [patientId]
         ),
         query(`SELECT id, severity, title, status, created_at FROM risk_alerts WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 10`, [

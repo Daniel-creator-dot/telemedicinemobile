@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Telemedicinemobile</string>
+	<string>Digi Health</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -74,5 +74,7 @@
 	<string>Digi Health needs camera access for in-app video consultations.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Digi Health needs microphone access for in-app video consultations.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Digi Health uses your photo library so you can add a letter, lab, or scan to your medical vault.</string>
 </dict>
 </plist>

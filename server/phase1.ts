@@ -284,6 +284,8 @@ export async function initPhase1Schema() {
     console.log('Default medical ops user created (medops/ops123)');
   }
 
+  await ensureDemoClinicians();
+
   await query(`
     UPDATE doctors SET
       title = COALESCE(title, 'Dr'),
@@ -297,6 +299,57 @@ export async function initPhase1Schema() {
   `);
 
   console.log('Phase 1 schema ready');
+}
+
+async function ensureDemoClinicians() {
+  const existing = await query("SELECT COUNT(*) FROM users WHERE role = 'doctor'");
+  if (parseInt(existing.rows[0].count, 10) > 0) return;
+
+  const hashed = await bcrypt.hash('staff123', 10);
+  const clinicians = [
+    {
+      username: 'dr_appiah',
+      name: 'Dr. Kwesi Appiah',
+      spec: 'General Physician',
+      langs: 'English, Twi',
+      fee: 50,
+      years: 12,
+      bio: 'Family physician at Digi Health Virtual Clinic, Accra.',
+    },
+    {
+      username: 'dr_mensah',
+      name: 'Dr. Sarah Mensah',
+      spec: 'Pediatrician',
+      langs: 'English, Ga, Twi',
+      fee: 60,
+      years: 9,
+      bio: 'Paediatrician covering child consults and follow-up on the Digi Health network.',
+    },
+    {
+      username: 'dr_doe',
+      name: 'Dr. John Doe',
+      spec: 'Cardiologist',
+      langs: 'English, Ewe',
+      fee: 80,
+      years: 15,
+      bio: 'Cardiologist for chest pain, hypertension, and chronic heart follow-up.',
+    },
+  ];
+
+  for (const d of clinicians) {
+    const user = await query(
+      `INSERT INTO users (username, password, role, name) VALUES ($1, $2, 'doctor', $3) RETURNING id`,
+      [d.username, hashed, d.name]
+    );
+    await query(
+      `INSERT INTO doctors (
+         user_id, name, specialization, slot_duration, start_time, end_time,
+         title, languages, consultation_fee, years_experience, qualifications, biography, facility, is_active, is_online
+       ) VALUES ($1, $2, $3, 20, '08:00', '17:00', 'Dr', $4, $5, $6, 'MBChB, MWACP', $7, 'Digi Health Virtual Clinic', TRUE, TRUE)`,
+      [user.rows[0].id, d.name, d.spec, d.langs, d.fee, d.years, d.bio]
+    );
+  }
+  console.log('Demo clinicians created (dr_appiah / dr_mensah / dr_doe, password staff123)');
 }
 
 async function nextPatientCode() {

@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../core/api_client.dart';
 import '../../models/appointment.dart';
 import '../../models/chat_message.dart';
@@ -282,6 +284,14 @@ class CareRepository {
   Future<Map<String, dynamic>> addVaultDocument(Map<String, dynamic> payload) async {
     final res = await _api.dio.post<Map<String, dynamic>>('/api/vault/documents', data: payload);
     return res.data ?? {};
+  }
+
+  Future<List<int>> vaultFileBytes(int id) async {
+    final res = await _api.dio.get<List<int>>(
+      '/api/vault/documents/$id/file',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return res.data ?? <int>[];
   }
 
   Future<void> deleteVaultDocument(int id) async {

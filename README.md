@@ -17,6 +17,9 @@ npm run dev
 
 The server binds `0.0.0.0:$PORT` (default `5000`) for local and Render.
 
+**Live API:** https://telemedicine-server-l2bj.onrender.com  
+**Health:** https://telemedicine-server-l2bj.onrender.com/health
+
 Required environment:
 
 | Variable | Purpose |
@@ -38,19 +41,16 @@ SMS credentials live in the `settings` table and are never returned to non-admin
 
 ```bash
 flutter pub get
+flutter run
+```
+
+The app talks to the live Render API by default (`https://telemedicine-server-l2bj.onrender.com`). Override for local work:
+
+```bash
 flutter run --dart-define=API_URL=http://localhost:5000
 ```
 
-Defaults if `API_URL` is omitted:
-
-- Web / desktop: `http://localhost:5000`
-- Android emulator: `http://10.0.2.2:5000`
-
-Physical devices need a reachable host, for example:
-
-```bash
-flutter run --dart-define=API_URL=http://192.168.1.20:5000
-```
+Android emulator to a local API: `--dart-define=API_URL=http://10.0.2.2:5000`.
 
 ## Roles
 
@@ -59,7 +59,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Role | Username (typical seed) | Home |
 | --- | --- | --- |
 | Patient | phone + OTP register | Consult Now, book, video, chat, Rx, records, tracker |
-| Doctor | created by admin | Queue, video consult, SOAP, e-prescribe, referrals |
+| Doctor | `dr_appiah` / `staff123` (also `dr_mensah`, `dr_doe`) | Queue, video consult, SOAP, e-prescribe, referrals |
 | Nurse / triage | `nurse` | Pre-consult triage and urgency |
 | Medical operations | `medops` | Command centre, queue, follow-ups |
 | Lab technician | `labtech` | Lab request lifecycle + result return |
@@ -99,7 +99,7 @@ Open **Patient → Care phases** for live counts on all five.
 - **Family / dependents:** Patient → Family. Add a child/spouse/parent (creates a patient record, no login). Book or Consult Now on their behalf. Appointments stay scoped to the guardian account.
 - **Care programs:** Patient → Care programs. Enroll in hypertension, diabetes, asthma, sickle cell, or antenatal. Mark daily/weekly tasks; reminders go to the existing notifications inbox. Not a diagnosis.
 - **Clinical AI assist:** Doctor SOAP dialog → “Draft SOAP (assistive)”. Patient → Symptom helper. Works without an LLM key (templated from notes/vitals). If `OPENAI_API_KEY` is set, a richer draft is attempted. Always labeled assistive; never a diagnosis; no HIPAA claim.
-- **Vault:** Rx, labs, imaging, letters, plus document *metadata* you add (title, source, notes). This API does not store file bytes (Render disk is ephemeral).
+- **Vault:** Rx, labs, imaging, letters from visits, plus photos/PDFs you attach (up to 2 MB). Files are stored in Postgres so they survive Render’s ephemeral disk.
 
 Video rooms use unguessable Jitsi names (`digihealth-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, GHS, card / MoMo / bank). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
 
@@ -122,7 +122,7 @@ This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRE
 - **Risk alerts:** Rule-based from tracker (high BP/glucose) and overdue program tasks. Labeled assistive, not a diagnosis.
 - **Consents:** `POST /api/consents/me` for telemedicine, data, communication, sharing, AI assist.
 
-This is still not a production national deployment: vault is metadata-only, and Jitsi is public-hosted with unguessable room names. Paystack keys must be set (env or Admin → Settings) before live collection.
+This is still not a production national deployment: Jitsi is public-hosted with unguessable room names. Paystack keys must be set (env or Admin → Settings) before live collection. Vault files live in Postgres (2 MB cap), not object storage.
 
 ### Completeness pass
 

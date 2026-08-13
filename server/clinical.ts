@@ -158,7 +158,9 @@ export function registerClinicalRoutes(app: Express) {
           [patient.id]
         ),
         query(
-          `SELECT * FROM vault_documents WHERE patient_id = $1 ORDER BY created_at DESC`,
+          `SELECT id, patient_id, title, kind, notes, source_label, created_by, created_at,
+                  file_name, mime_type, byte_size, (content IS NOT NULL) AS has_file
+           FROM vault_documents WHERE patient_id = $1 ORDER BY created_at DESC`,
           [patient.id]
         ).catch(() => ({ rows: [] })),
       ]);
@@ -169,7 +171,7 @@ export function registerClinicalRoutes(app: Express) {
         scans: scans.rows,
         letters: consults.rows,
         documents: docs.rows,
-        storage_note: 'Uploaded files are not stored on this API. Documents are metadata you add (title, source, notes).',
+        storage_note: 'Letters, labs, imaging, and prescriptions from visits stay here. You can also attach a photo or PDF (up to 2 MB) — stored in the clinic database, not on this server disk.',
       });
     } catch (err) {
       console.error(err);

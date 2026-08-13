@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/env.dart';
 import '../../core/session.dart';
 import 'auth_repository.dart';
 
@@ -253,7 +254,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ).animate().fadeIn(delay: 100.ms),
-                    const SizedBox(height: 50),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppEnv.isLocalOverride ? 'Local clinic API' : 'Live clinic · Ghana',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 11,
+                        color: Colors.white.withOpacity(0.55),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 42),
 
                     // Glassmorphic Input Container
                     Container(
