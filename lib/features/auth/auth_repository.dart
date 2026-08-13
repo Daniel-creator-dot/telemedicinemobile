@@ -27,6 +27,42 @@ class AuthRepository {
     return _parseAuthResponse(res.data);
   }
 
+  Future<String?> requestOtp({required String phone, required String purpose}) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/auth/request-otp',
+      data: {'phone': phone.trim(), 'purpose': purpose},
+    );
+    return res.data?['debug_otp']?.toString();
+  }
+
+  Future<AuthResult> registerWithOtp({
+    required String phone,
+    required String code,
+    required String password,
+    required String name,
+    required String email,
+    required bool telemedicineConsent,
+    required bool privacyConsent,
+    required bool communicationConsent,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/auth/register-otp',
+      data: {
+        'phone': phone.trim(),
+        'code': code.trim(),
+        'password': password,
+        'name': name.trim(),
+        'email': email.trim(),
+        'consents': [
+          {'type': 'telemedicine', 'accepted': telemedicineConsent},
+          {'type': 'data_processing', 'accepted': privacyConsent},
+          {'type': 'communication', 'accepted': communicationConsent},
+        ],
+      },
+    );
+    return _parseAuthResponse(res.data);
+  }
+
   Future<void> register({
     required String username,
     required String password,
@@ -44,10 +80,6 @@ class AuthRepository {
         'email': email.trim(),
       },
     );
-    // Registration endpoint also returns token/user in Graprime backend
-    // but the screen flow can login immediately or we parse it
-    // Wait, the backend index.ts says:
-    // res.status(201).json({ token, user: { id: user.id, username: user.username, role: user.role, name } });
   }
 
   Future<void> forgotPassword(String username) async {

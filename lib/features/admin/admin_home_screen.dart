@@ -1,16 +1,15 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_client.dart';
 import '../../core/session.dart';
 import '../../models/appointment.dart';
 import '../../models/auth_user.dart';
+import '../consult/open_video_consult.dart';
 import '../doctor/consultation_dialog.dart';
 
 class AdminHomeScreen extends StatefulWidget {
@@ -229,13 +228,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     }
   }
 
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open link.')));
-    }
+  Future<void> _openMeeting(Appointment apt) async {
+    await openVideoConsult(context, apt, isClinician: true);
   }
 
   @override
@@ -1282,10 +1276,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       'Time: ${apt.preferredTime}  |  Specialist: ${apt.doctorName ?? "Unassigned"}',
                       style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11),
                     ),
-                    if (apt.isTelemedicine && apt.meetingLink != null) ...[
+                    if (apt.isVideoConsult && apt.hasMeetingLink) ...[
                       const SizedBox(height: 6),
                       InkWell(
-                        onTap: () => _launchUrl(apt.meetingLink!),
+                        onTap: () => _openMeeting(apt),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1554,6 +1548,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     DropdownMenuItem(value: 'doctor', child: Text('Doctor / Specialist', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
                     DropdownMenuItem(value: 'admin', child: Text('Administrator', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
                     DropdownMenuItem(value: 'lab_technician', child: Text('Lab Technician', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'nurse', child: Text('Nurse / Triage', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'medical_ops', child: Text('Medical Operations', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'pharmacy', child: Text('Pharmacy', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'imaging', child: Text('Imaging Centre', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'corporate', child: Text('Corporate client', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'insurance', child: Text('Insurance', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
+                    DropdownMenuItem(value: 'finance', child: Text('Finance', style: GoogleFonts.roboto(color: Color(0xFF0F172A)))),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _regRole = v);

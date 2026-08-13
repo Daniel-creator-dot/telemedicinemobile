@@ -6,10 +6,21 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/session.dart';
 import '../../core/notification_service.dart';
 import '../../models/auth_user.dart';
+import '../../models/role.dart';
 import 'appointments_repository.dart';
+import 'care_repository.dart';
 
 class BookAppointmentDialog extends StatefulWidget {
-  const BookAppointmentDialog({super.key});
+  const BookAppointmentDialog({
+    super.key,
+    this.preselectedDoctorId,
+    this.preselectedDoctorName,
+    this.preselectedSpecialty,
+  });
+
+  final int? preselectedDoctorId;
+  final String? preselectedDoctorName;
+  final String? preselectedSpecialty;
 
   @override
   State<BookAppointmentDialog> createState() => _BookAppointmentDialogState();
@@ -35,8 +46,11 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   String _selectedService = '';
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  List<String> _slots = [];
+  String? _selectedSlot;
   bool _isTelemedicine = false;
   bool _loadingDoctors = true;
+  bool _loadingSlots = false;
   bool _submitting = false;
 
   // Booked result details for success screen
@@ -44,17 +58,15 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   String _bookingTimeStr = '';
 
   final List<String> _services = [
-    'Physio',
-    'Dietician',
-    'Surgical',
-    'Psychiatry',
-    'Urology',
-    'Physician specialties',
-    'Dental',
-    'Ent',
-    'Eye',
-    'Pediatric',
-    'ANC/Gynae'
+    'general consultation',
+    'specialist consultation',
+    'follow-up',
+    'prescription review',
+    'laboratory-result review',
+    'imaging-result review',
+    'chronic disease review',
+    'second medical opinion',
+    'other',
   ];
 
   @override
@@ -79,23 +91,93 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
   }
 
   void _loadDoctorsAndSession() {
-    // Fill session data
     final session = context.read<Session>();
     if (session.isAuthenticated && session.user != null) {
       _fullName.text = session.user!.name;
-      _phoneNumber.text = session.user!.username; // typically username or phone
-      _email.text = ''; // optional
-      _isTelemedicine = true; // default for verified patient telemedicine sessions
+      _phoneNumber.text = session.user!.phoneNumber ?? session.user!.username;
+      _email.text = session.user!.email ?? '';
+      _nationwideId.text = session.user!.patientCode ?? '';
+      _isTelemedicine = true;
+    }
+    final specialty = widget.preselectedSpecialty?.trim().toLowerCase();
+    if (specialty != null && _services.contains(specialty)) {
+      _selectedService = specialty;
     }
 
-    // Fetch doctors
     context.read<AppointmentsRepository>().getAvailableDoctors().then((list) {
+      if (!mounted) return;
+      AuthUser? selected;
+      if (widget.preselectedDoctorId != null) {
+        final id = widget.preselectedDoctorId.toString();
+        for (final d in list) {
+          if (d.id == id) {
+            selected = d;
+            break;
+          }
+        }
+        if (selected == null) {
+          selected = AuthUser(
+            id: id,
+            username: widget.preselectedDoctorName ?? 'Doctor',
+            name: widget.preselectedDoctorName ?? 'Doctor',
+            role: AppRole.doctor,
+          );
+          list = [...list, selected];
+        }
+      }
       setState(() {
         _doctors = list;
+        _selectedDoctor = selected;
         _loadingDoctors = false;
       });
+      _loadSlots();
     }).catchError((_) {
-      setState(() => _loadingDoctors = false);
+      if (mounted) setState(() => _loadingDoctors = false);
+    });
+  }
+
+  String _dateStr(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _loadSlots() async {
+    if (_selectedDoctor == null || _selectedDate == null) {
+      setState(() {
+        _slots = [];
+        _selectedSlot = null;
+      });
+      return;
+    }
+    final doctorId = int.tryParse(_selectedDoctor!.id);
+    if (doctorId == null) return;
+    setState(() => _loadingSlots = true);
+    try {
+      final slots = await context.read<CareRepository>().getSlots(doctorId, _dateStr(_selectedDate!));
+      if (!mounted) return;
+      setState(() {
+        _slots = slots;
+        _loadingSlots = false;
+        if (_selectedSlot != null && !slots.contains(_selectedSlot)) {
+          _selectedSlot = null;
+          _selectedTime = null;
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _slots = [];
+          _loadingSlots = false;
+        });
+      }
+    }
+  }
+
+  void _pickSlot(String slot) {
+    final parts = slot.split(':');
+    final hour = int.tryParse(parts[0]) ?? 9;
+    final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    setState(() {
+      _selectedSlot = slot;
+      _selectedTime = TimeOfDay(hour: hour, minute: minute);
     });
   }
 
@@ -120,7 +202,12 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
       },
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _selectedSlot = null;
+        _selectedTime = null;
+      });
+      await _loadSlots();
     }
   }
 
@@ -150,7 +237,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
     setState(() => _submitting = true);
     try {
       final repo = context.read<AppointmentsRepository>();
-      final dateStr = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
+      final dateStr = _dateStr(_selectedDate!);
       final timeStr = '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00';
 
       final deps = _dependantsControllers.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
@@ -180,7 +267,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
 
       final now = DateTime.now();
       setState(() {
-        _bookedId = apt.appointmentId ?? 'GP-${apt.id}-CONF';
+        _bookedId = apt.appointmentId.isNotEmpty ? apt.appointmentId : 'GP-${apt.id}-CONF';
         _bookingTimeStr = '${now.month}/${now.day}/${now.year} ${TimeOfDay.fromDateTime(now).format(context)}';
         _currentStep = 3; // Go to Success Screen
         _submitting = false;
@@ -201,7 +288,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
     } else if (_currentStep == 1) {
       if (_selectedDate == null || _selectedTime == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select preferred date & time.')),
+          const SnackBar(content: Text('Please select a date and an available slot.')),
         );
         return;
       }
@@ -422,6 +509,80 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
     );
   }
 
+  Widget _buildSlotPicker() {
+    if (_selectedDoctor == null) {
+      return InkWell(
+        onTap: _selectTime,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.02),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.access_time, color: Color(0xFF8B5CF6), size: 16),
+              const SizedBox(width: 12),
+              Text(
+                _selectedTime == null
+                    ? 'Choose a doctor to see open slots, or pick a time'
+                    : 'Selected Time: ${_selectedTime!.format(context)}',
+                style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_selectedDate == null) {
+      return Text(
+        'Choose a date to load this doctor\'s open slots.',
+        style: GoogleFonts.roboto(color: Colors.white38, fontSize: 12),
+      );
+    }
+    if (_loadingSlots) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Center(child: CircularProgressIndicator(color: Color(0xFF00D2C4), strokeWidth: 2)),
+      );
+    }
+    if (_slots.isEmpty) {
+      return Text(
+        'No open slots on this date. Try another day.',
+        style: GoogleFonts.roboto(color: Colors.white38, fontSize: 12),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Available slots', style: GoogleFonts.roboto(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _slots.map((slot) {
+            final selected = _selectedSlot == slot;
+            return ChoiceChip(
+              label: Text(slot),
+              selected: selected,
+              onSelected: (_) => _pickSlot(slot),
+              selectedColor: const Color(0xFF00D2C4),
+              labelStyle: GoogleFonts.roboto(
+                color: selected ? Colors.black : Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+              backgroundColor: const Color(0xFF1E293B),
+              side: BorderSide(color: selected ? const Color(0xFF00D2C4) : Colors.white12),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDetailsStep() {
     return Column(
       key: const ValueKey('details-step'),
@@ -457,34 +618,6 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         ),
         const SizedBox(height: 12),
 
-        // Time Picker
-        InkWell(
-          onTap: _selectTime,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.02),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white10),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.access_time, color: Color(0xFF8B5CF6), size: 16),
-                const SizedBox(width: 12),
-                Text(
-                  _selectedTime == null
-                      ? 'Choose Preferred Time'
-                      : 'Selected Time: ${_selectedTime!.format(context)}',
-                  style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 15),
-
-        // Specialty dropdown
         DropdownButtonFormField<String>(
           value: _selectedService.isEmpty ? null : _selectedService,
           dropdownColor: const Color(0xFF0F172A),
@@ -501,21 +634,29 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         ),
         const SizedBox(height: 12),
 
-        // Doctor assigned dropdown
         _loadingDoctors
             ? const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(color: Color(0xFF00D2C4))))
             : DropdownButtonFormField<AuthUser>(
                 value: _selectedDoctor,
                 dropdownColor: const Color(0xFF0F172A),
-                decoration: _fieldDeco('Doctor to see (Optional)', Icons.badge_outlined),
+                decoration: _fieldDeco('Doctor to see', Icons.badge_outlined),
                 items: _doctors
                     .map((d) => DropdownMenuItem(
                           value: d,
                           child: Text(d.name, style: GoogleFonts.roboto(color: Colors.white, fontSize: 13)),
                         ))
                     .toList(),
-                onChanged: (v) => setState(() => _selectedDoctor = v),
+                onChanged: (v) {
+                  setState(() {
+                    _selectedDoctor = v;
+                    _selectedSlot = null;
+                    _selectedTime = null;
+                  });
+                  _loadSlots();
+                },
               ),
+        const SizedBox(height: 15),
+        _buildSlotPicker(),
         const SizedBox(height: 15),
 
         // Telehealth Mode

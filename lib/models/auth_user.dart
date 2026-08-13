@@ -7,6 +7,9 @@ class AuthUser {
     required this.name,
     required this.role,
     this.phoneNumber,
+    this.email,
+    this.patientCode,
+    this.patientId,
   });
 
   final String id;
@@ -14,6 +17,9 @@ class AuthUser {
   final String name;
   final AppRole role;
   final String? phoneNumber;
+  final String? email;
+  final String? patientCode;
+  final int? patientId;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
@@ -22,6 +28,11 @@ class AuthUser {
       name: json['name']?.toString() ?? '',
       role: AppRole.fromString(json['role']?.toString()),
       phoneNumber: json['phone_number']?.toString(),
+      email: json['email']?.toString(),
+      patientCode: json['patient_code']?.toString(),
+      patientId: json['patient_id'] is int
+          ? json['patient_id'] as int
+          : int.tryParse(json['patient_id']?.toString() ?? ''),
     );
   }
 
@@ -31,11 +42,17 @@ class AuthUser {
         'name': name,
         'role': role.name,
         if (phoneNumber != null) 'phone_number': phoneNumber,
+        if (email != null) 'email': email,
+        if (patientCode != null) 'patient_code': patientCode,
+        if (patientId != null) 'patient_id': patientId,
       };
 
   AuthUser copyWith({
     String? name,
     String? phoneNumber,
+    String? email,
+    String? patientCode,
+    int? patientId,
   }) {
     return AuthUser(
       id: id,
@@ -43,6 +60,9 @@ class AuthUser {
       name: name ?? this.name,
       role: role,
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      email: email ?? this.email,
+      patientCode: patientCode ?? this.patientCode,
+      patientId: patientId ?? this.patientId,
     );
   }
 }

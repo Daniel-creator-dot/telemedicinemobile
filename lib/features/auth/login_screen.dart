@@ -29,6 +29,11 @@ class _LoginScreenState extends State<LoginScreen> {
   _AuthMode _mode = _AuthMode.signIn;
   bool _loading = false;
   bool _obscure = true;
+  bool _otpSent = false;
+  bool _consentTele = false;
+  bool _consentPrivacy = false;
+  bool _consentComms = true;
+  String? _debugOtp;
   String? _error;
 
   @override
@@ -47,6 +52,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _mode = mode;
       _error = null;
+      _otpSent = false;
+      _debugOtp = null;
     });
   }
 
@@ -73,21 +80,36 @@ class _LoginScreenState extends State<LoginScreen> {
           break;
 
         case _AuthMode.signUp:
-          await repo.register(
-            username: _username.text,
+          if (!_consentTele || !_consentPrivacy) {
+            setState(() => _error = 'Accept telemedicine and privacy terms to continue.');
+            break;
+          }
+          if (!_otpSent) {
+            final debug = await repo.requestOtp(phone: _phoneNumber.text, purpose: 'register');
+            if (!mounted) return;
+            setState(() {
+              _otpSent = true;
+              _debugOtp = debug;
+              _username.text = _phoneNumber.text;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(debug != null ? 'OTP sent. Dev code: $debug' : 'OTP sent to your phone.')),
+            );
+            break;
+          }
+          final result = await repo.registerWithOtp(
+            phone: _phoneNumber.text,
+            code: _otpCode.text,
             password: _password.text,
             name: _name.text,
-            phoneNumber: _phoneNumber.text,
             email: _email.text,
+            telemedicineConsent: _consentTele,
+            privacyConsent: _consentPrivacy,
+            communicationConsent: _consentComms,
           );
-          // After successful signup, auto-login
-          final loginResult = await repo.login(
-            username: _username.text,
-            password: _password.text,
-          );
-          await session.setSession(token: loginResult.token, user: loginResult.user);
+          await session.setSession(token: result.token, user: result.user);
           if (!mounted) return;
-          _navigateHome(loginResult.user.role.name);
+          _navigateHome(result.user.role.name);
           break;
 
         case _AuthMode.forgot:
@@ -126,6 +148,20 @@ class _LoginScreenState extends State<LoginScreen> {
       context.go('/admin');
     } else if (role == 'lab_technician') {
       context.go('/lab-technician');
+    } else if (role == 'nurse') {
+      context.go('/nurse');
+    } else if (role == 'medical_ops') {
+      context.go('/ops');
+    } else if (role == 'pharmacy') {
+      context.go('/pharmacy');
+    } else if (role == 'imaging') {
+      context.go('/imaging');
+    } else if (role == 'corporate') {
+      context.go('/corporate');
+    } else if (role == 'insurance') {
+      context.go('/insurance');
+    } else if (role == 'finance') {
+      context.go('/finance');
     } else {
       context.go('/patient');
     }
@@ -136,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
       case _AuthMode.signIn:
         return 'Sign In';
       case _AuthMode.signUp:
-        return 'Create Account';
+        return _otpSent ? 'Verify OTP & Join' : 'Send Registration OTP';
       case _AuthMode.forgot:
         return 'Send OTP';
       case _AuthMode.reset:
@@ -307,19 +343,57 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _phoneNumber,
                               keyboardType: TextInputType.phone,
                               style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('Phone Number', Icons.phone_outlined),
+                              decoration: _inputDeco('Mobile number (Ghana)', Icons.phone_outlined),
                               validator: (v) => v == null || v.trim().isEmpty
                                   ? 'Phone number is required'
                                   : null,
                             ),
                             const SizedBox(height: 12),
+                            if (_otpSent) ...[
+                              TextFormField(
+                                controller: _otpCode,
+                                keyboardType: TextInputType.number,
+                                style: GoogleFonts.roboto(color: Colors.white),
+                                decoration: _inputDeco('OTP from SMS', Icons.lock_clock_outlined),
+                                validator: (v) => v == null || v.trim().length < 4
+                                    ? 'Enter the OTP'
+                                    : null,
+                              ),
+                              if (_debugOtp != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text('Dev OTP: $_debugOtp', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 12)),
+                                ),
+                              const SizedBox(height: 12),
+                            ],
+                            CheckboxListTile(
+                              value: _consentTele,
+                              onChanged: (v) => setState(() => _consentTele = v ?? false),
+                              activeColor: const Color(0xFF00D2C4),
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('I consent to telemedicine care', style: GoogleFonts.roboto(color: Colors.white, fontSize: 12)),
+                            ),
+                            CheckboxListTile(
+                              value: _consentPrivacy,
+                              onChanged: (v) => setState(() => _consentPrivacy = v ?? false),
+                              activeColor: const Color(0xFF00D2C4),
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('I accept privacy and data-processing terms', style: GoogleFonts.roboto(color: Colors.white, fontSize: 12)),
+                            ),
+                            CheckboxListTile(
+                              value: _consentComms,
+                              onChanged: (v) => setState(() => _consentComms = v ?? false),
+                              activeColor: const Color(0xFF00D2C4),
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('Send me SMS, email and push updates', style: GoogleFonts.roboto(color: Colors.white, fontSize: 12)),
+                            ),
                           ],
 
-                          // Username field used in sign in, sign up, forgot, reset
+                          if (!isSignUp)
                           TextFormField(
                             controller: _username,
                             style: GoogleFonts.roboto(color: Colors.white),
-                            decoration: _inputDeco('Username', Icons.account_circle_outlined),
+                            decoration: _inputDeco(isSignIn ? 'Username or phone' : 'Username', Icons.account_circle_outlined),
                             validator: (v) => v == null || v.trim().isEmpty
                                 ? 'Username is required'
                                 : null,

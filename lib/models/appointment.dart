@@ -19,6 +19,12 @@ class Appointment {
     this.staffId,
     this.nationwideId,
     this.whoIsComing,
+    this.patientId,
+    this.bookingType,
+    this.consultType,
+    this.queueNumber,
+    this.etaMinutes,
+    this.complaint,
   });
 
   final int id;
@@ -40,6 +46,12 @@ class Appointment {
   final String? staffId;
   final String? nationwideId;
   final List<String>? whoIsComing;
+  final int? patientId;
+  final String? bookingType;
+  final String? consultType;
+  final int? queueNumber;
+  final int? etaMinutes;
+  final String? complaint;
 
   factory Appointment.fromJson(Map<String, dynamic> json) {
     // Parse who_is_coming which can be a list or a string
@@ -60,9 +72,10 @@ class Appointment {
       preferredDate: json['preferred_date']?.toString() ?? '',
       preferredTime: json['preferred_time']?.toString() ?? '',
       status: json['status']?.toString() ?? 'pending',
-      isTelemedicine: json['is_telemedicine'] == true || json['is_telemedicine'] == 1,
+      isTelemedicine: _readBool(json['is_telemedicine']) ||
+          json['booking_type']?.toString() == 'consult_now',
       paymentStatus: json['payment_status']?.toString() ?? 'unpaid',
-      meetingLink: json['meeting_link']?.toString(),
+      meetingLink: _readLink(json['meeting_link']),
       doctorName: json['doctor_name']?.toString(),
       doctorId: json['doctor_id'] as int?,
       service: json['service']?.toString(),
@@ -71,6 +84,14 @@ class Appointment {
       staffId: json['staff_id']?.toString(),
       nationwideId: json['nationwide_id']?.toString(),
       whoIsComing: whoIsComing,
+      patientId: json['patient_id'] as int?,
+      bookingType: json['booking_type']?.toString(),
+      consultType: json['consult_type']?.toString(),
+      queueNumber: json['queue_number'] as int?,
+      etaMinutes: json['eta_minutes'] is int
+          ? json['eta_minutes'] as int
+          : int.tryParse(json['eta_minutes']?.toString() ?? ''),
+      complaint: json['complaint']?.toString(),
     );
   }
 
@@ -94,5 +115,77 @@ class Appointment {
         if (staffId != null) 'staff_id': staffId,
         if (nationwideId != null) 'nationwide_id': nationwideId,
         if (whoIsComing != null) 'who_is_coming': whoIsComing,
+        if (patientId != null) 'patient_id': patientId,
+        if (bookingType != null) 'booking_type': bookingType,
+        if (consultType != null) 'consult_type': consultType,
+        if (queueNumber != null) 'queue_number': queueNumber,
+        if (etaMinutes != null) 'eta_minutes': etaMinutes,
+        if (complaint != null) 'complaint': complaint,
       };
+
+  bool get isConsultNow => bookingType == 'consult_now';
+
+  bool get hasMeetingLink => meetingLink != null && meetingLink!.trim().isNotEmpty;
+
+  bool get isVideoConsult => isTelemedicine || isConsultNow || hasMeetingLink;
+
+  static bool _readBool(dynamic value) {
+    if (value == true || value == 1) return true;
+    final s = value?.toString().toLowerCase();
+    return s == 'true' || s == 't' || s == '1' || s == 'yes';
+  }
+
+  static String? _readLink(dynamic value) {
+    final s = value?.toString().trim();
+    if (s == null || s.isEmpty || s == 'null') return null;
+    return s;
+  }
+
+  bool get isLiveConsult {
+    final s = status.toLowerCase();
+    return s == 'approved' || s == 'arrived' || s == 'consulting';
+  }
+
+  bool get isWaitingInQueue {
+    final s = status.toLowerCase();
+    return s == 'queued' || s == 'pending' || s == 'triage';
+  }
+
+  Appointment copyWith({
+    String? status,
+    String? paymentStatus,
+    String? meetingLink,
+    String? doctorName,
+    int? doctorId,
+    int? queueNumber,
+    int? etaMinutes,
+  }) {
+    return Appointment(
+      id: id,
+      appointmentId: appointmentId,
+      fullName: fullName,
+      phoneNumber: phoneNumber,
+      email: email,
+      preferredDate: preferredDate,
+      preferredTime: preferredTime,
+      status: status ?? this.status,
+      isTelemedicine: isTelemedicine,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      meetingLink: meetingLink ?? this.meetingLink,
+      doctorName: doctorName ?? this.doctorName,
+      doctorId: doctorId ?? this.doctorId,
+      service: service,
+      priority: priority,
+      notes: notes,
+      staffId: staffId,
+      nationwideId: nationwideId,
+      whoIsComing: whoIsComing,
+      patientId: patientId,
+      bookingType: bookingType,
+      consultType: consultType,
+      queueNumber: queueNumber ?? this.queueNumber,
+      etaMinutes: etaMinutes ?? this.etaMinutes,
+      complaint: complaint,
+    );
+  }
 }

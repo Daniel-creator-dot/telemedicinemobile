@@ -11,6 +11,12 @@ class Prescription {
     this.createdAt,
     this.patientName,
     this.aptCode,
+    this.prescriptionRef,
+    this.strength,
+    this.route,
+    this.quantity,
+    this.pharmacyName,
+    this.dispenseStatus,
   });
 
   final int id;
@@ -24,6 +30,12 @@ class Prescription {
   final String? createdAt;
   final String? patientName;
   final String? aptCode;
+  final String? prescriptionRef;
+  final String? strength;
+  final String? route;
+  final String? quantity;
+  final String? pharmacyName;
+  final String? dispenseStatus;
 
   factory Prescription.fromJson(Map<String, dynamic> json) {
     return Prescription(
@@ -38,6 +50,12 @@ class Prescription {
       createdAt: json['created_at']?.toString(),
       patientName: json['patient_name']?.toString(),
       aptCode: json['apt_code']?.toString(),
+      prescriptionRef: json['prescription_ref']?.toString(),
+      strength: json['strength']?.toString(),
+      route: json['route']?.toString(),
+      quantity: json['quantity']?.toString(),
+      pharmacyName: json['pharmacy_name']?.toString(),
+      dispenseStatus: json['dispense_status']?.toString(),
     );
   }
 

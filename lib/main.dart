@@ -6,11 +6,14 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'core/api_client.dart';
+import 'features/consult/open_video_consult.dart';
 import 'core/session.dart';
 import 'core/notification_service.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/patient/appointments_repository.dart';
 import 'features/patient/book_appointment_dialog.dart';
+import 'features/patient/care_repository.dart';
+import 'features/patient/chat_screen.dart';
 import 'routing/app_router.dart';
 import 'models/appointment.dart';
 import 'models/auth_user.dart';
@@ -22,13 +25,14 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
-  // Initialize Notification Service
-  await NotificationService().initialize();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('Firebase/notifications unavailable: $e');
+  }
 
   final api = ApiClient();
   final session = Session(api);
@@ -42,6 +46,7 @@ void main() async {
         ChangeNotifierProvider<Session>.value(value: session),
         Provider(create: (ctx) => AuthRepository(ctx.read<ApiClient>())),
         Provider(create: (ctx) => AppointmentsRepository(ctx.read<ApiClient>())),
+        Provider(create: (ctx) => CareRepository(ctx.read<ApiClient>())),
       ],
       child: const TelemedicineApp(),
     ),
@@ -309,6 +314,10 @@ class _DashboardViewState extends State<DashboardView> {
     _loadDashboardData();
   }
 
+  Future<void> _openMeeting(Appointment apt) async {
+    await openVideoConsult(context, apt);
+  }
+
   Future<void> _loadDashboardData() async {
     try {
       final repo = context.read<AppointmentsRepository>();
@@ -316,7 +325,7 @@ class _DashboardViewState extends State<DashboardView> {
       final myApts = await repo.getMyAppointments();
       
       // Get the next scheduled approved/pending appointment
-      final upcoming = myApts.where((a) => a.status == 'pending' || a.status == 'approved').toList();
+      final upcoming = myApts.where((a) => a.status == 'pending' || a.status == 'approved' || a.status == 'queued' || a.status == 'consulting').toList();
       
       // Schedule notifications for upcoming telemedicine appointments
       final notificationService = NotificationService();
@@ -364,7 +373,7 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                     ),
                     Text(
-                      session.user?.name ?? 'Sarah Jenkins',
+                      session.user?.name ?? 'Patient',
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontSize: 26,
                         letterSpacing: -0.5,
@@ -398,7 +407,9 @@ class _DashboardViewState extends State<DashboardView> {
                     radius: 24,
                     backgroundColor: const Color(0xFF1E293B),
                     child: Text(
-                      session.user?.name.substring(0, session.user!.name.length > 1 ? 2 : 1).toUpperCase() ?? 'SJ',
+                      (session.user?.name.isNotEmpty == true)
+                          ? session.user!.name.substring(0, session.user!.name.length > 1 ? 2 : 1).toUpperCase()
+                          : 'DH',
                       style: GoogleFonts.roboto(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -585,10 +596,7 @@ class _DashboardViewState extends State<DashboardView> {
                   backgroundImage: 'assets/speciality.png',
                   overlayColor: const Color(0xFF065F46), // deep emerald
                   onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => const BookAppointmentDialog(),
-                    ).then((_) => _loadDashboardData());
+                    context.push('/patient/consult-now').then((_) => _loadDashboardData());
                   },
                 ),
                 const SizedBox(width: 10),
@@ -600,10 +608,9 @@ class _DashboardViewState extends State<DashboardView> {
                   backgroundImage: 'assets/records.png',
                   overlayColor: const Color(0xFF92400E), // deep amber
                   onTap: () {
-                    // Navigate to Messages tab where prescriptions are located
                     final parentState = context.findAncestorStateOfType<_MainNavigationScreenState>();
                     if (parentState != null) {
-                      parentState.setState(() => parentState._currentIndex = 2);
+                      parentState.setState(() => parentState._currentIndex = 3);
                     }
                   },
                 ),
@@ -616,11 +623,7 @@ class _DashboardViewState extends State<DashboardView> {
                   backgroundImage: 'assets/live queue.png',
                   overlayColor: const Color(0xFF9B1C1C), // deep crimson
                   onTap: () {
-                    // Navigate to Appointments tab to see queue status
-                    final parentState = context.findAncestorStateOfType<_MainNavigationScreenState>();
-                    if (parentState != null) {
-                      parentState.setState(() => parentState._currentIndex = 1);
-                    }
+                    context.push('/patient/consult-now').then((_) => _loadDashboardData());
                   },
                 ),
               ],
@@ -743,14 +746,13 @@ class _DashboardViewState extends State<DashboardView> {
                             ),
                           ],
                         ),
-                        if (_nextAppointment!.isTelemedicine && _nextAppointment!.status == 'approved' && _nextAppointment!.meetingLink != null)
+                        if (_nextAppointment!.isTelemedicine &&
+                            (_nextAppointment!.status == 'approved' ||
+                                _nextAppointment!.status == 'consulting' ||
+                                _nextAppointment!.status == 'queued') &&
+                            _nextAppointment!.meetingLink != null)
                           ElevatedButton.icon(
-                            onPressed: () {
-                              // Launch Meeting Link
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Launching secure video room...')),
-                              );
-                            },
+                            onPressed: () => _openMeeting(_nextAppointment!),
                             icon: const Icon(Icons.videocam, size: 16),
                             label: Text(
                               'Join Room',
@@ -871,7 +873,7 @@ class _DashboardViewState extends State<DashboardView> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () => context.push('/patient/doctors'),
                   child: Text(
                     'See All',
                     style: GoogleFonts.roboto(
@@ -1314,6 +1316,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
   int _activeTab = 0; // 0: Upcoming, 1: Past, 2: Calendar
   DateTime _calendarMonth = DateTime.now();
   List<Appointment> _appointments = [];
+  Map<String, dynamic> _eligibility = {};
   bool _loading = true;
 
   @override
@@ -1327,6 +1330,10 @@ class _AppointmentsViewState extends State<AppointmentsView> {
     try {
       final repo = context.read<AppointmentsRepository>();
       final list = await repo.getMyAppointments();
+      Map<String, dynamic> elig = {};
+      try {
+        elig = await context.read<CareRepository>().eligibility();
+      } catch (_) {}
       
       // Schedule notifications for telemedicine appointments
       final notificationService = NotificationService();
@@ -1334,6 +1341,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
       
       setState(() {
         _appointments = list;
+        _eligibility = elig;
         _loading = false;
       });
     } catch (e) {
@@ -1356,8 +1364,10 @@ class _AppointmentsViewState extends State<AppointmentsView> {
     try {
       final repo = context.read<AppointmentsRepository>();
       await repo.payForAppointment(apt.id);
+      final copay = _eligibility['copay'] ?? 50;
+      final payer = _eligibility['payer_name'] ?? 'self pay';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment Approved! Meeting link has been generated.')),
+        SnackBar(content: Text('Copay GHS $copay collected. Covered by $payer.')),
       );
       _fetchAppointments();
     } catch (e) {
@@ -1644,7 +1654,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final upcoming = _appointments.where((a) => a.status == 'pending' || a.status == 'approved').toList();
+    final upcoming = _appointments.where((a) => a.status == 'pending' || a.status == 'approved' || a.status == 'queued' || a.status == 'consulting' || a.status == 'arrived').toList();
     final past = _appointments.where((a) => a.status == 'completed' || a.status == 'cancelled').toList();
 
     return Padding(
@@ -1855,7 +1865,11 @@ class _AppointmentsViewState extends State<AppointmentsView> {
               ElevatedButton.icon(
                 onPressed: () => _payCopay(apt),
                 icon: const Icon(Icons.payment, size: 16),
-                label: const Text('Pay Visit Copay (GHS 50.00)'),
+                label: Text(
+                  _eligibility['eligible'] == true
+                      ? 'Pay copay GHS ${_eligibility['copay'] ?? 50} (${_eligibility['payer_name'] ?? 'cover'})'
+                      : 'Pay visit GHS 50.00',
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00D2C4),
                   foregroundColor: Colors.black,
@@ -1864,24 +1878,34 @@ class _AppointmentsViewState extends State<AppointmentsView> {
                 ),
               )
             else if (apt.meetingLink != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.videocam, color: Color(0xFFC084FC), size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SelectableText(
-                        'Secure Link: ${apt.meetingLink}',
-                        style: GoogleFonts.roboto(color: Colors.white70, fontSize: 11),
-                      ),
+              Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.videocam, color: Color(0xFFC084FC), size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SelectableText(
+                            'Secure Link: ${apt.meetingLink}',
+                            style: GoogleFonts.roboto(color: Colors.white70, fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => openVideoConsult(context, apt),
+                    icon: const Icon(Icons.videocam, size: 16),
+                    label: const Text('Join Room'),
+                  ),
+                ],
               )
           ]
         ],
@@ -1899,6 +1923,27 @@ class MessagesView extends StatefulWidget {
 }
 
 class _MessagesViewState extends State<MessagesView> {
+  List<Appointment> _threads = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final list = await context.read<AppointmentsRepository>().getMyAppointments();
+      setState(() {
+        _threads = list.where((a) => a.status != 'cancelled').toList();
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1917,48 +1962,38 @@ class _MessagesViewState extends State<MessagesView> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Direct, HIPAA-compliant chat tunnels with your doctors',
+            'Clinical messaging linked to your consultations',
             style: GoogleFonts.roboto(
               color: Color(0xFF64748B),
               fontSize: 13,
             ),
           ),
           const SizedBox(height: 25),
-          
           Expanded(
-            child: ListView(
-              physics: const BouncingScrollPhysics(),
-              children: [
-                _buildChatItem(
-                  context,
-                  initials: 'OC',
-                  name: 'Dr. Olivia Carter',
-                  lastMessage: 'Sure, we can check the dosage during our call today.',
-                  time: '10:14 AM',
-                  unreadCount: 2,
-                  onTap: () {
-                    // Navigate to chat detail or open chat dialog
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Opening chat with Dr. Olivia Carter')),
-                    );
-                  },
-                ),
-                _buildChatItem(
-                  context,
-                  initials: 'JD',
-                  name: 'Dr. John Doe',
-                  lastMessage: 'Your blood panel reports look completely healthy.',
-                  time: 'Yesterday',
-                  unreadCount: 0,
-                  onTap: () {
-                    // Navigate to chat detail or open chat dialog
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Opening chat with Dr. John Doe')),
-                    );
-                  },
-                ),
-              ],
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _threads.isEmpty
+                    ? Center(child: Text('No consultation threads yet.', style: GoogleFonts.roboto(color: Colors.black38)))
+                    : ListView.builder(
+                        itemCount: _threads.length,
+                        itemBuilder: (context, index) {
+                          final apt = _threads[index];
+                          final name = apt.doctorName ?? 'Care team';
+                          return _buildChatItem(
+                            context,
+                            initials: name.substring(0, name.length > 1 ? 2 : 1).toUpperCase(),
+                            name: name,
+                            lastMessage: apt.consultType ?? apt.service ?? apt.status,
+                            time: apt.preferredDate.split('T').first,
+                            unreadCount: 0,
+                            onTap: () {
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => ClinicalChatScreen(appointment: apt),
+                              ));
+                            },
+                          );
+                        },
+                      ),
           )
         ],
       ),
@@ -2077,6 +2112,10 @@ class ProfileView extends StatefulWidget {
 class _ProfileViewState extends State<ProfileView> {
   List<Prescription> _prescriptions = [];
   List<Consultation> _consultations = [];
+  List<Map<String, dynamic>> _labs = [];
+  List<Map<String, dynamic>> _scans = [];
+  List<Map<String, dynamic>> _referrals = [];
+  Map<String, dynamic> _eligibility = {};
   bool _loadingData = true;
 
   @override
@@ -2090,9 +2129,21 @@ class _ProfileViewState extends State<ProfileView> {
       final repo = context.read<AppointmentsRepository>();
       final scripts = await repo.getMyPrescriptions();
       final logs = await repo.getMyConsultations();
+      Map<String, dynamic> network = {};
+      Map<String, dynamic> elig = {};
+      try {
+        network = await context.read<CareRepository>().myNetwork();
+      } catch (_) {}
+      try {
+        elig = await context.read<CareRepository>().eligibility();
+      } catch (_) {}
       setState(() {
         _prescriptions = scripts;
         _consultations = logs;
+        _labs = ((network['labs'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _scans = ((network['scans'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _referrals = ((network['referrals'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _eligibility = elig;
         _loadingData = false;
       });
     } catch (e) {
@@ -2135,17 +2186,26 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           const SizedBox(height: 10),
           Text(
-            session.user?.name ?? 'Sarah Jenkins',
+            session.user?.name ?? 'Patient',
             style: theme.textTheme.headlineMedium?.copyWith(fontSize: 22),
           ),
           Text(
-            'Patient ID: #DH-${session.user?.id ?? "00"}-PORTAL',
+            'Patient ID: ${session.user?.patientCode ?? 'DH-${session.user?.id ?? "00"}'}',
             style: GoogleFonts.roboto(
               fontSize: 11,
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (_eligibility['payer_name'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _eligibility['eligible'] == true
+                  ? '${_eligibility['payer_name']} · copay GHS ${_eligibility['copay']}'
+                  : 'Self pay · GHS ${_eligibility['consult_fee'] ?? 50}',
+              style: GoogleFonts.roboto(fontSize: 11, color: Colors.white70),
+            ),
+          ],
           
           const SizedBox(height: 20),
           Divider(color: Colors.white.withOpacity(0.05)),
@@ -2155,7 +2215,7 @@ class _ProfileViewState extends State<ProfileView> {
             child: _loadingData
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF00D2C4)))
                 : DefaultTabController(
-                    length: 2,
+                    length: 3,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -2164,8 +2224,9 @@ class _ProfileViewState extends State<ProfileView> {
                           unselectedLabelColor: Colors.white38,
                           indicatorColor: theme.colorScheme.primary,
                           tabs: const [
-                            Tab(text: 'My Prescriptions'),
-                            Tab(text: 'Past Consultations'),
+                            Tab(text: 'Prescriptions'),
+                            Tab(text: 'Results'),
+                            Tab(text: 'Consults'),
                           ],
                         ),
                         const SizedBox(height: 15),
@@ -2173,6 +2234,7 @@ class _ProfileViewState extends State<ProfileView> {
                           child: TabBarView(
                             children: [
                               _buildPrescriptionsTab(),
+                              _buildResultsTab(),
                               _buildConsultationsTab(),
                             ],
                           ),
@@ -2182,6 +2244,12 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
           ),
           
+          OutlinedButton.icon(
+            onPressed: () => context.push('/patient/profile'),
+            icon: const Icon(Icons.folder_shared_outlined, size: 18),
+            label: const Text('Edit medical profile'),
+          ),
+          const SizedBox(height: 10),
           ElevatedButton.icon(
             onPressed: () async {
               await session.clear();
@@ -2228,12 +2296,12 @@ class _ProfileViewState extends State<ProfileView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                pr.medicationName,
+                pr.prescriptionRef != null ? '${pr.prescriptionRef} · ${pr.medicationName}' : pr.medicationName,
                 style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 4),
               Text(
-                'Dosage: ${pr.dosage ?? "-"}  |  Frequency: ${pr.frequency ?? "-"}  |  Duration: ${pr.duration ?? "-"}',
+                'Dosage: ${pr.dosage ?? "-"}  |  ${pr.strength ?? ''}  |  ${pr.route ?? ''}  |  Qty: ${pr.quantity ?? "-"}',
                 style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11),
               ),
               if (pr.instructions != null && pr.instructions!.isNotEmpty) ...[
@@ -2243,6 +2311,76 @@ class _ProfileViewState extends State<ProfileView> {
                   style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontStyle: FontStyle.italic),
                 ),
               ],
+              if ((pr.pharmacyName ?? '').isNotEmpty || (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent')) ...[
+                const SizedBox(height: 6),
+                Text(
+                  [
+                    if ((pr.pharmacyName ?? '').isNotEmpty) pr.pharmacyName!,
+                    if (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent') pr.dispenseStatus,
+                  ].join(' · '),
+                  style: GoogleFonts.roboto(color: const Color(0xFFF59E0B), fontSize: 11),
+                ),
+              ],
+              if (pr.pharmacyName != null || pr.dispenseStatus != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  [
+                    if (pr.pharmacyName != null && pr.pharmacyName!.isNotEmpty) pr.pharmacyName!,
+                    if (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent') pr.dispenseStatus,
+                  ].join(' · '),
+                  style: GoogleFonts.roboto(color: const Color(0xFFF59E0B), fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResultsTab() {
+    final items = <Map<String, String>>[
+      ..._labs.map((l) => {
+            'title': l['test_name']?.toString() ?? 'Lab',
+            'meta': '${l['partner_name'] ?? 'Lab'} · ${l['status'] ?? ''}',
+            'body': (l['results'] ?? l['result_notes'] ?? 'Awaiting result').toString(),
+          }),
+      ..._scans.map((s) => {
+            'title': '${s['scan_type'] ?? 'Scan'} ${s['body_part'] ?? ''}'.trim(),
+            'meta': '${s['partner_name'] ?? 'Imaging'} · ${s['status'] ?? ''}',
+            'body': (s['results'] ?? s['result_notes'] ?? 'Awaiting report').toString(),
+          }),
+      ..._referrals.map((r) => {
+            'title': '${r['referral_code'] ?? 'REF'} · ${r['specialty'] ?? 'Specialist'}',
+            'meta': '${r['to_doctor_name'] ?? r['org_name'] ?? 'Specialist'} · ${r['status'] ?? ''}',
+            'body': (r['result_notes'] ?? r['reason'] ?? '').toString(),
+          }),
+    ];
+    if (items.isEmpty) {
+      return Center(
+        child: Text('No lab, imaging, or referral results yet.', style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13)),
+      );
+    }
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.02)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item['title']!, style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              Text(item['meta']!, style: GoogleFonts.roboto(color: const Color(0xFF00D2C4), fontSize: 11)),
+              const SizedBox(height: 4),
+              Text(item['body']!, style: GoogleFonts.roboto(color: Colors.white54, fontSize: 12)),
             ],
           ),
         );

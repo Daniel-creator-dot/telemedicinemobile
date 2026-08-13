@@ -1,14 +1,16 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_client.dart';
 import '../../core/session.dart';
 import '../../models/appointment.dart';
+import '../consult/open_video_consult.dart';
+import '../patient/appointments_repository.dart';
+import '../patient/care_repository.dart';
+import '../patient/chat_screen.dart';
 import 'consultation_dialog.dart';
 import 'prescription_dialog.dart';
 
@@ -35,12 +37,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
   List<Appointment> _appointments = [];
   List<Map<String, dynamic>> _doctors = [];
+  List<Map<String, dynamic>> _referrals = [];
   Map<String, dynamic> _stats = {
     'stats': {'total': 0, 'today': 0, 'pending': 0, 'completed': 0},
     'trends': [],
     'workload': [],
   };
   bool _loading = true;
+  bool _online = false;
   String? _error;
 
   @override
@@ -61,6 +65,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         api.dio.get<Map<String, dynamic>>('/api/analytics/dashboard'),
         api.dio.get<List<dynamic>>('/api/doctors'),
       ]);
+      List<Map<String, dynamic>> refs = [];
+      try {
+        refs = await context.read<CareRepository>().getReferrals();
+      } catch (_) {}
       final aptsRaw = results[0].data as List<dynamic>? ?? [];
       final statsRaw = results[1].data as Map<String, dynamic>? ?? {};
       final docsRaw = results[2].data as List<dynamic>? ?? [];
@@ -70,6 +78,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             .toList();
         _stats = statsRaw;
         _doctors = docsRaw.map((j) => j as Map<String, dynamic>).toList();
+        _referrals = refs;
       });
     } catch (e) {
       setState(() => _error = e.toString());
@@ -98,35 +107,34 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     }
   }
 
-  Future<void> _generateLink(Appointment apt) async {
-    try {
-      final api = context.read<ApiClient>();
-      await api.dio.post<Map<String, dynamic>>(
-        '/api/appointments/${apt.id}/generate-link',
-      );
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Meeting link generated & SMS sent!')),
-        );
-      _loadAll();
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-    }
-  }
+  Future<void> _generateLink(Appointment apt) => _joinVideoConsult(apt);
 
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Could not open link.')));
+  Future<void> _joinVideoConsult(Appointment apt) async {
+    var current = apt;
+    final repo = context.read<AppointmentsRepository>();
+    try {
+      if (!current.hasMeetingLink) {
+        current = await repo.generateMeetingLink(apt.id);
+        current = current.copyWith(doctorName: apt.doctorName ?? current.doctorName);
+      }
+      final status = current.status.toLowerCase();
+      if (status != 'completed' && status != 'cancelled' && status != 'consulting') {
+        try {
+          await repo.updateAppointmentStatus(current.id, 'consulting');
+          current = current.copyWith(status: 'consulting');
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      await openVideoConsult(context, current, isClinician: true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start video consult: $e')),
+        );
+      }
+      return;
     }
+    if (mounted) _loadAll();
   }
 
   void _openConsultation(Appointment apt) {
@@ -137,17 +145,78 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   void _openChat(Appointment apt) {
-    // Open chat with patient
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening chat with ${apt.fullName}')),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ClinicalChatScreen(appointment: apt)),
     );
-    // TODO: Implement actual chat functionality
   }
 
   void _openPrescription(Appointment apt) {
     showDialog(
       context: context,
       builder: (ctx) => PrescriptionDialog(appointment: apt),
+    );
+  }
+
+  Widget _referralCard(Map<String, dynamic> r) {
+    final status = r['status']?.toString() ?? 'pending';
+    final incoming = r['to_doctor_id']?.toString() == context.read<Session>().user?.id;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${r['referral_code'] ?? ''} · ${r['specialty'] ?? 'Specialist'}',
+              style: GoogleFonts.roboto(fontWeight: FontWeight.bold),
+            ),
+            Text('${r['patient_name'] ?? ''} · ${incoming ? 'Incoming' : 'Sent'} · $status'),
+            Text(r['reason']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+            if ((r['result_notes'] ?? '').toString().isNotEmpty)
+              Text('Result: ${r['result_notes']}', style: const TextStyle(fontSize: 12, color: Color(0xFF0F766E))),
+            if (incoming && status == 'pending')
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: () async {
+                    await context.read<CareRepository>().updateReferral(r['id'] as int, {'status': 'accepted'});
+                    _loadAll();
+                  },
+                  child: const Text('Accept'),
+                ),
+              ),
+            if (incoming && (status == 'accepted' || status == 'in_progress'))
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () async {
+                    final notes = TextEditingController();
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Return referral result'),
+                        content: TextField(controller: notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Findings / plan')),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Complete')),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      await context.read<CareRepository>().updateReferral(r['id'] as int, {
+                        'status': 'completed',
+                        'result_notes': notes.text.trim(),
+                      });
+                      _loadAll();
+                    }
+                  },
+                  child: const Text('Return result'),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -699,10 +768,29 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   // OVERVIEW TAB
   // ===========================================================================
   Widget _buildOverview() {
-    final activeConsult = _appointments.cast<Appointment?>().firstWhere(
-      (a) => a != null && a.status == 'consulting' && a.isTelemedicine,
-      orElse: () => null,
-    );
+    final liveVideo = _appointments.where((a) {
+      final s = a.status.toLowerCase();
+      return a.isVideoConsult &&
+          !['completed', 'cancelled', 'rejected', 'missed'].contains(s);
+    }).toList()
+      ..sort((a, b) {
+        int rank(String s) {
+          switch (s.toLowerCase()) {
+            case 'consulting':
+              return 0;
+            case 'arrived':
+              return 1;
+            case 'approved':
+              return 2;
+            case 'queued':
+              return 3;
+            default:
+              return 4;
+          }
+        }
+        return rank(a.status).compareTo(rank(b.status));
+      });
+    final activeConsult = liveVideo.isEmpty ? null : liveVideo.first;
     final trends = _stats['trends'] as List<dynamic>? ?? [];
     final workload = _stats['workload'] as List<dynamic>? ?? [];
     final session = context.watch<Session>();
@@ -991,24 +1079,20 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           const SizedBox(height: 16),
                           Row(
                             children: [
-                              if (activeConsult.isTelemedicine)
+                              if (activeConsult.isVideoConsult)
                                 Expanded(
                                   child: ElevatedButton.icon(
-                                    onPressed: activeConsult.meetingLink != null
-                                        ? () => _launchUrl(
-                                            activeConsult.meetingLink!,
-                                          )
-                                        : () => _generateLink(activeConsult),
+                                    onPressed: () => _joinVideoConsult(activeConsult),
                                     icon: Icon(
-                                      activeConsult.meetingLink != null
+                                      activeConsult.hasMeetingLink
                                           ? Icons.videocam_rounded
                                           : Icons.add_link_rounded,
                                       size: 16,
                                     ),
                                     label: Text(
-                                      activeConsult.meetingLink != null
+                                      activeConsult.hasMeetingLink
                                           ? 'JOIN ROOM'
-                                          : 'LINK SMS',
+                                          : 'START ROOM',
                                       style: GoogleFonts.roboto(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 11,
@@ -1027,7 +1111,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                     ),
                                   ),
                                 ),
-                              if (activeConsult.isTelemedicine)
+                              if (activeConsult.isVideoConsult)
                                 const SizedBox(width: 10),
                               Expanded(
                                 child: OutlinedButton.icon(
@@ -1106,7 +1190,26 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               },
             ),
 
+          SwitchListTile(
+            value: _online,
+            onChanged: (v) async {
+              setState(() => _online = v);
+              try {
+                await context.read<CareRepository>().setDoctorOnline(v);
+              } catch (_) {}
+            },
+            title: Text('Available for Consult Now', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
+            subtitle: Text(_online ? 'Patients can be matched to you now' : 'Go online to receive live queue patients'),
+            activeColor: const Color(0xFF22C55E),
+          ),
+
           // ── Quick Actions Grid ──────────────────────────────────────────────
+          if (_referrals.isNotEmpty) ...[
+            _sectionHeader('Referrals'),
+            const SizedBox(height: 10),
+            ..._referrals.take(6).map(_referralCard),
+            const SizedBox(height: 16),
+          ],
           _sectionHeader('Quick Actions'),
           const SizedBox(height: 10),
           GridView.count(
@@ -1793,10 +1896,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   Widget _liveRowAction(Appointment apt) {
-    if (apt.isTelemedicine) {
-      if (apt.meetingLink != null) {
+    if (apt.isVideoConsult) {
+      if (apt.hasMeetingLink) {
         return ElevatedButton.icon(
-          onPressed: () => _launchUrl(apt.meetingLink!),
+          onPressed: () => _joinVideoConsult(apt),
           icon: const Icon(Icons.videocam_rounded, size: 12),
           label: const Text('JOIN'),
           style: ElevatedButton.styleFrom(
@@ -2212,13 +2315,13 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             ),
 
           // Telemedicine link
-          if (apt.isTelemedicine && apt.meetingLink != null)
+          if (apt.isVideoConsult && apt.hasMeetingLink)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: InkWell(
-                  onTap: () => _launchUrl(apt.meetingLink!),
+                  onTap: () => _joinVideoConsult(apt),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -2277,18 +2380,18 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       runSpacing: 8,
       children: [
         // Telemedicine: generate link or show JOIN button
-        if (apt.isTelemedicine && apt.meetingLink == null)
+        if (apt.isVideoConsult && !apt.hasMeetingLink)
           _actionBtn(
-            'Generate Link',
+            'START ROOM',
             const Color(0xFF16A34A),
-            () => _generateLink(apt),
+            () => _joinVideoConsult(apt),
             icon: Icons.add_link_rounded,
           ),
-        if (apt.isTelemedicine && apt.meetingLink != null)
+        if (apt.isVideoConsult && apt.hasMeetingLink)
           _actionBtn(
             'JOIN SESSION',
             const Color(0xFF4F46E5),
-            () => _launchUrl(apt.meetingLink!),
+            () => _joinVideoConsult(apt),
             icon: Icons.video_call_rounded,
           ),
 
@@ -2374,16 +2477,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   // QUEUE TAB
   // ===========================================================================
   Widget _buildQueueTab() {
-    final queue = _appointments
-        .where(
-          (a) => [
-            'approved',
-            'arrived',
-            'waiting',
-            'consulting',
-          ].contains(a.status.toLowerCase()),
-        )
-        .toList();
+    final queue = _appointments.where((a) {
+      final s = a.status.toLowerCase();
+      if (['completed', 'cancelled', 'rejected', 'missed'].contains(s)) {
+        return false;
+      }
+      if (['approved', 'arrived', 'waiting', 'consulting'].contains(s)) {
+        return true;
+      }
+      return a.isVideoConsult && ['queued', 'pending', 'triage'].contains(s);
+    }).toList();
 
     return queue.isEmpty
         ? Center(
@@ -2659,14 +2762,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // Telemedicine session buttons
-        if (apt.isTelemedicine) ...[
-          if (apt.meetingLink != null)
+        if (apt.isVideoConsult) ...[
+          if (apt.hasMeetingLink)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: _actionBtn(
                 'JOIN SESSION',
                 const Color(0xFF4F46E5),
-                () => _launchUrl(apt.meetingLink!),
+                () => _joinVideoConsult(apt),
                 icon: Icons.video_call_rounded,
               ),
             )
@@ -2674,9 +2777,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: _actionBtn(
-                'Generate Link',
+                'START ROOM',
                 const Color(0xFF16A34A),
-                () => _generateLink(apt),
+                () => _joinVideoConsult(apt),
                 icon: Icons.add_link_rounded,
               ),
             ),

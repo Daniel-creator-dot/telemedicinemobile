@@ -332,6 +332,13 @@ export const initDb = async () => {
       console.log('Default lab technician user created (labtech/labtech123)');
     }
 
+    const { initPhase1Schema } = require('./phase1') as typeof import('./phase1');
+    await initPhase1Schema();
+    const { initPhase2Schema } = require('./phase2') as typeof import('./phase2');
+    await initPhase2Schema();
+    const { initPhase3Schema } = require('./phase3') as typeof import('./phase3');
+    await initPhase3Schema();
+
     console.log('Database initialized successfully');
   } catch (err) {
     console.error('Error initializing database:', err);

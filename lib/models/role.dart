@@ -2,7 +2,14 @@ enum AppRole {
   patient,
   doctor,
   admin,
-  labTechnician;
+  labTechnician,
+  nurse,
+  medicalOps,
+  pharmacy,
+  imaging,
+  corporate,
+  insurance,
+  finance;
 
   static AppRole fromString(String? value) {
     switch (value?.toLowerCase()) {
@@ -13,6 +20,21 @@ enum AppRole {
       case 'lab_technician':
       case 'labtechnician':
         return AppRole.labTechnician;
+      case 'nurse':
+        return AppRole.nurse;
+      case 'medical_ops':
+      case 'medicalops':
+        return AppRole.medicalOps;
+      case 'pharmacy':
+        return AppRole.pharmacy;
+      case 'imaging':
+        return AppRole.imaging;
+      case 'corporate':
+        return AppRole.corporate;
+      case 'insurance':
+        return AppRole.insurance;
+      case 'finance':
+        return AppRole.finance;
       case 'patient':
       default:
         return AppRole.patient;
@@ -29,6 +51,20 @@ enum AppRole {
         return 'admin';
       case AppRole.labTechnician:
         return 'lab_technician';
+      case AppRole.nurse:
+        return 'nurse';
+      case AppRole.medicalOps:
+        return 'medical_ops';
+      case AppRole.pharmacy:
+        return 'pharmacy';
+      case AppRole.imaging:
+        return 'imaging';
+      case AppRole.corporate:
+        return 'corporate';
+      case AppRole.insurance:
+        return 'insurance';
+      case AppRole.finance:
+        return 'finance';
     }
   }
 
@@ -42,6 +78,20 @@ enum AppRole {
         return 'Administrator';
       case AppRole.labTechnician:
         return 'Lab Technician';
+      case AppRole.nurse:
+        return 'Nurse / Triage';
+      case AppRole.medicalOps:
+        return 'Medical Operations';
+      case AppRole.pharmacy:
+        return 'Pharmacy';
+      case AppRole.imaging:
+        return 'Imaging Centre';
+      case AppRole.corporate:
+        return 'Corporate';
+      case AppRole.insurance:
+        return 'Insurance';
+      case AppRole.finance:
+        return 'Finance';
     }
   }
 }

@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDb, query } from './db';
+import { registerPhase1Routes, getPatientForUser } from './phase1';
+import { registerPhase2Routes, assignNearestPartner, notifyDiagnosticClosedLoop } from './phase2';
+import { registerPhase3Routes, recordVisitPayment } from './phase3';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
@@ -96,7 +99,7 @@ const authenticate = (req: any, res: any, next: any) => {
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+    const result = await query('SELECT * FROM users WHERE username = $1 OR phone_number = $1', [username]);
     const user = result.rows[0];
 
     if (user && await bcrypt.compare(password, user.password)) {
@@ -105,7 +108,23 @@ app.post('/api/auth/login', async (req, res) => {
         process.env.JWT_SECRET!,
         { expiresIn: '24h' }
       );
-      res.json({ token, user: { id: user.id, username: user.username, role: user.role, name: user.name } });
+      let extras: Record<string, unknown> = {};
+      if (user.role === 'patient') {
+        const patient = await getPatientForUser(user.id);
+        if (patient) extras = { patient_code: patient.patient_code, patient_id: patient.id };
+      }
+      res.json({
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          name: user.name,
+          phone_number: user.phone_number,
+          email: user.email,
+          ...extras,
+        },
+      });
     } else {
       res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -132,10 +151,11 @@ app.post('/api/auth/register', async (req, res) => {
     );
     const user = userResult.rows[0];
 
-    // Create Patient Profile
-    await query(
-      'INSERT INTO patients (full_name, email, phone_number) VALUES ($1, $2, $3)',
-      [name, email, phone_number]
+    const codeResult = await query(`SELECT nextval('patient_code_seq') AS n`);
+    const patientCode = `DH-${String(codeResult.rows[0].n).padStart(6, '0')}`;
+    const patientResult = await query(
+      'INSERT INTO patients (user_id, patient_code, full_name, email, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING id, patient_code',
+      [user.id, patientCode, name, email, phone_number]
     );
 
     const token = jwt.sign(
@@ -146,7 +166,16 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.status(201).json({ 
       token, 
-      user: { id: user.id, username: user.username, role: user.role, name } 
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        name,
+        phone_number,
+        email,
+        patient_code: patientResult.rows[0].patient_code,
+        patient_id: patientResult.rows[0].id,
+      } 
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -390,27 +419,66 @@ app.get('/api/appointments', authenticate, async (req: any, res) => {
 
 app.get('/api/appointments/my', authenticate, async (req: any, res) => {
   try {
-    // Get patient_id from user table or by matching phone number
+    const patient = await getPatientForUser(req.user.id);
     const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
-    const phone = userResult.rows[0].phone_number;
+    const phone = userResult.rows[0]?.phone_number;
 
     const result = await query(`
       SELECT a.*, d.name as doctor_name 
       FROM appointments a 
       LEFT JOIN doctors d ON a.doctor_id = d.id 
-      WHERE a.phone_number = $1
+      WHERE ($1::int IS NOT NULL AND a.patient_id = $1) OR a.phone_number = $2
       ORDER BY a.preferred_date DESC, a.preferred_time DESC
-    `, [phone]);
+    `, [patient?.id || null, phone || '']);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+app.get('/api/appointments/:id', authenticate, async (req: any, res) => {
+  const { id } = req.params;
+  if (!/^\d+$/.test(String(id))) {
+    return res.status(404).json({ message: 'Not found' });
+  }
+  try {
+    const result = await query(
+      `SELECT a.*, d.name as doctor_name
+       FROM appointments a
+       LEFT JOIN doctors d ON a.doctor_id = d.id
+       WHERE a.id = $1`,
+      [id]
+    );
+    const apt = result.rows[0];
+    if (!apt) return res.status(404).json({ message: 'Not found' });
+
+    if (req.user.role === 'doctor') {
+      const docResult = await query('SELECT id FROM doctors WHERE user_id = $1', [req.user.id]);
+      const docId = docResult.rows[0]?.id;
+      if (docId && apt.doctor_id && Number(apt.doctor_id) !== Number(docId)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    }
+    if (req.user.role === 'patient') {
+      const patient = await getPatientForUser(req.user.id);
+      const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
+      const phone = userResult.rows[0]?.phone_number;
+      const mine = (patient?.id && Number(apt.patient_id) === Number(patient.id)) ||
+        (phone && apt.phone_number === phone);
+      if (!mine) return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    res.json(apt);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 app.post('/api/appointments', async (req, res) => {
-  const { 
+    const { 
     fullName, whoIsComing, phoneNumber, email, staffId, nationwideId, department, 
-    reason, preferredDate, preferredTime, priority, notes, doctor_id, service, isTelemedicine
+    reason, preferredDate, preferredTime, priority, notes, doctor_id, service, isTelemedicine,
+    consult_type, booking_type
   } = req.body;
   
   const effectiveStaffId = staffId || null;
@@ -443,12 +511,14 @@ app.post('/api/appointments', async (req, res) => {
     const result = await query(`
       INSERT INTO appointments (
         appointment_id, patient_id, full_name, who_is_coming, phone_number, email, staff_id, nationwide_id,
-        department, notes, preferred_date, preferred_time, priority, doctor_id, service, is_telemedicine
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        department, notes, preferred_date, preferred_time, priority, doctor_id, service, is_telemedicine,
+        consult_type, booking_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
       appointmentId, patient.id, fullName, whoIsComing, phoneNumber, email, staffId, nationwideId,
-      department, reason + (notes ? ' | ' + notes : ''), preferredDate, preferredTime, priority, doctor_id, service, !!isTelemedicine
+      department, reason + (notes ? ' | ' + notes : ''), preferredDate, preferredTime, priority, doctor_id, service, !!isTelemedicine,
+      consult_type || service || 'general consultation', booking_type || 'scheduled'
     ]);
 
     // Real SMS Sending
@@ -573,25 +643,44 @@ app.post('/api/appointments/:id/generate-link', authenticate, async (req: any, r
   if (req.user.role === 'patient') return res.status(403).json({ message: 'Forbidden' });
 
   try {
-    // Generate a "real" looking Google Meet code: abc-defg-hij
+    const existing = await query(
+      `SELECT a.*, d.name as doctor_name
+       FROM appointments a
+       LEFT JOIN doctors d ON a.doctor_id = d.id
+       WHERE a.id = $1`,
+      [id]
+    );
+    const current = existing.rows[0];
+    if (!current) return res.status(404).json({ message: 'Not found' });
+    if (current.meeting_link) {
+      return res.json(current);
+    }
+
     const chars = 'abcdefghijklmnopqrstuvwxyz';
     const getChars = (len: number) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     const meetingLink = `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
     
-    const result = await query(
-      'UPDATE appointments SET meeting_link = $1, payment_status = $2 WHERE id = $3 RETURNING *',
+    await query(
+      'UPDATE appointments SET meeting_link = $1, payment_status = $2, is_telemedicine = TRUE WHERE id = $3',
       [meetingLink, 'paid', id]
+    );
+
+    const result = await query(
+      `SELECT a.*, d.name as doctor_name
+       FROM appointments a
+       LEFT JOIN doctors d ON a.doctor_id = d.id
+       WHERE a.id = $1`,
+      [id]
     );
 
     const apt = result.rows[0];
     if (apt) {
-      // Include date and time in the SMS
       const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
       const msg = `CSA: Your Telemedicine session link for ${apt.appointment_id} is ready: ${meetingLink}. Scheduled for ${scheduledInfo}. Please join at your scheduled time. Thank you.`;
       await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in manual link gen:', e));
     }
 
-    res.json(result.rows[0]);
+    res.json(apt);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -613,7 +702,7 @@ app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
     if (apt.is_telemedicine) {
       const chars = 'abcdefghijklmnopqrstuvwxyz';
       const getChars = (len: number) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      meetingLink = `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
+      meetingLink = apt.meeting_link || `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
     }
 
     await query(`
@@ -625,12 +714,27 @@ app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
       WHERE id = $4
     `, [status, paymentRef, meetingLink, id]);
 
+    let doctorUserId: number | null = null;
+    if (apt.doctor_id) {
+      const doc = await query('SELECT user_id FROM doctors WHERE id = $1', [apt.doctor_id]);
+      doctorUserId = doc.rows[0]?.user_id || null;
+    }
+    const billed = await recordVisitPayment(Number(id), apt.patient_id || null, doctorUserId, paymentRef).catch((e) => {
+      console.error('Coverage payment row failed:', e);
+      return { paymentRef, eligibility: { copay: 50, source: 'self_pay' } };
+    });
+
     if (apt.is_telemedicine && meetingLink) {
       const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
       await sendSMS(apt.phone_number, `CSA: Payment Confirmed! Your session with the doctor for ${scheduledInfo} is set. Join here: ${meetingLink}`);
     }
 
-    res.json({ message: 'Payment successful', paymentRef, meetingLink });
+    res.json({
+      message: 'Payment successful',
+      paymentRef: billed.paymentRef || paymentRef,
+      meetingLink,
+      eligibility: billed.eligibility,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Payment processing failed' });
@@ -647,8 +751,9 @@ app.patch('/api/appointments/:id/status', async (req, res) => {
 
     let meetingLink = aptData?.meeting_link;
 
-    // 2. If approving a telemedicine appointment that doesn't have a link yet, generate one
-    if (status === 'approved' && aptData?.is_telemedicine && !meetingLink) {
+    // 2. If starting/approving a video consult that doesn't have a link yet, generate one
+    if ((status === 'approved' || status === 'consulting') && !meetingLink &&
+        (aptData?.is_telemedicine || aptData?.booking_type === 'consult_now')) {
       const chars = 'abcdefghijklmnopqrstuvwxyz';
       const getChars = (len: number) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
       meetingLink = `https://meet.jit.si/graprime-telemed-${getChars(3)}-${getChars(4)}-${getChars(3)}`;
@@ -796,10 +901,11 @@ app.patch('/api/notifications/read', async (req, res) => {
 app.get('/api/prescriptions', authenticate, async (req: any, res) => {
   try {
     const result = await query(`
-      SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name 
+      SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name, o.name as pharmacy_name
       FROM prescriptions pr
       JOIN appointments a ON pr.appointment_id = a.id
       JOIN patients p ON pr.patient_id = p.id
+      LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
       ORDER BY pr.created_at DESC
     `);
     res.json(result.rows);
@@ -810,17 +916,16 @@ app.get('/api/prescriptions', authenticate, async (req: any, res) => {
 
 app.get('/api/prescriptions/my', authenticate, async (req: any, res) => {
   try {
-    const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
-    const phone = userResult.rows[0].phone_number;
-    const patientResult = await query('SELECT id FROM patients WHERE phone_number = $1', [phone]);
-    const patientId = patientResult.rows[0]?.id;
+    const patient = await getPatientForUser(req.user.id);
+    const patientId = patient?.id;
 
     if (!patientId) return res.json([]);
 
     const result = await query(`
-      SELECT pr.*, a.appointment_id as apt_code 
+      SELECT pr.*, a.appointment_id as apt_code, o.name as pharmacy_name
       FROM prescriptions pr
       JOIN appointments a ON pr.appointment_id = a.id
+      LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
       WHERE pr.patient_id = $1
       ORDER BY pr.created_at DESC
     `, [patientId]);
@@ -833,12 +938,13 @@ app.get('/api/prescriptions/my', authenticate, async (req: any, res) => {
 app.post('/api/prescriptions', authenticate, async (req: any, res) => {
   if (req.user.role === 'patient') return res.status(403).json({ message: 'Forbidden' });
   
-  const { appointment_id, patient_id, consultation_id, medication_name, dosage, frequency, duration, instructions } = req.body;
+  const { appointment_id, patient_id, consultation_id, medication_name, dosage, frequency, duration, instructions, strength, route, quantity } = req.body;
   try {
+    const prescriptionRef = 'RX-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
     const result = await query(`
-      INSERT INTO prescriptions (appointment_id, patient_id, consultation_id, medication_name, dosage, frequency, duration, instructions)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
-    `, [appointment_id, patient_id, consultation_id || null, medication_name, dosage, frequency, duration, instructions]);
+      INSERT INTO prescriptions (appointment_id, patient_id, consultation_id, medication_name, dosage, frequency, duration, instructions, prescription_ref, strength, route, quantity)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *
+    `, [appointment_id, patient_id, consultation_id || null, medication_name, dosage, frequency, duration, instructions, prescriptionRef, strength || null, route || null, quantity || null]);
     
     const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
     if (aptResult.rows[0]) {
@@ -866,6 +972,8 @@ app.delete('/api/prescriptions/:id', authenticate, async (req: any, res) => {
 app.get('/api/consultations/my', authenticate, async (req: any, res) => {
   if (req.user.role !== 'patient') return res.status(403).json({ message: 'Forbidden' });
   try {
+    const patient = await getPatientForUser(req.user.id);
+    if (!patient) return res.json([]);
     const result = await query(`
       SELECT c.*, u.name as doctor_name, a.preferred_date, a.service, a.notes as appointment_notes
       FROM consultations c
@@ -873,7 +981,7 @@ app.get('/api/consultations/my', authenticate, async (req: any, res) => {
       LEFT JOIN users u ON c.doctor_id = u.id
       WHERE c.patient_id = $1 AND c.status = 'completed'
       ORDER BY c.created_at DESC
-    `, [req.user.id]);
+    `, [patient.id]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -896,19 +1004,21 @@ app.get('/api/consultations/:appointmentId', authenticate, async (req: any, res)
 });
 
 app.post('/api/consultations', authenticate, async (req: any, res) => {
-  if (req.user.role !== 'doctor' && req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Only doctors can create consultations' });
+  if (req.user.role !== 'doctor' && req.user.role !== 'admin' && req.user.role !== 'nurse') {
+    return res.status(403).json({ message: 'Only clinicians can create consultations' });
   }
   const { appointment_id, patient_id, chief_complaint, symptoms, diagnosis, clinical_notes,
     vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2,
-    follow_up_date, status } = req.body;
+    follow_up_date, status, hpc, medical_history, working_diagnosis, differential, treatment_plan, patient_education } = req.body;
   try {
     const result = await query(`
       INSERT INTO consultations (appointment_id, patient_id, doctor_id, chief_complaint, symptoms, diagnosis, clinical_notes,
-        vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2, follow_up_date, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *
+        vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2, follow_up_date, status,
+        hpc, medical_history, working_diagnosis, differential, treatment_plan, patient_education, started_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, CURRENT_TIMESTAMP) RETURNING *
     `, [appointment_id, patient_id, req.user.id, chief_complaint, symptoms, diagnosis, clinical_notes,
-      vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2, follow_up_date || null, status || 'in_progress']);
+      vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2, follow_up_date || null, status || 'in_progress',
+      hpc || null, medical_history || null, working_diagnosis || diagnosis || null, differential || null, treatment_plan || null, patient_education || null]);
     
     if (status === 'completed' && diagnosis) {
       const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
@@ -927,18 +1037,24 @@ app.post('/api/consultations', authenticate, async (req: any, res) => {
 app.put('/api/consultations/:id', authenticate, async (req: any, res) => {
   const { chief_complaint, symptoms, diagnosis, clinical_notes,
     vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2,
-    follow_up_date, status } = req.body;
+    follow_up_date, status, hpc, medical_history, working_diagnosis, differential, treatment_plan, patient_education } = req.body;
   try {
     const oldCons = await query('SELECT status, appointment_id FROM consultations WHERE id = $1', [req.params.id]);
     
     const result = await query(`
       UPDATE consultations SET chief_complaint=$1, symptoms=$2, diagnosis=$3, clinical_notes=$4,
         vitals_bp=$5, vitals_temp=$6, vitals_pulse=$7, vitals_weight=$8, vitals_height=$9, vitals_spo2=$10,
-        follow_up_date=$11, status=$12
-      WHERE id=$13 RETURNING *
+        follow_up_date=$11, status=$12,
+        hpc=COALESCE($13, hpc), medical_history=COALESCE($14, medical_history),
+        working_diagnosis=COALESCE($15, working_diagnosis), differential=COALESCE($16, differential),
+        treatment_plan=COALESCE($17, treatment_plan), patient_education=COALESCE($18, patient_education),
+        ended_at = CASE WHEN $12 = 'completed' THEN CURRENT_TIMESTAMP ELSE ended_at END
+      WHERE id=$19 RETURNING *
     `, [chief_complaint, symptoms, diagnosis, clinical_notes,
       vitals_bp, vitals_temp, vitals_pulse, vitals_weight, vitals_height, vitals_spo2,
-      follow_up_date || null, status || 'in_progress', req.params.id]);
+      follow_up_date || null, status || 'in_progress',
+      hpc || null, medical_history || null, working_diagnosis || diagnosis || null, differential || null,
+      treatment_plan || null, patient_education || null, req.params.id]);
     
     if (status === 'completed' && oldCons.rows[0]?.status !== 'completed' && diagnosis) {
       const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [oldCons.rows[0].appointment_id]);
@@ -959,16 +1075,29 @@ app.get('/api/labs', authenticate, async (req: any, res) => {
   try {
     const { patient_id, status } = req.query;
     let sql = `
-      SELECT lr.*, a.full_name as patient_name, a.appointment_id as apt_code, u.name as doctor_name
+      SELECT lr.*, a.full_name as patient_name, a.appointment_id as apt_code, u.name as doctor_name,
+             o.name as partner_name
       FROM lab_requests lr
       LEFT JOIN appointments a ON lr.appointment_id = a.id
       LEFT JOIN users u ON lr.doctor_id = u.id
+      LEFT JOIN partner_orgs o ON lr.partner_id = o.id
     `;
     const conditions: string[] = [];
     const params: any[] = [];
     
     if (patient_id) { conditions.push(`lr.patient_id = $${params.length + 1}`); params.push(patient_id); }
     if (status) { conditions.push(`lr.status = $${params.length + 1}`); params.push(status); }
+    if (req.user.role === 'lab_technician') {
+      const staff = await query(
+        `SELECT o.id FROM partner_orgs o JOIN partner_staff s ON s.org_id = o.id
+         WHERE s.user_id = $1 AND o.type = 'laboratory' LIMIT 1`,
+        [req.user.id]
+      );
+      if (staff.rows[0]) {
+        conditions.push(`(lr.partner_id = $${params.length + 1} OR lr.partner_id IS NULL)`);
+        params.push(staff.rows[0].id);
+      }
+    }
     
     if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY lr.created_at DESC';
@@ -990,11 +1119,12 @@ app.post('/api/labs', authenticate, async (req: any, res) => {
     const userResult = await query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const doctorName = userResult.rows[0]?.name || 'Unknown';
     
+    const nearest = await assignNearestPartner('laboratory', patient_id);
     const result = await query(`
-      INSERT INTO lab_requests (consultation_id, appointment_id, patient_id, doctor_id, test_name, test_type, urgency, requested_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
-    `, [consultation_id || null, appointment_id, patient_id, req.user.id, test_name, test_type || 'blood', urgency || 'routine', doctorName]);
-    res.status(201).json(result.rows[0]);
+      INSERT INTO lab_requests (consultation_id, appointment_id, patient_id, doctor_id, test_name, test_type, urgency, requested_by, partner_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
+    `, [consultation_id || null, appointment_id, patient_id, req.user.id, test_name, test_type || 'blood', urgency || 'routine', doctorName, nearest?.id || null]);
+    res.status(201).json({ ...result.rows[0], partner_name: nearest?.name || null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -1013,9 +1143,18 @@ app.put('/api/labs/:id', authenticate, async (req: any, res) => {
     
     const result = await query(`
       UPDATE lab_requests SET status=$1, results=$2, result_notes=$3, 
-        completed_by=$4, completed_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'completed_at'}
+        completed_by=$4,
+        completed_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'completed_at'},
+        result_returned_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'result_returned_at'}
       WHERE id=$5 RETURNING *
     `, [status, results, result_notes, completedBy, req.params.id]);
+    if (status === 'completed' && result.rows[0]) {
+      await notifyDiagnosticClosedLoop(
+        { sendSMS, sendPushNotification },
+        result.rows[0],
+        'lab'
+      );
+    }
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -1028,16 +1167,29 @@ app.get('/api/scans', authenticate, async (req: any, res) => {
   try {
     const { patient_id, status } = req.query;
     let sql = `
-      SELECT sr.*, a.full_name as patient_name, a.appointment_id as apt_code, u.name as doctor_name
+      SELECT sr.*, a.full_name as patient_name, a.appointment_id as apt_code, u.name as doctor_name,
+             o.name as partner_name
       FROM scan_requests sr
       LEFT JOIN appointments a ON sr.appointment_id = a.id
       LEFT JOIN users u ON sr.doctor_id = u.id
+      LEFT JOIN partner_orgs o ON sr.partner_id = o.id
     `;
     const conditions: string[] = [];
     const params: any[] = [];
     
     if (patient_id) { conditions.push(`sr.patient_id = $${params.length + 1}`); params.push(patient_id); }
     if (status) { conditions.push(`sr.status = $${params.length + 1}`); params.push(status); }
+    if (req.user.role === 'imaging' || req.user.role === 'lab_technician') {
+      const staff = await query(
+        `SELECT o.id FROM partner_orgs o JOIN partner_staff s ON s.org_id = o.id
+         WHERE s.user_id = $1 AND o.type = $2 LIMIT 1`,
+        [req.user.id, req.user.role === 'imaging' ? 'imaging' : 'laboratory']
+      );
+      if (staff.rows[0] && req.user.role === 'imaging') {
+        conditions.push(`(sr.partner_id = $${params.length + 1} OR sr.partner_id IS NULL)`);
+        params.push(staff.rows[0].id);
+      }
+    }
     
     if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY sr.created_at DESC';
@@ -1058,11 +1210,12 @@ app.post('/api/scans', authenticate, async (req: any, res) => {
     const userResult = await query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const doctorName = userResult.rows[0]?.name || 'Unknown';
     
+    const nearest = await assignNearestPartner('imaging', patient_id);
     const result = await query(`
-      INSERT INTO scan_requests (consultation_id, appointment_id, patient_id, doctor_id, scan_type, body_part, clinical_indication, urgency, requested_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
-    `, [consultation_id || null, appointment_id, patient_id, req.user.id, scan_type, body_part, clinical_indication, urgency || 'routine', doctorName]);
-    res.status(201).json(result.rows[0]);
+      INSERT INTO scan_requests (consultation_id, appointment_id, patient_id, doctor_id, scan_type, body_part, clinical_indication, urgency, requested_by, partner_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *
+    `, [consultation_id || null, appointment_id, patient_id, req.user.id, scan_type, body_part, clinical_indication, urgency || 'routine', doctorName, nearest?.id || null]);
+    res.status(201).json({ ...result.rows[0], partner_name: nearest?.name || null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -1070,7 +1223,7 @@ app.post('/api/scans', authenticate, async (req: any, res) => {
 });
 
 app.put('/api/scans/:id', authenticate, async (req: any, res) => {
-  if (!['lab_technician', 'doctor', 'admin'].includes(req.user.role)) {
+  if (!['lab_technician', 'imaging', 'doctor', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ message: 'Forbidden' });
   }
   const { status, results, result_notes } = req.body;
@@ -1080,9 +1233,18 @@ app.put('/api/scans/:id', authenticate, async (req: any, res) => {
     
     const result = await query(`
       UPDATE scan_requests SET status=$1, results=$2, result_notes=$3,
-        completed_by=$4, completed_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'completed_at'}
+        completed_by=$4,
+        completed_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'completed_at'},
+        result_returned_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'result_returned_at'}
       WHERE id=$5 RETURNING *
     `, [status, results, result_notes, completedBy, req.params.id]);
+    if (status === 'completed' && result.rows[0]) {
+      await notifyDiagnosticClosedLoop(
+        { sendSMS, sendPushNotification },
+        result.rows[0],
+        'scan'
+      );
+    }
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -1366,9 +1528,13 @@ app.get('/api/analytics/dashboard', authenticate, async (req: any, res) => {
   }
 });
 
+registerPhase1Routes(app, { authenticate, sendSMS, sendPushNotification });
+registerPhase2Routes(app, { authenticate, sendSMS, sendPushNotification });
+registerPhase3Routes(app, { authenticate, sendSMS, sendPushNotification });
+
 // Initialize Database
 initDb().then(() => {
-  app.listen(PORT, () => {
+  app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
   });
 }).catch(err => {

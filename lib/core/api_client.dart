@@ -4,10 +4,18 @@ import 'package:flutter/foundation.dart';
 typedef UnauthorizedHandler = void Function();
 
 class ApiClient {
+  static String get defaultBaseUrl {
+    if (kIsWeb) return 'http://localhost:5000';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:5000';
+    }
+    return 'http://localhost:5000';
+  }
+
   ApiClient() {
     _dio = Dio(
       BaseOptions(
-        baseUrl: 'http://localhost:5000',
+        baseUrl: defaultBaseUrl,
         connectTimeout: const Duration(seconds: 20),
         receiveTimeout: const Duration(seconds: 30),
         followRedirects: true,

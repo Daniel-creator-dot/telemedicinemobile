@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../models/appointment.dart';
+import '../patient/care_repository.dart';
 
 class PrescriptionDialog extends StatefulWidget {
   const PrescriptionDialog({super.key, required this.appointment});
@@ -21,8 +22,12 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
   final _frequency = TextEditingController();
   final _duration = TextEditingController();
   final _instructions = TextEditingController();
+  final _strength = TextEditingController();
+  final _route = TextEditingController();
+  final _quantity = TextEditingController();
 
   bool _submitting = false;
+  bool _sendToPharmacy = true;
 
   @override
   void dispose() {
@@ -31,6 +36,9 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
     _frequency.dispose();
     _duration.dispose();
     _instructions.dispose();
+    _strength.dispose();
+    _route.dispose();
+    _quantity.dispose();
     super.dispose();
   }
 
@@ -51,7 +59,7 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
         }
       }
 
-      await api.dio.post<Map<String, dynamic>>(
+      final created = await api.dio.post<Map<String, dynamic>>(
         '/api/prescriptions',
         data: {
           'appointment_id': widget.appointment.id,
@@ -61,8 +69,17 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
           'frequency': _frequency.text.trim(),
           'duration': _duration.text.trim(),
           'instructions': _instructions.text.trim(),
+          'strength': _strength.text.trim(),
+          'route': _route.text.trim(),
+          'quantity': _quantity.text.trim(),
         },
       );
+
+      if (_sendToPharmacy && created.data?['id'] != null) {
+        try {
+          await context.read<CareRepository>().sendPrescriptionToPharmacy(created.data!['id'] as int);
+        } catch (_) {}
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -121,6 +138,24 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
+                  controller: _strength,
+                  style: GoogleFonts.roboto(color: Colors.white),
+                  decoration: _inputDeco('Strength (e.g. 500mg)', Icons.science_outlined),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _route,
+                  style: GoogleFonts.roboto(color: Colors.white),
+                  decoration: _inputDeco('Route (oral, IM, topical)', Icons.alt_route),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _quantity,
+                  style: GoogleFonts.roboto(color: Colors.white),
+                  decoration: _inputDeco('Quantity (e.g. 14 tablets)', Icons.inventory_2_outlined),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
                   controller: _dosage,
                   style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Dosage (e.g. 500mg, 1 tablet)', Icons.healing_outlined),
@@ -146,6 +181,15 @@ class _PrescriptionDialogState extends State<PrescriptionDialog> {
                   maxLines: 2,
                   style: GoogleFonts.roboto(color: Colors.white),
                   decoration: _inputDeco('Special Instructions (e.g. Take after meals)', Icons.info_outline),
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  value: _sendToPharmacy,
+                  onChanged: (v) => setState(() => _sendToPharmacy = v ?? true),
+                  title: Text('Send to nearest network pharmacy', style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13)),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF00D2C4),
                 ),
                 const SizedBox(height: 25),
                 ElevatedButton(

@@ -70,5 +70,9 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Digi Health needs camera access for in-app video consultations.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Digi Health needs microphone access for in-app video consultations.</string>
 </dict>
 </plist>

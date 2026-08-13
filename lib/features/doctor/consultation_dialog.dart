@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
 import '../../models/appointment.dart';
+import '../patient/care_repository.dart';
+import 'referral_dialog.dart';
 
 class ConsultationDialog extends StatefulWidget {
   const ConsultationDialog({super.key, required this.appointment});
@@ -34,6 +36,11 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
   final _diagnosis = TextEditingController();
   final _clinicalNotes = TextEditingController();
   final _followUpDate = TextEditingController();
+  final _hpc = TextEditingController();
+  final _medicalHistory = TextEditingController();
+  final _differential = TextEditingController();
+  final _treatmentPlan = TextEditingController();
+  final _patientEducation = TextEditingController();
 
   // Labs, Scans, Rx Lists
   List<dynamic> _labs = [];
@@ -66,6 +73,11 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
     _diagnosis.dispose();
     _clinicalNotes.dispose();
     _followUpDate.dispose();
+    _hpc.dispose();
+    _medicalHistory.dispose();
+    _differential.dispose();
+    _treatmentPlan.dispose();
+    _patientEducation.dispose();
     super.dispose();
   }
 
@@ -76,10 +88,11 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
 
       // 1. Get patient_id from appointment list
       final appointmentsRes = await api.dio.get<List<dynamic>>('/api/appointments');
+      _patientId = widget.appointment.patientId ?? 0;
       if (appointmentsRes.data != null) {
         final matches = appointmentsRes.data!.where((json) => json['id'] == widget.appointment.id);
         if (matches.isNotEmpty) {
-          _patientId = matches.first['patient_id'] as int? ?? 0;
+          _patientId = matches.first['patient_id'] as int? ?? _patientId;
         }
       }
 
@@ -99,6 +112,11 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         _symptoms.text = _consultation['symptoms']?.toString() ?? '';
         _diagnosis.text = _consultation['diagnosis']?.toString() ?? '';
         _clinicalNotes.text = _consultation['clinical_notes']?.toString() ?? '';
+        _hpc.text = _consultation['hpc']?.toString() ?? '';
+        _medicalHistory.text = _consultation['medical_history']?.toString() ?? '';
+        _differential.text = _consultation['differential']?.toString() ?? '';
+        _treatmentPlan.text = _consultation['treatment_plan']?.toString() ?? '';
+        _patientEducation.text = _consultation['patient_education']?.toString() ?? '';
         _followUpDate.text = _consultation['follow_up_date'] != null
             ? _consultation['follow_up_date'].toString().split('T')[0]
             : '';
@@ -144,6 +162,12 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
         'vitals_spo2': _vitalsSpo2.text.trim(),
         'follow_up_date': _followUpDate.text.trim().isEmpty ? null : _followUpDate.text.trim(),
         'status': status,
+        'hpc': _hpc.text.trim(),
+        'medical_history': _medicalHistory.text.trim(),
+        'working_diagnosis': _diagnosis.text.trim(),
+        'differential': _differential.text.trim(),
+        'treatment_plan': _treatmentPlan.text.trim(),
+        'patient_education': _patientEducation.text.trim(),
       };
 
       if (_consultation != null) {
@@ -430,7 +454,35 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _patientId == 0
+                      ? null
+                      : () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => ReferralDialog(appointment: widget.appointment, patientId: _patientId),
+                          );
+                          if (ok == true && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Specialist referral sent.')),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.share_outlined, size: 16),
+                  label: const Text('Refer specialist'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF00D2C4),
+                    side: const BorderSide(color: Color(0xFF00D2C4)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
@@ -459,6 +511,8 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   ),
                 ),
               ),
+            ],
+          ),
             ],
           ),
         ),
@@ -568,27 +622,61 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
             TextFormField(
               controller: _chiefComplaint,
               style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
-              decoration: _inputDeco('Chief Complaint (e.g. Headache for 3 days)'),
+              decoration: _inputDeco('Presenting complaint'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _hpc,
+              maxLines: 2,
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
+              decoration: _inputDeco('History of presenting complaint'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _medicalHistory,
+              maxLines: 2,
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
+              decoration: _inputDeco('Medical / surgical / social history'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _symptoms,
               maxLines: 2,
               style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
-              decoration: _inputDeco('Observed Symptoms'),
+              decoration: _inputDeco('Observed symptoms / examination'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _diagnosis,
               style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
-              decoration: _inputDeco('Final Medical Diagnosis'),
+              decoration: _inputDeco('Working diagnosis'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _differential,
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
+              decoration: _inputDeco('Differential diagnosis'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _treatmentPlan,
+              maxLines: 2,
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
+              decoration: _inputDeco('Treatment plan'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _patientEducation,
+              maxLines: 2,
+              style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
+              decoration: _inputDeco('Patient education'),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _clinicalNotes,
               maxLines: 3,
               style: GoogleFonts.roboto(color: Colors.white, fontSize: 13),
-              decoration: _inputDeco('Clinical Notes & Advice'),
+              decoration: _inputDeco('Clinical notes & advice'),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -657,6 +745,8 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                           ),
                           const SizedBox(height: 4),
                           Text('Urgency: ${lab['urgency']}  |  Type: ${lab['test_type']}', style: GoogleFonts.roboto(color: Colors.white38, fontSize: 10)),
+                          if ((lab['partner_name'] ?? '').toString().isNotEmpty)
+                            Text('Partner: ${lab['partner_name']}', style: GoogleFonts.roboto(color: Colors.white54, fontSize: 10)),
                           if (lab['results'] != null) ...[
                             const SizedBox(height: 6),
                             Text('Findings: ${lab['results']}', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11)),
@@ -792,7 +882,34 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                           if (rx['instructions'] != null && rx['instructions'].toString().isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Text('Advise: ${rx['instructions']}', style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 10, fontStyle: FontStyle.italic)),
-                          ]
+                          ],
+                          if ((rx['pharmacy_name'] ?? '').toString().isNotEmpty)
+                            Text(
+                              '${rx['pharmacy_name']} · ${rx['dispense_status'] ?? 'sent'}',
+                              style: GoogleFonts.roboto(color: const Color(0xFF00D2C4), fontSize: 10),
+                            ),
+                          if ((rx['dispense_status'] == null || rx['dispense_status'] == 'unsent') && rx['id'] != null)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () async {
+                                  try {
+                                    await context.read<CareRepository>().sendPrescriptionToPharmacy(rx['id'] as int);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Sent to nearest network pharmacy.')),
+                                      );
+                                    }
+                                    _loadAllData();
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not send: $e')));
+                                    }
+                                  }
+                                },
+                                child: const Text('Send to pharmacy'),
+                              ),
+                            ),
                         ],
                       ),
                     );
