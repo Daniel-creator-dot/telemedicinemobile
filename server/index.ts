@@ -18,7 +18,7 @@ import { registerPhase5Routes, registerAuditMiddleware } from './phase5';
 import { registerCompleteRoutes } from './complete';
 import { registerMembershipRoutes } from './membership';
 import { registerPhaseOverviewRoutes } from './phases';
-import { createSecureJitsiLink } from './jitsi';
+import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import {
   authenticate,
   requireRoles,
@@ -115,7 +115,10 @@ app.get('/', (_req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    const result = await query('SELECT * FROM users WHERE username = $1 OR phone_number = $1', [username]);
+    const result = await query(
+      'SELECT * FROM users WHERE LOWER(username) = LOWER($1) OR phone_number = $1',
+      [String(username || '').trim()]
+    );
     const user = result.rows[0];
 
     if (user && await bcrypt.compare(password, user.password)) {
@@ -660,6 +663,11 @@ app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CL
     const current = await assertAppointmentAccess(req, res, id);
     if (!current) return;
     if (current.meeting_link) {
+      const normalized = normalizeJitsiMeetingLink(current.meeting_link);
+      if (normalized && normalized !== current.meeting_link) {
+        await query('UPDATE appointments SET meeting_link = $1 WHERE id = $2', [normalized, id]);
+        current.meeting_link = normalized;
+      }
       return res.json(current);
     }
 
@@ -693,7 +701,7 @@ app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CL
 });
 
 async function markAppointmentPaid(apt: any, paymentRef: string, gateway = 'paystack') {
-  let meetingLink = apt.meeting_link || null;
+  let meetingLink = normalizeJitsiMeetingLink(apt.meeting_link) || null;
   if (apt.is_telemedicine) {
     meetingLink = meetingLink || createSecureJitsiLink();
   }
@@ -841,7 +849,7 @@ app.patch('/api/appointments/:id/status', authenticate, async (req: any, res) =>
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    let meetingLink = aptData?.meeting_link;
+    let meetingLink = normalizeJitsiMeetingLink(aptData?.meeting_link);
 
     // 2. If starting/approving a video consult that doesn't have a link yet, generate one
     if ((status === 'approved' || status === 'consulting') && !meetingLink &&

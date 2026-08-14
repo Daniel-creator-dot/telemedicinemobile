@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../models/auth_user.dart';
+import 'admin_chrome.dart';
 
 class AdminUsersTab extends StatelessWidget {
   const AdminUsersTab({
@@ -30,34 +31,33 @@ class AdminUsersTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+          AdminGlass(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Register staff', style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
-                Text('Creates a login that can call the authenticated staff APIs.', style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 12)),
-                const SizedBox(height: 12),
-                TextField(controller: name, decoration: fieldDecoration('Full name', Icons.person_outline)),
+                Text('Register staff', style: adminSerif(size: 20)),
+                const SizedBox(height: 6),
+                Text(
+                  'Creates a login that can call authenticated staff APIs.',
+                  style: adminSans(size: 12, color: AdminPalette.mute),
+                ),
+                const SizedBox(height: 14),
+                TextField(controller: name, style: adminSans(), decoration: fieldDecoration('Full name', Icons.person_outline)),
                 const SizedBox(height: 10),
-                TextField(controller: username, decoration: fieldDecoration('Username', Icons.account_circle_outlined)),
+                TextField(controller: username, style: adminSans(), decoration: fieldDecoration('Username', Icons.account_circle_outlined)),
                 const SizedBox(height: 10),
-                TextField(controller: password, obscureText: true, decoration: fieldDecoration('Password', Icons.lock_outline)),
+                TextField(controller: password, obscureText: true, style: adminSans(), decoration: fieldDecoration('Password', Icons.lock_outline)),
                 const SizedBox(height: 10),
-                TextField(controller: phone, decoration: fieldDecoration('Phone (for alerts)', Icons.phone_android_outlined)),
+                TextField(controller: phone, style: adminSans(), decoration: fieldDecoration('Phone (for alerts)', Icons.phone_android_outlined)),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: role,
+                  dropdownColor: AdminPalette.surface,
+                  style: adminSans(),
                   decoration: fieldDecoration('Staff role', Icons.badge_outlined),
                   items: const [
                     DropdownMenuItem(value: 'doctor', child: Text('Doctor / Specialist')),
@@ -75,11 +75,11 @@ class AdminUsersTab extends StatelessWidget {
                     if (v != null) onRoleChanged(v);
                   },
                 ),
-                const SizedBox(height: 20),
-                ElevatedButton(
+                const SizedBox(height: 18),
+                FilledButton(
                   onPressed: onCreate,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00D2C4),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AdminPalette.cyan,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -87,25 +87,31 @@ class AdminUsersTab extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 24),
-          Text('Staff registry', style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 16)),
+          ).animate().fadeIn(duration: 400.ms),
+          const SizedBox(height: 20),
+          Text('Staff registry', style: adminSerif(size: 18)),
           const SizedBox(height: 10),
           if (users.isEmpty)
-            Text('No users returned from /api/users.', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8)))
+            Text('No users returned from /api/users.', style: adminSans(color: AdminPalette.mute))
           else
             ...users.map(
-              (u) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
-                  child: Text(
-                    u.name.isNotEmpty ? u.name.substring(0, 1).toUpperCase() : '?',
-                    style: const TextStyle(color: Color(0xFF8B5CF6)),
+              (u) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: AdminGlass(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: AdminPalette.violet.withValues(alpha: 0.22),
+                      child: Text(
+                        u.name.isNotEmpty ? u.name.substring(0, 1).toUpperCase() : '?',
+                        style: adminSans(weight: FontWeight.w800, color: AdminPalette.violet),
+                      ),
+                    ),
+                    title: Text(u.name, style: adminSans(size: 14, weight: FontWeight.w800)),
+                    subtitle: Text('${u.username} · ${u.role.label}', style: adminSans(size: 11, color: AdminPalette.mute)),
                   ),
                 ),
-                title: Text(u.name, style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: Text('${u.username} · ${u.role.label}', style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 11)),
               ),
             ),
         ],

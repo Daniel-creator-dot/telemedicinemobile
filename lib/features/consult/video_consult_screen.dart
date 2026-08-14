@@ -141,6 +141,10 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
       final normalized = normalizeJitsiMeetingUrl(_apt.meetingLink!);
       if (normalized != _apt.meetingLink) {
         setState(() => _apt = _apt.copyWith(meetingLink: normalized));
+        // Persist rewritten host so patient + doctor share one room URL.
+        try {
+          await context.read<AppointmentsRepository>().generateMeetingLink(_apt.id);
+        } catch (_) {}
       }
       return;
     }
@@ -188,7 +192,13 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
 
   void _onJitsiEvent(String event) {
     if (!mounted) return;
-    if (event == 'joined' || event == 'loaded' || event == 'ready') {
+    // Digi chrome used to mark "In room" on iframe ready — that lied while
+    // Jitsi was still stuck on the moderator/lobby gate.
+    if (event == 'ready' || event == 'loaded') {
+      setState(() => _connection = 'Connecting');
+      return;
+    }
+    if (event == 'joined') {
       setState(() => _connection = _remoteJoined ? 'Connected' : 'In room');
       _startTimer();
       return;

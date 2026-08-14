@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -6,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
 import '../../core/notification_service.dart';
+import '../admin/admin_chrome.dart';
 import '../consult/open_video_consult.dart';
 import 'appointments_repository.dart';
 import 'book_appointment_dialog.dart';
@@ -37,63 +40,86 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _screens[_currentIndex],
+      backgroundColor: AdminPalette.bg,
+      body: AdminMeshBackdrop(
+        child: SafeArea(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: KeyedSubtree(
+              key: ValueKey(_currentIndex),
+              child: _screens[_currentIndex],
+            ),
+          ),
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFF6F3EE),
-          border: Border(top: BorderSide(color: Color(0xFFE8E4DC))),
-        ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(4, (index) {
-                const icons = [
-                  Icons.home_outlined,
-                  Icons.calendar_today_outlined,
-                  Icons.forum_outlined,
-                  Icons.person_outline,
-                ];
-                const activeIcons = [
-                  Icons.home_filled,
-                  Icons.calendar_today,
-                  Icons.forum,
-                  Icons.person,
-                ];
-                const labels = ['Home', 'Visits', 'Messages', 'You'];
-                final isActive = _currentIndex == index;
-                return GestureDetector(
-                  onTap: () => setState(() => _currentIndex = index),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isActive ? activeIcons[index] : icons[index],
-                          color: isActive ? const Color(0xFF1F4A3A) : const Color(0xFF8A847C),
-                          size: 22,
+          top: false,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC0C1422),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(color: AdminPalette.cyan.withValues(alpha: 0.14), blurRadius: 30, offset: const Offset(0, -4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: List.generate(4, (index) {
+                    const icons = [
+                      Icons.home_outlined,
+                      Icons.calendar_today_outlined,
+                      Icons.forum_outlined,
+                      Icons.person_outline,
+                    ];
+                    const activeIcons = [
+                      Icons.home_filled,
+                      Icons.calendar_today,
+                      Icons.forum,
+                      Icons.person,
+                    ];
+                    const labels = ['Home', 'Visits', 'Messages', 'You'];
+                    final isActive = _currentIndex == index;
+                    return GestureDetector(
+                      onTap: () => setState(() => _currentIndex = index),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 240),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: isActive ? const LinearGradient(colors: [AdminPalette.cyan, Color(0xFF1AA89C)]) : null,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          labels[index],
-                          style: GoogleFonts.dmSans(
-                            color: isActive ? const Color(0xFF1F4A3A) : const Color(0xFF8A847C),
-                            fontSize: 11,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isActive ? activeIcons[index] : icons[index],
+                              color: isActive ? Colors.black : AdminPalette.mute,
+                              size: 22,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              labels[index],
+                              style: adminSans(
+                                size: 10,
+                                weight: FontWeight.w800,
+                                color: isActive ? Colors.black : AdminPalette.mute,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
+                      ),
+                    );
+                  }),
+                ),
+              ),
             ),
           ),
         ),
@@ -160,7 +186,7 @@ class _DashboardViewState extends State<DashboardView> {
 
     return RefreshIndicator(
       onRefresh: _loadDashboardData,
-      color: theme.colorScheme.primary,
+      color: AdminPalette.cyan,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
@@ -174,18 +200,10 @@ class _DashboardViewState extends State<DashboardView> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Welcome back,',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF94A3B8),
-                      ),
-                    ),
+                    Text('Welcome back,', style: adminSans(size: 13, color: AdminPalette.mute)),
                     Text(
                       session.user?.name ?? 'Patient',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontSize: 26,
-                        letterSpacing: -0.5,
-                      ),
+                      style: adminSerif(size: 26, weight: FontWeight.w700, letterSpacing: -0.5),
                     ),
                   ],
                 ),
@@ -193,7 +211,7 @@ class _DashboardViewState extends State<DashboardView> {
                   children: [
                     IconButton(
                       onPressed: () => context.push('/patient/notifications'),
-                      icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFF0F172A)),
+                      icon: const Icon(Icons.notifications_none_rounded, color: AdminPalette.ink),
                     ),
                     const SizedBox(width: 4),
                 Container(
@@ -201,34 +219,28 @@ class _DashboardViewState extends State<DashboardView> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF8B5CF6), Color(0xFF00D2C4)],
+                      colors: [AdminPalette.gold, AdminPalette.cyan],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF8B5CF6).withOpacity(0.5),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      ),
-                      BoxShadow(
-                        color: const Color(0xFF00D2C4).withOpacity(0.3),
-                        blurRadius: 15,
-                        spreadRadius: 1,
+                        color: AdminPalette.cyan.withValues(alpha: 0.45),
+                        blurRadius: 18,
                       ),
                     ],
                   ),
                   child: CircleAvatar(
                     radius: 24,
-                    backgroundColor: const Color(0xFF1E293B),
+                    backgroundColor: AdminPalette.surface,
                     child: Text(
                       (session.user?.name.isNotEmpty == true)
                           ? session.user!.name.substring(0, session.user!.name.length > 1 ? 2 : 1).toUpperCase()
                           : 'DH',
-                      style: GoogleFonts.roboto(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                      style: adminSans(
+                        color: AdminPalette.ink,
+                        weight: FontWeight.w800,
+                        size: 16,
                       ),
                     ),
                   ),
@@ -333,28 +345,9 @@ class _DashboardViewState extends State<DashboardView> {
             ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
 
             // Modern Search Bar
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _isSearchFocused
-                      ? const Color(0xFF00D2C4).withOpacity(0.6)
-                      : const Color(0xFFE2E8F0),
-                  width: _isSearchFocused ? 2 : 1,
-                ),
-                boxShadow: _isSearchFocused
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFF00D2C4).withOpacity(0.3),
-                          blurRadius: 12,
-                          spreadRadius: 0,
-                        ),
-                      ]
-                    : null,
-              ),
+            AdminGlass(
+              glow: _isSearchFocused ? AdminPalette.cyan : null,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
               child: TextField(
                 onTap: () {
                   setState(() => _isSearchFocused = true);
@@ -364,19 +357,14 @@ class _DashboardViewState extends State<DashboardView> {
                   setState(() => _isSearchFocused = false);
                   context.push('/patient/doctors');
                 },
-                style: GoogleFonts.roboto(color: const Color(0xFF0F172A)),
+                style: adminSans(size: 14),
                 decoration: InputDecoration(
                   icon: Icon(
                     Icons.search_rounded,
-                    color: _isSearchFocused
-                        ? const Color(0xFF00D2C4)
-                        : theme.colorScheme.primary,
+                    color: _isSearchFocused ? AdminPalette.cyan : AdminPalette.mute,
                   ),
                   hintText: 'Search symptoms, specialists, clinics...',
-                  hintStyle: GoogleFonts.roboto(
-                    color: const Color(0xFF64748B),
-                    fontSize: 14,
-                  ),
+                  hintStyle: adminSans(size: 14, color: AdminPalette.mute),
                   border: InputBorder.none,
                 ),
               ),
@@ -387,11 +375,7 @@ class _DashboardViewState extends State<DashboardView> {
             // Quick Actions
             Text(
               'Quick Actions',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.2,
-              ),
+              style: adminSans(size: 16, weight: FontWeight.w800),
             ).animate().fadeIn(delay: 150.ms),
             const SizedBox(height: 12),
             Row(
@@ -479,60 +463,17 @@ class _DashboardViewState extends State<DashboardView> {
 
             // Next Appointment Card
             if (_nextAppointment != null) ...[
-              Container(
-                width: double.infinity,
+              AdminGlass(
+                glow: AdminPalette.cyan,
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      theme.colorScheme.secondary.withOpacity(0.15),
-                      theme.colorScheme.primary.withOpacity(0.08),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.07),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.secondary.withOpacity(0.1),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
-                    )
-                  ],
-                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _nextAppointment!.isTelemedicine ? Icons.videocam_rounded : Icons.local_hospital_rounded,
-                                size: 14,
-                                color: const Color(0xFF00D2C4),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                _nextAppointment!.isTelemedicine ? 'VIDEO VISIT' : 'CLINICAL VISIT',
-                                style: GoogleFonts.roboto(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF00D2C4),
-                                ),
-                              ),
-                            ],
-                          ),
+                        AdminStatusChip(
+                          label: _nextAppointment!.isTelemedicine ? 'VIDEO VISIT' : 'CLINICAL VISIT',
+                          color: AdminPalette.cyan,
                         ),
                         const Spacer(),
                         _buildBadge(_nextAppointment!.status),
@@ -543,10 +484,10 @@ class _DashboardViewState extends State<DashboardView> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: const Color(0xFF1E293B),
+                          backgroundColor: AdminPalette.cyan.withValues(alpha: 0.16),
                           child: Text(
                             _nextAppointment!.doctorName?.substring(0, 2).toUpperCase() ?? 'MD',
-                            style: GoogleFonts.roboto(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            style: adminSans(color: AdminPalette.cyan, size: 13, weight: FontWeight.w800),
                           ),
                         ),
                         const SizedBox(width: 15),
@@ -555,23 +496,18 @@ class _DashboardViewState extends State<DashboardView> {
                           children: [
                             Text(
                               _nextAppointment!.doctorName ?? 'Assigned Specialist',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: adminSans(size: 16, weight: FontWeight.w800),
                             ),
                             Text(
                               'Medical Practitioner',
-                              style: GoogleFonts.roboto(
-                                color: const Color(0xFF94A3B8),
-                                fontSize: 12,
-                              ),
+                              style: adminSans(size: 12, color: AdminPalette.mute),
                             ),
                           ],
                         ),
                       ],
                     ),
                     const SizedBox(height: 20),
-                    Divider(color: Colors.white.withOpacity(0.1), height: 1),
+                    Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
                     const SizedBox(height: 15),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -581,14 +517,12 @@ class _DashboardViewState extends State<DashboardView> {
                             const Icon(
                               Icons.calendar_today_rounded,
                               size: 16,
-                              color: Color(0xFF8B5CF6),
+                              color: AdminPalette.gold,
                             ),
                             const SizedBox(width: 8),
                             Text(
                               '${_nextAppointment!.preferredDate}, ${_nextAppointment!.preferredTime}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: adminSans(size: 13, weight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -597,18 +531,16 @@ class _DashboardViewState extends State<DashboardView> {
                                 _nextAppointment!.status == 'consulting' ||
                                 _nextAppointment!.status == 'queued') &&
                             _nextAppointment!.meetingLink != null)
-                          ElevatedButton.icon(
+                          FilledButton.icon(
                             onPressed: () => _openMeeting(_nextAppointment!),
                             icon: const Icon(Icons.videocam, size: 16),
                             label: Text(
                               'Join Room',
-                              style: GoogleFonts.roboto(fontWeight: FontWeight.bold),
+                              style: adminSans(weight: FontWeight.w800, size: 12, color: Colors.black),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: Colors.white,
-                              elevation: 6,
-                              shadowColor: theme.colorScheme.primary.withOpacity(0.45),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AdminPalette.cyan,
+                              foregroundColor: Colors.black,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
@@ -626,16 +558,12 @@ class _DashboardViewState extends State<DashboardView> {
               children: [
                 Text(
                   'Health Overview',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.2,
-                  ),
+                  style: adminSans(size: 16, weight: FontWeight.w800),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: AdminPalette.lime.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -712,20 +640,16 @@ class _DashboardViewState extends State<DashboardView> {
               children: [
                 Text(
                   'Our Specialists',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.2,
-                  ),
+                  style: adminSans(size: 16, weight: FontWeight.w800),
                 ),
                 TextButton(
                   onPressed: () => context.push('/patient/doctors'),
                   child: Text(
                     'See All',
-                    style: GoogleFonts.roboto(
-                      color: theme.colorScheme.secondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                    style: adminSans(
+                      color: AdminPalette.cyan,
+                      size: 12,
+                      weight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -781,62 +705,14 @@ class _DashboardViewState extends State<DashboardView> {
     Color? overlayColor,
   }) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 85,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.25), width: 1),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Background image (faded texture)
-                if (backgroundImage != null)
-                  Image.asset(backgroundImage, fit: BoxFit.cover),
-
-                // Light overlay — image shows through with a bright wash
-                Container(
-                  color: backgroundImage != null
-                      ? Colors.white.withOpacity(0.05)
-                      : color.withOpacity(0.10),
-                ),
-
-                // Foreground content
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.20),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(icon, color: color, size: 16),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.roboto(
-                          color: color,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+      child: SizedBox(
+        height: 96,
+        child: AdminActionTile(
+          title: label,
+          subtitle: 'Open',
+          icon: icon,
+          color: color,
+          onTap: onTap,
         ),
       ),
     );
@@ -852,8 +728,6 @@ class _DashboardViewState extends State<DashboardView> {
     required Color accentColor,
     Widget? customWidget,
   }) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -920,11 +794,7 @@ class _DashboardViewState extends State<DashboardView> {
                 children: [
                   Text(
                     value,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
+                    style: adminSerif(size: 22, weight: FontWeight.w700, letterSpacing: -0.5),
                   ),
                   const SizedBox(height: 2),
                   Container(
@@ -1281,7 +1151,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             const SizedBox(height: 16),
             Text(
               '${_monthName(day.month)} ${day.day}, ${day.year}',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: adminSerif(size: 18, weight: FontWeight.w700),
             ),
             const SizedBox(height: 14),
             ...apts.map((apt) {
@@ -1363,7 +1233,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             ),
             Text(
               '${_monthName(month.month)} ${month.year}',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: adminSerif(size: 18, weight: FontWeight.w700),
             ),
             IconButton(
               onPressed: () => setState(() {
@@ -1503,10 +1373,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
             children: [
               Text(
                 'Schedule Planner',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontSize: 26,
-                  letterSpacing: -0.5,
-                ),
+                style: adminSerif(size: 26, weight: FontWeight.w700, letterSpacing: -0.5),
               ),
               IconButton(
                 icon: const Icon(Icons.add_circle, color: Color(0xFF00D2C4), size: 28),
@@ -1517,10 +1384,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
           const SizedBox(height: 8),
           Text(
             'Manage your clinical checkups and teleconsultations',
-            style: GoogleFonts.roboto(
-              color: Color(0xFF64748B),
-              fontSize: 13,
-            ),
+            style: adminSans(color: AdminPalette.mute, size: 13),
           ),
           const SizedBox(height: 20),
 
@@ -1626,17 +1490,10 @@ class _AppointmentsViewState extends State<AppointmentsView> {
         break;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: AdminGlass(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.03),
-          width: 1,
-        ),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1746,6 +1603,7 @@ class _AppointmentsViewState extends State<AppointmentsView> {
           ]
         ],
       ),
+    ),
     );
   }
 }
@@ -1782,8 +1640,6 @@ class _MessagesViewState extends State<MessagesView> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -1791,25 +1647,19 @@ class _MessagesViewState extends State<MessagesView> {
         children: [
           Text(
             'Secure Chats',
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontSize: 26,
-              letterSpacing: -0.5,
-            ),
+            style: adminSerif(size: 26, weight: FontWeight.w700, letterSpacing: -0.5),
           ),
           const SizedBox(height: 8),
           Text(
             'Clinical messaging linked to your consultations',
-            style: GoogleFonts.roboto(
-              color: Color(0xFF64748B),
-              fontSize: 13,
-            ),
+            style: adminSans(color: AdminPalette.mute, size: 13),
           ),
           const SizedBox(height: 25),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _threads.isEmpty
-                    ? Center(child: Text('No consultation threads yet.', style: GoogleFonts.roboto(color: Colors.black38)))
+                    ? Center(child: Text('No consultation threads yet.', style: adminSans(color: AdminPalette.mute, size: 13)))
                     : ListView.builder(
                         itemCount: _threads.length,
                         itemBuilder: (context, index) {
@@ -1845,31 +1695,21 @@ class _MessagesViewState extends State<MessagesView> {
     required int unreadCount,
     VoidCallback? onTap,
   }) {
-    final theme = Theme.of(context);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AdminGlass(
+        onTap: onTap,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.03),
-            width: 1,
-          ),
-        ),
         child: Row(
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
+            backgroundColor: AdminPalette.cyan.withValues(alpha: 0.16),
             child: Text(
               initials,
-              style: GoogleFonts.roboto(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
+              style: adminSans(
+                color: AdminPalette.cyan,
+                weight: FontWeight.w800,
               ),
             ),
           ),
@@ -1917,7 +1757,7 @@ class _MessagesViewState extends State<MessagesView> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
+                color: AdminPalette.cyan,
                 shape: BoxShape.circle,
               ),
               child: Text(
@@ -2023,14 +1863,14 @@ class _ProfileViewState extends State<ProfileView> {
           const SizedBox(height: 10),
           Text(
             session.user?.name ?? 'Patient',
-            style: theme.textTheme.headlineMedium?.copyWith(fontSize: 22),
+            style: adminSerif(size: 22, weight: FontWeight.w700),
           ),
           Text(
             'Patient ID: ${session.user?.patientCode ?? 'DH-${session.user?.id ?? "00"}'}',
-            style: GoogleFonts.roboto(
-              fontSize: 11,
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w600,
+            style: adminSans(
+              size: 11,
+              color: AdminPalette.cyan,
+              weight: FontWeight.w700,
             ),
           ),
           if (_eligibility['payer_name'] != null) ...[
@@ -2351,11 +2191,11 @@ class _CareChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ActionChip(
-      avatar: Icon(icon, size: 16, color: const Color(0xFF8B5CF6)),
-      label: Text(label, style: GoogleFonts.roboto(fontWeight: FontWeight.w600, fontSize: 12)),
+      avatar: Icon(icon, size: 16, color: AdminPalette.cyan),
+      label: Text(label, style: adminSans(weight: FontWeight.w600, size: 12)),
       onPressed: onTap,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: Color(0xFFE2E8F0)),
+      backgroundColor: AdminPalette.glass,
+      side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
     );
   }
 }

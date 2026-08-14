@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/appointment.dart';
+import '../admin/admin_chrome.dart';
 import 'doctor_workspace.dart';
 
 class DoctorQueueTab extends StatelessWidget {
@@ -58,7 +59,7 @@ class DoctorQueueTab extends StatelessWidget {
           onStart: () => onUpdateStatus(next, next.status.toLowerCase() == 'arrived' ? 'consulting' : 'arrived'),
         ).animate().fadeIn(duration: 300.ms),
         const SizedBox(height: 16),
-        Text('Waiting (${rest.length})', style: GoogleFonts.roboto(fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+        Text('Waiting (${rest.length})', style: adminSans(weight: FontWeight.w800, size: 14)),
         const SizedBox(height: 8),
         if (rest.isEmpty)
           Text('No one else is waiting.', style: GoogleFonts.roboto(color: const Color(0xFF94A3B8), fontSize: 13)),
@@ -99,22 +100,15 @@ class _NextPatientCockpit extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AdminGlass(
+      glow: AdminPalette.cyan,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF312E81)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('NEXT PATIENT', style: GoogleFonts.roboto(color: const Color(0xFF5EEAD4), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+          Text('NEXT PATIENT', style: adminSans(color: AdminPalette.cyan, size: 11, weight: FontWeight.w800, letterSpacing: 1.2)),
           const SizedBox(height: 8),
-          Text(appointment.fullName, style: GoogleFonts.roboto(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(appointment.fullName, style: adminSerif(size: 24, weight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(
             [
@@ -184,14 +178,10 @@ class _QueueRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AdminGlass(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -207,7 +197,7 @@ class _QueueRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(apt.fullName, style: GoogleFonts.roboto(fontWeight: FontWeight.w700)),
+                    Text(apt.fullName, style: adminSans(weight: FontWeight.w700, size: 14)),
                     Text(
                       '${apt.consultType ?? apt.service ?? 'Visit'} · ${apt.preferredTime}',
                       style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 12),
@@ -230,6 +220,7 @@ class _QueueRow extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

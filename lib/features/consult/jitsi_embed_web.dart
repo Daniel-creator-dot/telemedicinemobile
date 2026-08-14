@@ -41,9 +41,11 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
     super.initState();
     _viewType = 'digi-jitsi-${identityHashCode(this)}-${DateTime.now().microsecondsSinceEpoch}';
 
+    final normalized = normalizeJitsiMeetingUrl(widget.meetingUrl);
     final htmlDoc = buildJitsiHostHtml(
-      roomName: jitsiRoomNameFromUrl(widget.meetingUrl),
+      roomName: jitsiRoomNameFromUrl(normalized),
       displayName: widget.displayName,
+      domain: digiJitsiDomainFromUrl(normalized),
       startAudioMuted: widget.startAudioMuted,
       startVideoMuted: widget.startVideoMuted,
     );
@@ -52,8 +54,21 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
       ..style.border = 'none'
       ..style.width = '100%'
       ..style.height = '100%'
-      ..allow = 'camera; microphone; fullscreen; display-capture; autoplay'
+      ..allow = 'camera *; microphone *; fullscreen *; display-capture *; autoplay *'
+      ..setAttribute(
+        'allow',
+        'camera *; microphone *; fullscreen *; display-capture *; autoplay *',
+      )
       ..allowFullscreen = true;
+
+    // Warm parent-page media permission so nested Jitsi iframes can use devices.
+    try {
+      html.window.navigator.mediaDevices?.getUserMedia({'audio': true, 'video': true}).then((stream) {
+        for (final track in stream.getTracks()) {
+          track.stop();
+        }
+      });
+    } catch (_) {}
 
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) => _iframe);
 

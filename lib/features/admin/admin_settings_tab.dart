@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
+import 'admin_chrome.dart';
 
 class AdminSettingsTab extends StatelessWidget {
   const AdminSettingsTab({
@@ -28,71 +30,67 @@ class AdminSettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (opsSummary != null) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(16),
-              ),
+            AdminGlass(
+              glow: AdminPalette.cyan,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Operations snapshot', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const AdminLiveDot(),
+                      const SizedBox(width: 8),
+                      Text('Operations snapshot', style: adminSerif(size: 18)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   Text(
-                    'Active care programs: ${opsSummary!['active_programs'] ?? 0} · Vault records: ${opsSummary!['vault_documents'] ?? 0}',
-                    style: GoogleFonts.roboto(color: Colors.white70, fontSize: 13),
+                    'Active care programs: ${opsSummary!['active_programs'] ?? 0}  ·  Vault records: ${opsSummary!['vault_documents'] ?? 0}',
+                    style: adminSans(size: 13, color: AdminPalette.mute),
                   ),
                 ],
               ),
-            ),
+            ).animate().fadeIn(duration: 380.ms),
+            const SizedBox(height: 14),
           ],
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+          AdminGlass(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Clinic & SMS gateway', style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
+                Text('Clinic & SMS gateway', style: adminSerif(size: 20)),
+                const SizedBox(height: 6),
                 Text(
                   'The API key is never returned in full. Leave the masked field unchanged unless you are rotating the key.',
-                  style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 12),
+                  style: adminSans(size: 12, color: AdminPalette.mute, height: 1.4),
                 ),
-                const SizedBox(height: 12),
-                TextField(controller: clinicName, decoration: fieldDecoration('Clinic display name', Icons.home_work_outlined)),
+                const SizedBox(height: 14),
+                TextField(controller: clinicName, style: adminSans(), decoration: fieldDecoration('Clinic display name', Icons.home_work_outlined)),
                 const SizedBox(height: 10),
-                TextField(controller: smsBaseUrl, decoration: fieldDecoration('SMS gateway URL', Icons.link_rounded)),
+                TextField(controller: smsBaseUrl, style: adminSans(), decoration: fieldDecoration('SMS gateway URL', Icons.link_rounded)),
                 const SizedBox(height: 10),
-                TextField(controller: smsSenderId, decoration: fieldDecoration('Sender ID', Icons.abc_outlined)),
+                TextField(controller: smsSenderId, style: adminSans(), decoration: fieldDecoration('Sender ID', Icons.abc_outlined)),
                 const SizedBox(height: 10),
-                TextField(controller: smsApiKey, obscureText: true, decoration: fieldDecoration('Gateway API token', Icons.key_rounded)),
-                const SizedBox(height: 24),
-                Text('Paystack (same keys as Bytz Go)', style: GoogleFonts.roboto(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
+                TextField(controller: smsApiKey, obscureText: true, style: adminSans(), decoration: fieldDecoration('Gateway API token', Icons.key_rounded)),
+                const SizedBox(height: 22),
+                Text('Paystack', style: adminSerif(size: 20)),
+                const SizedBox(height: 6),
                 Text(
                   'Use a matching pair: pk_test_ with sk_test_, or pk_live_ with sk_live_. Secret is never returned in full.',
-                  style: GoogleFonts.roboto(color: const Color(0xFF64748B), fontSize: 12),
+                  style: adminSans(size: 12, color: AdminPalette.mute, height: 1.4),
                 ),
-                const SizedBox(height: 12),
-                TextField(controller: paystackPublicKey, decoration: fieldDecoration('Paystack public key (pk_…)', Icons.public_rounded)),
+                const SizedBox(height: 14),
+                TextField(controller: paystackPublicKey, style: adminSans(), decoration: fieldDecoration('Paystack public key (pk_…)', Icons.public_rounded)),
                 const SizedBox(height: 10),
-                TextField(controller: paystackSecretKey, obscureText: true, decoration: fieldDecoration('Paystack secret key (sk_…)', Icons.lock_rounded)),
-                const SizedBox(height: 20),
-                ElevatedButton(
+                TextField(controller: paystackSecretKey, obscureText: true, style: adminSans(), decoration: fieldDecoration('Paystack secret key (sk_…)', Icons.lock_rounded)),
+                const SizedBox(height: 18),
+                FilledButton(
                   onPressed: onSave,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00D2C4),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AdminPalette.cyan,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -100,7 +98,7 @@ class AdminSettingsTab extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+          ).animate().fadeIn(delay: 80.ms, duration: 400.ms),
         ],
       ),
     );

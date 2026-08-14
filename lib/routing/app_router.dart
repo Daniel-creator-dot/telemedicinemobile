@@ -39,8 +39,11 @@ import '../features/patient/followups_screen.dart';
 import '../features/ops/national_coverage_screen.dart';
 import '../models/appointment.dart';
 
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 GoRouter createAppRouter(Session session) {
   return GoRouter(
+    navigatorKey: appNavigatorKey,
     initialLocation: '/login',
     refreshListenable: session,
     redirect: (context, state) {

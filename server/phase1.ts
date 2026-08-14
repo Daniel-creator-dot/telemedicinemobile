@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from './db';
 import { checkOtpRateLimit, recordOtpFailure, assertAppointmentAccess } from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
-import { createSecureJitsiLink } from './jitsi';
+import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import { getActiveMembership } from './membership';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
@@ -302,9 +302,6 @@ export async function initPhase1Schema() {
 }
 
 async function ensureDemoClinicians() {
-  const existing = await query("SELECT COUNT(*) FROM users WHERE role = 'doctor'");
-  if (parseInt(existing.rows[0].count, 10) > 0) return;
-
   const hashed = await bcrypt.hash('staff123', 10);
   const clinicians = [
     {
@@ -337,19 +334,34 @@ async function ensureDemoClinicians() {
   ];
 
   for (const d of clinicians) {
-    const user = await query(
-      `INSERT INTO users (username, password, role, name) VALUES ($1, $2, 'doctor', $3) RETURNING id`,
-      [d.username, hashed, d.name]
-    );
-    await query(
-      `INSERT INTO doctors (
-         user_id, name, specialization, slot_duration, start_time, end_time,
-         title, languages, consultation_fee, years_experience, qualifications, biography, facility, is_active, is_online
-       ) VALUES ($1, $2, $3, 20, '08:00', '17:00', 'Dr', $4, $5, $6, 'MBChB, MWACP', $7, 'Digi Health Virtual Clinic', TRUE, TRUE)`,
-      [user.rows[0].id, d.name, d.spec, d.langs, d.fee, d.years, d.bio]
-    );
+    const found = await query('SELECT id FROM users WHERE username = $1', [d.username]);
+    let userId: number;
+    if (found.rows[0]) {
+      userId = found.rows[0].id;
+      await query(
+        `UPDATE users SET password = $1, role = 'doctor', name = $2 WHERE id = $3`,
+        [hashed, d.name, userId]
+      );
+    } else {
+      const user = await query(
+        `INSERT INTO users (username, password, role, name) VALUES ($1, $2, 'doctor', $3) RETURNING id`,
+        [d.username, hashed, d.name]
+      );
+      userId = user.rows[0].id;
+    }
+
+    const profile = await query('SELECT id FROM doctors WHERE user_id = $1', [userId]);
+    if (!profile.rows[0]) {
+      await query(
+        `INSERT INTO doctors (
+           user_id, name, specialization, slot_duration, start_time, end_time,
+           title, languages, consultation_fee, years_experience, qualifications, biography, facility, is_active, is_online
+         ) VALUES ($1, $2, $3, 20, '08:00', '17:00', 'Dr', $4, $5, $6, 'MBChB, MWACP', $7, 'Digi Health Virtual Clinic', TRUE, TRUE)`,
+        [userId, d.name, d.spec, d.langs, d.fee, d.years, d.bio]
+      );
+    }
   }
-  console.log('Demo clinicians created (dr_appiah / dr_mensah / dr_doe, password staff123)');
+  console.log('Demo clinicians ready (dr_appiah / dr_mensah / dr_doe, password staff123)');
 }
 
 async function nextPatientCode() {
@@ -758,6 +770,15 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
             [meetingLink, row.id]
           );
           row = updated.rows[0] ?? row;
+        } else {
+          const normalized = normalizeJitsiMeetingLink(row.meeting_link);
+          if (normalized && normalized !== row.meeting_link) {
+            const updated = await query(
+              'UPDATE appointments SET meeting_link = $1 WHERE id = $2 RETURNING *',
+              [normalized, row.id]
+            );
+            row = updated.rows[0] ?? { ...row, meeting_link: normalized };
+          }
         }
         return res.json({ already_in_queue: true, appointment: row });
       }

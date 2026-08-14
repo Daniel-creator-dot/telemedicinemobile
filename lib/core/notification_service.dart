@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import '../models/appointment.dart';
+import '../routing/app_router.dart';
 import 'api_client.dart';
 
 class NotificationService {
@@ -22,7 +27,7 @@ class NotificationService {
   // Register token with backend server
   Future<void> registerTokenWithBackend(ApiClient api) async {
     _apiClient = api;
-    final token = _fcmToken ?? await _messaging.getToken();
+    final token = _fcmToken ?? await _messaging.getToken().timeout(const Duration(seconds: 6));
     if (token == null || token.isEmpty) return;
     _fcmToken = token;
     
@@ -48,17 +53,17 @@ class NotificationService {
     
     // Request permission for iOS (only on non-web platforms)
     if (!kIsWeb) {
-      await _requestIOSPermission();
-      await _requestAndroidPermission();
+      await _requestIOSPermission().timeout(const Duration(seconds: 4));
+      await _requestAndroidPermission().timeout(const Duration(seconds: 4));
     }
 
     // Initialize local notifications (for foreground notifications) - only on mobile
     if (!kIsWeb) {
-      await _initializeLocalNotifications();
+      await _initializeLocalNotifications().timeout(const Duration(seconds: 4));
     }
 
-    // Get FCM token
-    await _getFCMToken();
+    // Get FCM token — can hang on emulators if Play Services is not ready
+    await _getFCMToken().timeout(const Duration(seconds: 6));
 
     // Configure message handlers
     _configureMessageHandlers();
@@ -125,14 +130,19 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _localNotifications.initialize(settings);
+    await _localNotifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (response) {
+        _openFromPayload(response.payload);
+      },
+    );
   }
 
   // Get FCM token
   Future<void> _getFCMToken() async {
     try {
       // Get the current FCM token
-      final token = await _messaging.getToken();
+      final token = await _messaging.getToken().timeout(const Duration(seconds: 6));
       _fcmToken = token;
       
       if (kDebugMode) {
@@ -231,18 +241,64 @@ class NotificationService {
         notification.title,
         notification.body,
         details,
-        payload: message.data.toString(),
+        payload: jsonEncode(message.data),
       );
     }
   }
 
   // Handle navigation based on notification data
+  String? _pendingRoute;
+
   void _handleNotificationNavigation(Map<String, dynamic> data) {
-    // TODO: Implement navigation logic based on notification data
-    // Example: Navigate to appointment details, consultation screen, etc.
-    if (kDebugMode) {
-      print('Navigate based on data: $data');
+    _pendingRoute = _routeFor(data);
+    flushPendingNavigation();
+  }
+
+  void _openFromPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map) {
+        _handleNotificationNavigation(Map<String, dynamic>.from(decoded));
+        return;
+      }
+    } catch (_) {}
+    if (payload.startsWith('/')) {
+      _pendingRoute = payload;
+      flushPendingNavigation();
     }
+  }
+
+  String _routeFor(Map<String, dynamic> data) {
+    final explicit = data['route']?.toString();
+    if (explicit != null && explicit.startsWith('/')) return explicit;
+    switch (data['type']?.toString()) {
+      case 'pharmacy':
+      case 'result':
+        return '/patient/records';
+      case 'referral':
+        return '/patient/phases';
+      case 'billing':
+        return '/patient/payments';
+      case 'account':
+        return '/patient/profile';
+      case 'appointment':
+        return '/patient';
+      default:
+        return '/patient/notifications';
+    }
+  }
+
+  void flushPendingNavigation() {
+    final route = _pendingRoute;
+    if (route == null) return;
+    final ctx = appNavigatorKey.currentContext;
+    if (ctx == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => flushPendingNavigation());
+      return;
+    }
+    _pendingRoute = null;
+    GoRouter.of(ctx).go(route);
   }
 
   // Subscribe to a topic
@@ -391,7 +447,11 @@ class NotificationService {
           title: 'Upcoming Telemedicine Appointment',
           body: 'Your appointment with ${appointment.doctorName ?? "your doctor"} starts in 30 minutes.',
           scheduledTime: reminderTime,
-          payload: appointment.meetingLink,
+          payload: jsonEncode({
+            'type': 'appointment',
+            'route': '/patient',
+            'appointment_id': appointment.id.toString(),
+          }),
         );
 
         if (kDebugMode) {
@@ -438,7 +498,11 @@ class NotificationService {
           title: 'Your Telemedicine Appointment is Due',
           body: 'Your appointment with ${appointment.doctorName ?? "your doctor"} is starting now. Tap to join the meeting.',
           scheduledTime: appointmentDateTime,
-          payload: appointment.meetingLink,
+          payload: jsonEncode({
+            'type': 'appointment',
+            'route': '/patient',
+            'appointment_id': appointment.id.toString(),
+          }),
         );
 
         if (kDebugMode) {

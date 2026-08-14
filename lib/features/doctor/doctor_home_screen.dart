@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/session.dart';
 import '../../models/appointment.dart';
+import '../admin/admin_chrome.dart';
 import '../consult/open_video_consult.dart';
 import '../patient/appointments_repository.dart';
 import '../patient/care_repository.dart';
@@ -305,23 +308,25 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(session, isDesktop),
-            Expanded(
-              child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF4F46E5),
-                      ),
-                    )
-                  : _error != null
-                  ? _buildError()
-                  : _buildContent(),
-            ),
-          ],
+      backgroundColor: AdminPalette.bg,
+      body: AdminMeshBackdrop(
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildTopBar(session, isDesktop),
+              Expanded(
+                child: _loading
+                    ? const AdminOrbitLoader(message: 'Opening clinic floor…')
+                    : _error != null
+                        ? _buildError()
+                        : AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 380),
+                            switchInCurve: Curves.easeOutCubic,
+                            child: KeyedSubtree(key: ValueKey(_tab), child: _buildContent()),
+                          ),
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: !isDesktop ? _buildBottomNav() : null,
@@ -332,30 +337,23 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     final active = _tab == tab;
     return GestureDetector(
       onTap: () => setState(() => _tab = tab),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: active ? const Color(0xFF4F46E5).withOpacity(0.08) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(999),
+          gradient: active ? const LinearGradient(colors: [AdminPalette.gold, Color(0xFFC4A574)]) : null,
+          color: active ? null : Colors.white.withValues(alpha: 0.04),
+          border: Border.all(color: active ? Colors.transparent : Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
-              size: 16,
-            ),
+            Icon(icon, color: active ? Colors.black : AdminPalette.mute, size: 15),
             const SizedBox(width: 6),
-            Text(
-              label,
-              style: GoogleFonts.roboto(
-                color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
-                fontWeight: active ? FontWeight.bold : FontWeight.w500,
-                fontSize: 12,
-              ),
-            ),
+            Text(label, style: adminSans(size: 12, weight: FontWeight.w800, color: active ? Colors.black : AdminPalette.mute)),
           ],
         ),
       ),
@@ -371,167 +369,127 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       _DoctorTab.reports: 'Reports & Analytics',
     };
 
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: isDesktop
-          ? Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF4F46E5).withOpacity(0.12),
-                    border: Border.all(
-                      color: const Color(0xFF4F46E5).withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.public_rounded,
-                    color: Color(0xFF4F46E5),
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Digi Health',
-                      style: GoogleFonts.roboto(
-                        color: Color(0xFF0F172A),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: AdminGlass(
+        radius: 20,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: isDesktop
+            ? Row(
+                children: [
+                  _clinicMark(),
+                  const SizedBox(width: 14),
+                  Container(width: 1, height: 28, color: Colors.white.withValues(alpha: 0.08)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          _headerTabItem('Floor', _DoctorTab.overview, Icons.dashboard_rounded),
+                          _headerTabItem('Bookings', _DoctorTab.appointments, Icons.calendar_month_rounded),
+                          _headerTabItem('Queue', _DoctorTab.queue, Icons.graphic_eq_rounded),
+                          _headerTabItem('Roster', _DoctorTab.doctors, Icons.people_alt_rounded),
+                          _headerTabItem('Pulse', _DoctorTab.reports, Icons.insights_rounded),
+                        ],
                       ),
                     ),
-                    Text(
-                      'Doctor Portal',
-                      style: GoogleFonts.roboto(
-                        color: Color(0xFF64748B),
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 20),
-                Container(width: 1, height: 24, color: const Color(0xFFE2E8F0)),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Row(
-                    children: [
-                      _headerTabItem('Dashboard', _DoctorTab.overview, Icons.dashboard_rounded),
-                      _headerTabItem('Appointments', _DoctorTab.appointments, Icons.calendar_month_rounded),
-                      _headerTabItem('Queue', _DoctorTab.queue, Icons.queue_rounded),
-                      _headerTabItem('Doctors', _DoctorTab.doctors, Icons.people_alt_rounded),
-                      _headerTabItem('Reports', _DoctorTab.reports, Icons.bar_chart_rounded),
-                    ],
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF4F46E5)),
-                  onPressed: _loadAll,
-                ),
-                const SizedBox(width: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: const Color(0xFFEEF2FF),
-                      child: Text(
-                        (session.user?.name ?? 'D')[0].toUpperCase(),
-                        style: GoogleFonts.roboto(
-                          color: Color(0xFF4F46E5),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      session.user?.name ?? 'Doctor',
-                      style: GoogleFonts.roboto(
-                        color: Color(0xFF0F172A),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-                Container(width: 1, height: 16, color: const Color(0xFFE2E8F0)),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'Logout',
-                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 20),
-                  onPressed: () async {
-                    await session.clear();
-                    if (mounted) context.go('/login');
-                  },
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF4F46E5).withOpacity(0.12),
-                    border: Border.all(
-                      color: const Color(0xFF4F46E5).withOpacity(0.3),
-                      width: 1.5,
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: AdminPalette.gold),
+                    onPressed: _loadAll,
+                  ),
+                  const SizedBox(width: 4),
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
+                    child: Text(
+                      (session.user?.name ?? 'D')[0].toUpperCase(),
+                      style: adminSans(size: 13, weight: FontWeight.w800, color: AdminPalette.gold),
                     ),
                   ),
-                  child: const Icon(
-                    Icons.public_rounded,
-                    color: Color(0xFF4F46E5),
-                    size: 18,
+                  const SizedBox(width: 8),
+                  Text(session.user?.name ?? 'Doctor', style: adminSans(size: 13, weight: FontWeight.w700)),
+                  IconButton(
+                    tooltip: 'Logout',
+                    icon: const Icon(Icons.logout_rounded, color: AdminPalette.rose, size: 20),
+                    onPressed: () async {
+                      await session.clear();
+                      if (mounted) context.go('/login');
+                    },
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  tabLabels[_tab]!,
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF4F46E5)),
-                  onPressed: _loadAll,
-                ),
-                const SizedBox(width: 4),
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: const Color(0xFFEEF2FF),
-                  child: Text(
-                    (session.user?.name ?? 'D')[0].toUpperCase(),
-                    style: GoogleFonts.roboto(
-                      color: Color(0xFF4F46E5),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
+                ],
+              )
+            : Row(
+                children: [
+                  _clinicMark(compact: true),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(tabLabels[_tab]!, style: adminSerif(size: 16, weight: FontWeight.w700)),
+                        Text('CLINIC FLOOR', style: adminSans(size: 9, weight: FontWeight.w800, color: AdminPalette.gold, letterSpacing: 1.4)),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-                  onPressed: () async {
-                    await session.clear();
-                    if (mounted) context.go('/login');
-                  },
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: AdminPalette.gold),
+                    onPressed: _loadAll,
+                  ),
+                  CircleAvatar(
+                    radius: 15,
+                    backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
+                    child: Text(
+                      (session.user?.name ?? 'D')[0].toUpperCase(),
+                      style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout_rounded, color: AdminPalette.rose, size: 18),
+                    onPressed: () async {
+                      await session.clear();
+                      if (mounted) context.go('/login');
+                    },
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _clinicMark({bool compact = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [AdminPalette.gold, AdminPalette.cyan],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            boxShadow: [BoxShadow(color: AdminPalette.gold.withValues(alpha: 0.45), blurRadius: 16)],
+          ),
+          child: const Icon(Icons.health_and_safety_rounded, color: Colors.black, size: 20),
+        ),
+        if (!compact) ...[
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Digi Health', style: adminSerif(size: 15, weight: FontWeight.w700)),
+              Text('CLINIC FLOOR', style: adminSans(size: 9, weight: FontWeight.w800, color: AdminPalette.gold, letterSpacing: 1.4)),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -543,55 +501,57 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       (_DoctorTab.doctors, Icons.people_alt_rounded, 'Doctors'),
       (_DoctorTab.reports, Icons.bar_chart_rounded, 'Reports'),
     ];
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          )
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: items.map((item) {
-              final active = _tab == item.$1;
-              return GestureDetector(
-                onTap: () => setState(() => _tab = item.$1),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: active ? const Color(0xFF4F46E5).withOpacity(0.15) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        item.$2,
-                        size: 20,
-                        color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
+        top: false,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xCC0C1422),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                boxShadow: [
+                  BoxShadow(color: AdminPalette.gold.withValues(alpha: 0.12), blurRadius: 30, offset: const Offset(0, -4)),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: items.map((item) {
+                  final active = _tab == item.$1;
+                  return GestureDetector(
+                    onTap: () => setState(() => _tab = item.$1),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 240),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        gradient: active ? const LinearGradient(colors: [AdminPalette.gold, Color(0xFFC4A574)]) : null,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.$3,
-                        style: GoogleFonts.roboto(
-                          fontSize: 9,
-                          fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                          color: active ? const Color(0xFF4F46E5) : const Color(0xFF64748B),
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(item.$2, size: 20, color: active ? Colors.black : AdminPalette.mute),
+                          const SizedBox(height: 3),
+                          Text(
+                            item.$3,
+                            style: adminSans(
+                              size: 10,
+                              weight: FontWeight.w800,
+                              color: active ? Colors.black : AdminPalette.mute,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
           ),
         ),
       ),
@@ -607,73 +567,12 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     String? backgroundImage,
     Color? overlayColor,
   }) {
-    return InkWell(
+    return AdminActionTile(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.25), width: 1.2),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Background image (faded texture)
-              if (backgroundImage != null)
-                Image.asset(backgroundImage, fit: BoxFit.cover),
-
-              // Light overlay — image shows through with a bright wash
-              Container(
-                color: backgroundImage != null
-                    ? Colors.white.withOpacity(0.15)
-                    : color.withOpacity(0.06),
-              ),
-
-              // Foreground content
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.20),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, color: color, size: 18),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.roboto(
-                        color: color,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.roboto(
-                        color: color.withOpacity(0.80),
-                        fontSize: 9,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -697,69 +596,45 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
   Widget _buildError() {
     return Center(
-      child: Container(
-        padding: const EdgeInsets.all(32),
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF4F46E5).withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4F46E5).withOpacity(0.1),
-                shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: AdminGlass(
+          glow: AdminPalette.gold,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [AdminPalette.gold.withValues(alpha: 0.35), AdminPalette.cyan.withValues(alpha: 0.2)],
+                  ),
+                ),
+                child: const Icon(Icons.wifi_off_rounded, color: AdminPalette.gold, size: 42),
               ),
-              child: const Icon(
-                Icons.wifi_off_rounded,
-                color: Color(0xFF4F46E5),
-                size: 48,
+              const SizedBox(height: 18),
+              Text('Clinic floor is offline', style: adminSerif(size: 20, weight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(
+                'Check the connection and sync the floor again.',
+                style: adminSans(size: 13, color: AdminPalette.mute),
+                textAlign: TextAlign.center,
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Failed to load data',
-              style: GoogleFonts.roboto(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                onPressed: _loadAll,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AdminPalette.gold,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Please check your connection and try again',
-              style: GoogleFonts.roboto(
-                color: const Color(0xFF64748B),
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadAll,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                elevation: 4,
-                shadowColor: const Color(0xFF4F46E5).withOpacity(0.4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -792,7 +667,6 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         return rank(a.status).compareTo(rank(b.status));
       });
     final activeConsult = liveVideo.isEmpty ? null : liveVideo.first;
-    final trends = _stats['trends'] as List<dynamic>? ?? [];
     final workload = _stats['workload'] as List<dynamic>? ?? [];
     final session = context.watch<Session>();
     final greeting = _getGreeting();
@@ -806,14 +680,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           // ── Welcome Banner with Image ─────────────────────────────────────
           Container(
             margin: const EdgeInsets.only(bottom: 20),
-            height: 180,
+            height: 188,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF4F46E5).withOpacity(0.25),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
+                  color: AdminPalette.gold.withValues(alpha: 0.28),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
@@ -830,8 +704,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFF0F172A).withOpacity(0.95),
-                          const Color(0xFF4F46E5).withOpacity(0.45),
+                          const Color(0xFF070B14).withValues(alpha: 0.92),
+                          AdminPalette.gold.withValues(alpha: 0.22),
                           Colors.transparent,
                         ],
                         begin: Alignment.centerLeft,
@@ -840,86 +714,38 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(22),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          '$greeting,',
-                          style: GoogleFonts.roboto(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.5,
-                          ),
+                        Row(
+                          children: [
+                            const AdminLiveDot(color: AdminPalette.gold),
+                            const SizedBox(width: 8),
+                            Text(
+                              '$greeting,',
+                              style: adminSans(size: 12, weight: FontWeight.w600, color: AdminPalette.mute, letterSpacing: 0.4),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           (session.user?.name != null)
                               ? (session.user!.name.toLowerCase().startsWith('dr.')
                                   ? session.user!.name
                                   : 'Dr. ${session.user!.name}')
                               : 'Doctor',
-                          style: GoogleFonts.roboto(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                          ),
+                          style: adminSerif(size: 28, weight: FontWeight.w700, letterSpacing: -0.6),
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.08),
-                            ),
-                          ),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.calendar_today_rounded, color: Color(0xFF00D2C4), size: 12),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '$_todayCount appointments today',
-                                    style: GoogleFonts.roboto(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                                  ),
-                                ],
-                              ),
-                              if (!isMobile)
-                                Container(
-                                  width: 1,
-                                  height: 16,
-                                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(1),
-                                  ),
-                                ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.hourglass_top_rounded, color: Colors.amber, size: 12),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '$_pendingCount pending',
-                                    style: GoogleFonts.roboto(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w700),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            AdminStatusChip(label: '$_todayCount today', color: AdminPalette.cyan),
+                            AdminStatusChip(label: '$_pendingCount pending', color: AdminPalette.gold),
+                          ],
                         ),
                       ],
                     ),
@@ -1191,18 +1017,26 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               },
             ),
 
-          SwitchListTile(
-            value: _online,
-            onChanged: (v) async {
-              setState(() => _online = v);
-              try {
-                await context.read<CareRepository>().setDoctorOnline(v);
-              } catch (_) {}
-            },
-            title: Text('Available for Consult Now', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
-            subtitle: Text(_online ? 'Patients can be matched to you now' : 'Go online to receive live queue patients'),
-            activeColor: const Color(0xFF22C55E),
+          AdminGlass(
+            glow: _online ? AdminPalette.lime : AdminPalette.line,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: SwitchListTile(
+              value: _online,
+              onChanged: (v) async {
+                setState(() => _online = v);
+                try {
+                  await context.read<CareRepository>().setDoctorOnline(v);
+                } catch (_) {}
+              },
+              title: Text('Available for Consult Now', style: adminSans(size: 14, weight: FontWeight.w800)),
+              subtitle: Text(
+                _online ? 'Patients can be matched to you now' : 'Go online to receive live queue patients',
+                style: adminSans(size: 12, color: AdminPalette.mute),
+              ),
+              activeThumbColor: AdminPalette.lime,
+            ),
           ),
+          const SizedBox(height: 16),
 
           // ── Quick Actions Grid ──────────────────────────────────────────────
           if (_referrals.isNotEmpty) ...[
@@ -1217,7 +1051,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             crossAxisCount: isMobile ? 2 : 4,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: isMobile ? 1.5 : 2.0,
+            childAspectRatio: isMobile ? 1.05 : 1.35,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             children: [
@@ -1266,7 +1100,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: isMobile ? 0.95 : 1.15,
+            childAspectRatio: isMobile ? 1.05 : 1.2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             children: [
@@ -1305,49 +1139,32 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           // ── Live Appointment Table ─────────────────────────────────────────
           _sectionHeader('Live Appointment View'),
           const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F172A).withOpacity(0.02),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: _getLiveAppointmentsList().isEmpty
-                  ? Padding(
-                      padding: EdgeInsets.all(40),
-                      child: Center(
-                        child: Text(
-                          'No live appointments scheduled for today',
-                          style: GoogleFonts.roboto(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 13,
-                          ),
-                        ),
+          AdminGlass(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: _getLiveAppointmentsList().isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(
+                      child: Text(
+                        'No live appointments scheduled for today',
+                        style: adminSans(size: 13, color: AdminPalette.mute),
                       ),
-                    )
-                  : ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _getLiveAppointmentsList().length,
-                      separatorBuilder: (context, index) => const Divider(
-                        color: Color(0xFFF1F5F9),
-                        height: 1,
-                        thickness: 1,
-                      ),
-                      itemBuilder: (context, index) {
-                        final apt = _getLiveAppointmentsList()[index];
-                        return _liveRow(apt);
-                      },
                     ),
-            ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _getLiveAppointmentsList().length,
+                    separatorBuilder: (context, index) => Divider(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      height: 1,
+                      thickness: 1,
+                    ),
+                    itemBuilder: (context, index) {
+                      final apt = _getLiveAppointmentsList()[index];
+                      return _liveRow(apt);
+                    },
+                  ),
           ).animate().fadeIn(duration: 300.ms, delay: 200.ms),
           const SizedBox(height: 20),
 
@@ -1355,59 +1172,28 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           if (workload.isNotEmpty) ...[
             _sectionHeader('Doctor Workload (Today)'),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
+            AdminGlass(
               child: Column(
-                children: workload.map((w) {
-                  final name = w['name']?.toString() ?? '';
-                  final count =
-                      int.tryParse(w['count']?.toString() ?? '0') ?? 0;
-                  final pct = (count / 20.0).clamp(0.0, 1.0);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              name,
-                              style: GoogleFonts.roboto(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            Text(
-                              '$count Patients',
-                              style: GoogleFonts.roboto(
-                                color: const Color(0xFF64748B),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: pct,
-                            backgroundColor: const Color(0xFFF1F5F9),
-                            valueColor: const AlwaysStoppedAnimation(
-                              Color(0xFF4F46E5),
-                            ),
-                            minHeight: 8,
+                children: [
+                  for (final w in workload) ...[
+                    Builder(
+                      builder: (_) {
+                        final name = w['name']?.toString() ?? '';
+                        final count = int.tryParse(w['count']?.toString() ?? '0') ?? 0;
+                        final pct = (count / 20.0).clamp(0.0, 1.0);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: AdminGlowBar(
+                            label: name,
+                            pct: pct,
+                            color: AdminPalette.gold,
+                            trailing: '$count pts',
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                }).toList(),
+                  ],
+                ],
               ),
             ),
           ],
@@ -1493,187 +1279,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     Color accent,
     Color bg,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 600;
-
-    Widget? trendWidget;
-    if (label.toLowerCase().contains("today")) {
-      trendWidget = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.trending_up_rounded,
-            color: Color(0xFF16A34A),
-            size: 12,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Active schedule',
-            style: GoogleFonts.roboto(
-              color: const Color(0xFF16A34A),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      );
-    } else if (label.toLowerCase().contains("pending")) {
-      trendWidget = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.notification_important_rounded,
-            color: Color(0xFFD97706),
-            size: 12,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Needs review',
-            style: GoogleFonts.roboto(
-              color: const Color(0xFFD97706),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      );
-    } else if (label.toLowerCase().contains("completed")) {
-      trendWidget = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.task_alt_rounded,
-            color: Color(0xFF16A34A),
-            size: 12,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Finished today',
-            style: GoogleFonts.roboto(
-              color: const Color(0xFF16A34A),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      );
-    } else {
-      trendWidget = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.show_chart_rounded,
-            color: Color(0xFF4F46E5),
-            size: 12,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '+8% this week',
-            style: GoogleFonts.roboto(
-              color: const Color(0xFF4F46E5),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      );
-    }
-
-    final cardPadding = isMobile ? 12.0 : 16.0;
-
-    return Container(
-      padding: EdgeInsets.all(cardPadding),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.015),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top Row: Icon Container and a small indicator dot
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                width: isMobile ? 38 : 44,
-                height: isMobile ? 38 : 44,
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(isMobile ? 10 : 14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Icon(icon, color: accent, size: isMobile ? 18 : 20),
-              ),
-              // Small status dot indicator
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.4),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          // Value
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.roboto(
-              color: const Color(0xFF0F172A),
-              fontSize: isMobile ? 26 : 30,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -1,
-            ),
-          ),
-          const SizedBox(height: 2),
-          // Label
-          Text(
-            label,
-            style: GoogleFonts.roboto(
-              color: Color(0xFF64748B),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (trendWidget != null) ...[
-            const SizedBox(height: 6),
-            // Trend badge at the bottom
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: bg.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: trendWidget,
-            ),
-          ],
-        ],
-      ),
-    );
+    return AdminKpiCard(label: label, value: value, icon: icon, color: accent);
   }
 
   String _getInitials(String name) {
@@ -1734,13 +1340,13 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: const Color(0xFFEEF2FF),
+                  backgroundColor: AdminPalette.gold.withValues(alpha: 0.16),
                   child: Text(
                     _getInitials(apt.fullName),
-                    style: GoogleFonts.roboto(
-                      color: const Color(0xFF4F46E5),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                    style: adminSans(
+                      color: AdminPalette.gold,
+                      weight: FontWeight.w800,
+                      size: 14,
                     ),
                   ),
                 ),
@@ -1773,10 +1379,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                           softWrap: false,
-                          style: GoogleFonts.roboto(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: const Color(0xFF0F172A),
+                          style: adminSans(
+                            weight: FontWeight.w700,
+                            size: 15,
                           ),
                         ),
                       ),
@@ -1816,10 +1421,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                       Text(
                         apt.preferredTime,
-                        style: GoogleFonts.roboto(
-                          color: const Color(0xFF475569),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                        style: adminSans(
+                          color: AdminPalette.mute,
+                          size: 11,
+                          weight: FontWeight.w600,
                         ),
                       ),
                       Container(
@@ -2057,11 +1662,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'All Appointments',
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: const Color(0xFF0F172A),
-                  ),
+                  style: adminSans(weight: FontWeight.w800, size: 15),
                 ),
                 const Spacer(),
                 Container(
@@ -2093,13 +1694,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   Widget _appointmentCard(Appointment apt) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AdminGlass(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2115,11 +1712,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     children: [
                       Text(
                         apt.fullName,
-                        style: GoogleFonts.roboto(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: const Color(0xFF0F172A),
-                        ),
+                        style: adminSans(weight: FontWeight.w800, size: 15),
                       ),
                       if (apt.whoIsComing != null &&
                           apt.whoIsComing!.isNotEmpty)
@@ -2171,7 +1764,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -2184,10 +1777,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 5),
                 Text(
                   _fmtDate(apt.preferredDate),
-                  style: GoogleFonts.roboto(
-                    fontSize: 11,
-                    color: const Color(0xFF475569),
-                  ),
+                  style: adminSans(size: 11, color: AdminPalette.mute),
                 ),
                 const SizedBox(width: 8),
                 const Icon(
@@ -2198,10 +1788,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 5),
                 Text(
                   apt.preferredTime,
-                  style: GoogleFonts.roboto(
-                    fontSize: 11,
-                    color: const Color(0xFF475569),
-                  ),
+                  style: adminSans(size: 11, color: AdminPalette.mute),
                 ),
                 const SizedBox(width: 8),
                 if (apt.doctorName != null) ...[
@@ -2209,10 +1796,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   Flexible(
                     child: Text(
                       apt.doctorName!,
-                      style: GoogleFonts.roboto(
-                        fontSize: 11,
-                        color: const Color(0xFF475569),
-                        fontWeight: FontWeight.w600,
+                      style: adminSans(
+                        size: 11,
+                        color: AdminPalette.mute,
+                        weight: FontWeight.w600,
                       ),
                       textAlign: TextAlign.right,
                       overflow: TextOverflow.ellipsis,
@@ -2236,15 +1823,15 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         apt.service!,
-                        style: GoogleFonts.roboto(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF475569),
+                        style: adminSans(
+                          size: 10,
+                          weight: FontWeight.w700,
+                          color: AdminPalette.mute,
                         ),
                       ),
                     ),
@@ -2371,6 +1958,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           ),
         ],
       ),
+    ),
     ).animate().fadeIn(duration: 250.ms);
   }
 
@@ -2576,11 +2164,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'All Doctors',
-                  style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: const Color(0xFF0F172A),
-                  ),
+                  style: adminSans(weight: FontWeight.w800, size: 15),
                 ),
                 const Spacer(),
                 Container(
@@ -2618,27 +2202,23 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         .map((p) => p.isNotEmpty ? p[0] : '')
         .take(2)
         .join();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AdminGlass(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
       child: Column(
         children: [
           Row(
             children: [
               CircleAvatar(
                 radius: 26,
-                backgroundColor: const Color(0xFFEEF2FF),
+                backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
                 child: Text(
                   initials,
-                  style: GoogleFonts.roboto(
-                    color: Color(0xFF4F46E5),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                  style: adminSans(
+                    color: AdminPalette.gold,
+                    weight: FontWeight.w800,
+                    size: 16,
                   ),
                 ),
               ),
@@ -2649,18 +2229,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   children: [
                     Text(
                       doc['name']?.toString() ?? '',
-                      style: GoogleFonts.roboto(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: Color(0xFF0F172A),
-                      ),
+                      style: adminSans(weight: FontWeight.w800, size: 15),
                     ),
                     Text(
                       doc['specialization']?.toString() ?? '',
-                      style: GoogleFonts.roboto(
-                        color: Color(0xFF64748B),
-                        fontSize: 12,
-                      ),
+                      style: adminSans(color: AdminPalette.mute, size: 12),
                     ),
                   ],
                 ),
@@ -2695,7 +2268,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -2715,10 +2288,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                       Text(
                         '${doc['slot_duration']} mins',
-                        style: GoogleFonts.roboto(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
+                        style: adminSans(weight: FontWeight.w700, size: 14),
                       ),
                     ],
                   ),
@@ -2741,10 +2311,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         ),
                         Text(
                           '${doc['start_time']?.toString().substring(0, 5) ?? '--'} – ${doc['end_time']?.toString().substring(0, 5) ?? '--'}',
-                          style: GoogleFonts.roboto(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
+                          style: adminSans(weight: FontWeight.w700, size: 14),
                         ),
                       ],
                     ),
@@ -2755,6 +2322,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           ),
         ],
       ),
+    ),
     ).animate().fadeIn(duration: 200.ms);
   }
 
@@ -2773,11 +2341,6 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         int.tryParse(noShow['repeated_offenders']?.toString() ?? '0') ?? 0;
     final attendanceRate = total > 0 ? (completed / total) : 0.0;
     final noShowRate = total > 0 ? (missed / total) : 0.0;
-    final maxTrend = trends.isEmpty
-        ? 1.0
-        : trends
-              .map((t) => double.tryParse(t['count']?.toString() ?? '0') ?? 0.0)
-              .reduce((a, b) => a > b ? a : b);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -2786,103 +2349,25 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         children: [
           Text(
             'Reports & Analytics',
-            style: GoogleFonts.roboto(
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              color: const Color(0xFF0F172A),
-            ),
+            style: adminSerif(size: 22, weight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
 
           // Trends bar chart
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+          AdminGlass(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionHeader('Appointment Trends (Last 7 Days)'),
                 const SizedBox(height: 16),
-                SizedBox(
-                  height: 140,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: trends.isEmpty
-                        ? [
-                            Expanded(
-                              child: Center(
-                                child: Text(
-                                  'No data',
-                                  style: GoogleFonts.roboto(color: Color(0xFF94A3B8)),
-                                ),
-                              ),
-                            ),
-                          ]
-                        : trends.map<Widget>((t) {
-                            final count =
-                                double.tryParse(
-                                  t['count']?.toString() ?? '0',
-                                ) ??
-                                0.0;
-                            final h = maxTrend > 0 ? (count / maxTrend) : 0.0;
-                            return Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 3,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '${count.toInt()}',
-                                      style: GoogleFonts.roboto(
-                                        color: Color(0xFF94A3B8),
-                                        fontSize: 9,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      height: (h * 100).clamp(6.0, 100.0),
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF4F46E5),
-                                        borderRadius: BorderRadius.vertical(
-                                          top: Radius.circular(6),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      t['day']?.toString().toUpperCase() ?? '',
-                                      style: GoogleFonts.roboto(
-                                        color: Color(0xFF94A3B8),
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                  ),
-                ),
+                AdminTrendChart(trends: trends),
               ],
             ),
           ),
           const SizedBox(height: 14),
 
           // Attendance Rate
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+          AdminGlass(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2890,47 +2375,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: 1,
-                            strokeWidth: 12,
-                            color: const Color(0xFFF1F5F9),
-                          ),
-                          CircularProgressIndicator(
-                            value: attendanceRate.toDouble(),
-                            strokeWidth: 12,
-                            color: const Color(0xFF4F46E5),
-                            backgroundColor: Colors.transparent,
-                          ),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                '${(attendanceRate * 100).toInt()}%',
-                                style: GoogleFonts.roboto(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 20,
-                                  color: const Color(0xFF0F172A),
-                                ),
-                              ),
-                              Text(
-                                'Rate',
-                                style: GoogleFonts.roboto(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    AdminRingMetric(label: 'Rate', pct: attendanceRate.toDouble(), color: AdminPalette.gold),
                     const SizedBox(width: 20),
                     Expanded(
                       child: Column(
@@ -2938,17 +2383,17 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           _reportStatRow(
                             'Total Appointments',
                             '$total',
-                            const Color(0xFF4F46E5),
+                            AdminPalette.cyan,
                           ),
                           _reportStatRow(
                             'Completed',
                             '$completed',
-                            const Color(0xFF16A34A),
+                            AdminPalette.lime,
                           ),
                           _reportStatRow(
                             'Pending',
                             '$_pendingCount',
-                            const Color(0xFFD97706),
+                            AdminPalette.gold,
                           ),
                         ],
                       ),
@@ -2961,13 +2406,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           const SizedBox(height: 14),
 
           // No-show Analysis
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+          AdminGlass(
+            glow: AdminPalette.rose,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2979,16 +2419,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
+                        color: AdminPalette.rose.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         '${(noShowRate * 100).toInt()}%',
-                        style: GoogleFonts.roboto(
-                          color: Color(0xFFDC2626),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                        style: adminSans(
+                          color: AdminPalette.rose,
+                          weight: FontWeight.w800,
+                          size: 14,
                         ),
                       ),
                     ),
@@ -2998,17 +2438,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       children: [
                         Text(
                           'Overall No-Show Rate',
-                          style: GoogleFonts.roboto(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
+                          style: adminSans(weight: FontWeight.w700, size: 13),
                         ),
                         Text(
                           'Calculated from total appointments',
-                          style: GoogleFonts.roboto(
-                            color: Color(0xFF64748B),
-                            fontSize: 11,
-                          ),
+                          style: adminSans(color: AdminPalette.mute, size: 11),
                         ),
                       ],
                     ),
@@ -3021,7 +2455,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       child: _noShowStatBox(
                         'Missed',
                         '$missed',
-                        const Color(0xFFFEF2F2),
+                        AdminPalette.rose,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -3029,7 +2463,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       child: _noShowStatBox(
                         'Repeat Offenders',
                         '$repeated',
-                        const Color(0xFFFFF7ED),
+                        AdminPalette.gold,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -3037,7 +2471,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       child: _noShowStatBox(
                         'Restricted',
                         '0',
-                        const Color(0xFFF8FAFC),
+                        AdminPalette.mute,
                       ),
                     ),
                   ],
@@ -3050,29 +2484,25 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     );
   }
 
-  Widget _noShowStatBox(String label, String value, Color bg) {
+  Widget _noShowStatBox(String label, String value, Color accent) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: bg,
+        color: accent.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: GoogleFonts.roboto(
-              color: Color(0xFF64748B),
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-            ),
+            style: adminSans(color: AdminPalette.mute, size: 9, weight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: GoogleFonts.roboto(fontWeight: FontWeight.w800, fontSize: 20),
+            style: adminSerif(weight: FontWeight.w700, size: 20),
           ),
         ],
       ),
@@ -3098,13 +2528,13 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 11),
+                style: adminSans(color: AdminPalette.mute, size: 11),
               ),
             ],
           ),
           Text(
             value,
-            style: GoogleFonts.roboto(fontWeight: FontWeight.w800, fontSize: 13),
+            style: adminSans(weight: FontWeight.w800, size: 13),
           ),
         ],
       ),
@@ -3113,13 +2543,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
   Widget _sectionHeader(String title) {
     return Text(
-      title,
-      style: GoogleFonts.roboto(
-        color: Color(0xFF94A3B8),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.5,
-      ),
+      title.toUpperCase(),
+      style: adminSans(size: 11, weight: FontWeight.w800, color: AdminPalette.mute, letterSpacing: 1.2),
     );
   }
 

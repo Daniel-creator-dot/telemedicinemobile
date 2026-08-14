@@ -26,8 +26,8 @@ class Session extends ChangeNotifier {
 
   Future<void> restore() async {
     try {
-      final token = await _storage.read(key: _kToken);
-      final userJson = await _storage.read(key: _kUser);
+      final token = await _storage.read(key: _kToken).timeout(const Duration(seconds: 3));
+      final userJson = await _storage.read(key: _kUser).timeout(const Duration(seconds: 3));
       debugPrint('[SESSION] Token from storage: ${token != null ? 'Present' : 'Missing'}');
       debugPrint('[SESSION] User from storage: ${userJson != null ? 'Present' : 'Missing'}');
       

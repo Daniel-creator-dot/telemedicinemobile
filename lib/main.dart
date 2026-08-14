@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -14,21 +16,11 @@ import 'routing/app_router.dart';
 import 'shared/widgets/app_launch_carousel.dart';
 import 'firebase_options.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await NotificationService().initialize();
-  } catch (e) {
-    debugPrint('Firebase/notifications unavailable: $e');
-  }
 
   final api = ApiClient();
   final session = Session(api);
-  
   api.onUnauthorized = () => session.clear();
 
   runApp(
@@ -43,6 +35,19 @@ void main() async {
       child: const TelemedicineApp(),
     ),
   );
+
+  unawaited(_initPush());
+}
+
+Future<void> _initPush() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(const Duration(seconds: 6));
+    await NotificationService().initialize().timeout(const Duration(seconds: 8));
+  } catch (e) {
+    debugPrint('Firebase/notifications unavailable: $e');
+  }
 }
 
 class TelemedicineApp extends StatefulWidget {
@@ -68,8 +73,11 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
   Future<void> _boot() async {
     final started = DateTime.now();
     
-    // Restore user session from secure storage
-    await context.read<Session>().restore();
+    try {
+      await context.read<Session>().restore().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('Session restore timed out or failed: $e');
+    }
 
     if (mounted) {
       setState(() => _loadingMessage = 'Preparing your care workspace…');
@@ -82,6 +90,7 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
 
     if (mounted) {
       setState(() => _splashDone = true);
+      NotificationService().flushPendingNavigation();
     }
   }
 

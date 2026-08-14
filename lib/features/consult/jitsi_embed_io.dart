@@ -57,13 +57,16 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
     _room.switchCamera = () => _web.runJavaScript('switchCamera();');
     _room.hangup = () => _web.runJavaScript('hangup();');
 
+    final normalized = normalizeJitsiMeetingUrl(widget.meetingUrl);
+    final domain = digiJitsiDomainFromUrl(normalized);
     final html = buildJitsiHostHtml(
-      roomName: jitsiRoomNameFromUrl(widget.meetingUrl),
+      roomName: jitsiRoomNameFromUrl(normalized),
       displayName: widget.displayName,
+      domain: domain,
       startAudioMuted: widget.startAudioMuted,
       startVideoMuted: widget.startVideoMuted,
     );
-    _web.loadHtmlString(html, baseUrl: 'https://meet.jit.si/');
+    _web.loadHtmlString(html, baseUrl: 'https://$domain/');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onControllerReady?.call(_room);
