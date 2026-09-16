@@ -165,7 +165,110 @@ export async function initPhase5Schema() {
 
   await seedNationalNetwork();
   await linkCommercialAccounts();
+  await seedAdminAnalyticsDemo();
   console.log('Phase 5 schema ready');
+}
+
+/** Ensure national admin analytics has visits + claim rollups to demonstrate. */
+async function seedAdminAnalyticsDemo() {
+  try {
+    const patient = await query(
+      `SELECT id, full_name, phone_number, email FROM patients ORDER BY id ASC LIMIT 1`
+    );
+    if (!patient.rows[0]) return;
+    const p = patient.rows[0];
+
+    const doctor = await query(
+      `SELECT id FROM doctors WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC LIMIT 1`
+    );
+    const doctorId = doctor.rows[0]?.id || null;
+
+    const recent = await query(
+      `SELECT COUNT(*)::int AS n FROM appointments
+       WHERE preferred_date >= CURRENT_DATE - INTERVAL '6 days'`
+    );
+    if (Number(recent.rows[0]?.n || 0) < 5 && doctorId) {
+      const days: Array<{ offset: number; status: string; booking: string }> = [
+        { offset: 0, status: 'queued', booking: 'consult_now' },
+        { offset: 0, status: 'consulting', booking: 'consult_now' },
+        { offset: 0, status: 'completed', booking: 'scheduled' },
+        { offset: 1, status: 'completed', booking: 'scheduled' },
+        { offset: 2, status: 'missed', booking: 'scheduled' },
+        { offset: 3, status: 'completed', booking: 'scheduled' },
+        { offset: 5, status: 'cancelled', booking: 'scheduled' },
+      ];
+      for (const d of days) {
+        const code = `NA-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
+        await query(
+          `INSERT INTO appointments (
+             appointment_id, patient_id, full_name, phone_number, email, doctor_id,
+             preferred_date, preferred_time, status, priority, notes, service,
+             is_telemedicine, booking_type, consult_type
+           ) VALUES (
+             $1,$2,$3,$4,$5,$6,
+             CURRENT_DATE - ($7::int), '10:00:00', $8, 'normal',
+             'National analytics demo visit', 'general consultation',
+             TRUE, $9, 'general consultation'
+           )
+           ON CONFLICT (appointment_id) DO NOTHING`,
+          [
+            code,
+            p.id,
+            p.full_name,
+            p.phone_number,
+            p.email || null,
+            doctorId,
+            d.offset,
+            d.status,
+            d.booking,
+          ]
+        ).catch(() => null);
+      }
+    }
+
+    const claimCount = await query(`SELECT COUNT(*)::int AS n FROM claims`).catch(() => ({
+      rows: [{ n: 0 }],
+    }));
+    if (Number(claimCount.rows[0]?.n || 0) < 3) {
+      const apt = await query(
+        `SELECT id FROM appointments WHERE patient_id = $1 ORDER BY id DESC LIMIT 1`,
+        [p.id]
+      ).catch(() => ({ rows: [] as any[] }));
+      const appointmentId = apt.rows[0]?.id || null;
+      const demos: Array<{ amount: number; status: string; source: string }> = [
+        { amount: 45, status: 'submitted', source: 'insurance' },
+        { amount: 40, status: 'paid', source: 'insurance' },
+        { amount: 30, status: 'approved', source: 'corporate' },
+      ];
+      for (const demo of demos) {
+        const seq = await query(`SELECT nextval('claim_code_seq') AS n`).catch(() => null);
+        if (!seq?.rows[0]) break;
+        const claimCode = `CLM-NA-${String(seq.rows[0].n).padStart(5, '0')}`;
+        await query(
+          `INSERT INTO claims (claim_code, appointment_id, patient_id, source, amount, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, 'National admin analytics demo claim')`,
+          [claimCode, appointmentId, p.id, demo.source, demo.amount, demo.status]
+        ).catch(() => null);
+      }
+    }
+
+    const alerts = await query(
+      `SELECT COUNT(*)::int AS n FROM risk_alerts WHERE status = 'open'`
+    ).catch(() => ({ rows: [{ n: 0 }] }));
+    if (Number(alerts.rows[0]?.n || 0) === 0) {
+      await query(
+        `INSERT INTO risk_alerts (patient_id, severity, title, detail, source, status)
+         VALUES ($1, 'warning', 'Demo elevated BP reading',
+                 'Seeded for national admin analytics — assistive, not a diagnosis.',
+                 'demo', 'open')`,
+        [p.id]
+      ).catch(() => null);
+    }
+
+    console.log('Admin national analytics demo ready (admin → Nation Pulse)');
+  } catch (err) {
+    console.warn('Admin analytics demo seed skipped', err);
+  }
 }
 
 const NATIONAL_PARTNERS: {
@@ -513,6 +616,181 @@ export function registerPhase5Routes(app: Express) {
         audit_last_24h: recentAudit.rows[0]?.count || 0,
         appointments_today: queue.rows,
         regions: GHANA_REGIONS.length,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Unified national admin analytics: visits + claims + partners + live queue. */
+  app.get('/api/admin/analytics', authenticate, requireRoles('admin'), async (_req, res) => {
+    try {
+      const [
+        visitsToday,
+        visits7d,
+        visitTrend,
+        visitsByType,
+        claimsByStatus,
+        claimsBySource,
+        claimsTotals,
+        partnersByType,
+        partnerMeta,
+        queueLive,
+        programs,
+        alertMeta,
+        audit24h,
+      ] = await Promise.all([
+        query(
+          `SELECT status, COUNT(*)::int AS count FROM appointments
+           WHERE preferred_date = CURRENT_DATE GROUP BY status`
+        ),
+        query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+             COUNT(*) FILTER (WHERE status IN ('pending','queued','approved','arrived','consulting'))::int AS open,
+             COUNT(*) FILTER (WHERE status = 'missed')::int AS missed,
+             COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+           FROM appointments
+           WHERE preferred_date >= CURRENT_DATE - INTERVAL '6 days'`
+        ),
+        query(
+          `SELECT preferred_date::text AS day,
+                  COUNT(*)::int AS total,
+                  COUNT(*) FILTER (WHERE status = 'completed')::int AS completed
+           FROM appointments
+           WHERE preferred_date >= CURRENT_DATE - INTERVAL '6 days'
+           GROUP BY preferred_date
+           ORDER BY preferred_date ASC`
+        ),
+        query(
+          `SELECT COALESCE(booking_type, 'scheduled') AS booking_type, COUNT(*)::int AS count
+           FROM appointments
+           WHERE preferred_date >= CURRENT_DATE - INTERVAL '6 days'
+           GROUP BY 1 ORDER BY count DESC`
+        ),
+        query(
+          `SELECT status, COUNT(*)::int AS count, COALESCE(SUM(amount),0)::float AS amount
+           FROM claims GROUP BY status ORDER BY count DESC`
+        ).catch(() => ({ rows: [] as any[] })),
+        query(
+          `SELECT COALESCE(source, 'unknown') AS source, COUNT(*)::int AS count,
+                  COALESCE(SUM(amount),0)::float AS amount
+           FROM claims GROUP BY 1 ORDER BY count DESC`
+        ).catch(() => ({ rows: [] as any[] })),
+        query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status IN ('submitted','queried'))::int AS open,
+             COUNT(*) FILTER (WHERE status = 'paid')::int AS paid,
+             COALESCE(SUM(amount) FILTER (WHERE status = 'paid' AND COALESCE(paid_at, submitted_at) > NOW() - INTERVAL '30 days'),0)::float AS paid_30d_amount
+           FROM claims`
+        ).catch(() => ({
+          rows: [{ total: 0, open: 0, paid: 0, paid_30d_amount: 0 }],
+        })),
+        query(
+          `SELECT type, COUNT(*)::int AS count FROM partner_orgs WHERE is_active = TRUE GROUP BY type`
+        ),
+        query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(DISTINCT region)::int AS regions_covered,
+             COUNT(*) FILTER (WHERE COALESCE(network_status, 'online') = 'online')::int AS online,
+             COUNT(*) FILTER (WHERE COALESCE(network_status, 'online') = 'busy')::int AS busy
+           FROM partner_orgs WHERE is_active = TRUE`
+        ).catch(() =>
+          query(
+            `SELECT COUNT(*)::int AS total, COUNT(DISTINCT region)::int AS regions_covered,
+                    COUNT(*)::int AS online, 0::int AS busy
+             FROM partner_orgs WHERE is_active = TRUE`
+          )
+        ),
+        query(`
+          SELECT
+            (SELECT COUNT(*)::int FROM doctors
+              WHERE is_active = TRUE
+                AND COALESCE(is_online, FALSE) = TRUE
+                AND last_seen_at IS NOT NULL
+                AND last_seen_at > NOW() - INTERVAL '90 seconds') AS doctors_online,
+            (SELECT COUNT(*)::int FROM appointments WHERE status = 'consulting') AS consulting_now,
+            (SELECT COUNT(*)::int FROM appointments
+              WHERE COALESCE(booking_type,'scheduled') = 'consult_now'
+                AND status IN ('queued','pending','approved')) AS patients_waiting,
+            (SELECT COALESCE(AVG(eta_minutes), 0)::float FROM appointments
+              WHERE COALESCE(booking_type,'scheduled') = 'consult_now'
+                AND status IN ('queued','pending')) AS avg_wait,
+            (SELECT COUNT(*)::int FROM appointments
+              WHERE preferred_date = CURRENT_DATE AND status = 'completed') AS completed_today,
+            (SELECT COUNT(*)::int FROM appointments
+              WHERE preferred_date = CURRENT_DATE AND status = 'missed') AS missed_today,
+            (SELECT COUNT(*)::int FROM lab_requests
+              WHERE status NOT IN ('completed','cancelled')) AS pending_labs,
+            (SELECT COUNT(*)::int FROM scan_requests
+              WHERE status NOT IN ('completed','cancelled')) AS pending_scans,
+            (SELECT COUNT(*)::int FROM prescriptions
+              WHERE COALESCE(dispense_status,'unsent') IN ('sent','received','preparing','ready')) AS pending_pharmacy,
+            (SELECT COUNT(*)::int FROM referrals
+              WHERE status NOT IN ('completed','declined')) AS open_referrals
+        `),
+        query(`SELECT COUNT(*)::int AS n FROM chronic_programs WHERE status = 'active'`).catch(() => ({
+          rows: [{ n: 0 }],
+        })),
+        query(
+          `SELECT severity, COUNT(*)::int AS count
+           FROM risk_alerts WHERE status = 'open' GROUP BY severity`
+        ).catch(() => ({ rows: [] as any[] })),
+        query(
+          `SELECT COUNT(*)::int AS count FROM audit_log WHERE created_at > NOW() - INTERVAL '24 hours'`
+        ).catch(() => ({ rows: [{ count: 0 }] })),
+      ]);
+
+      const openAlerts = alertMeta.rows.reduce(
+        (s: number, r: any) => s + Number(r.count || 0),
+        0
+      );
+
+      res.json({
+        generated_at: new Date().toISOString(),
+        visits: {
+          today: visitsToday.rows,
+          last_7d: visits7d.rows[0] || {
+            total: 0,
+            completed: 0,
+            open: 0,
+            missed: 0,
+            cancelled: 0,
+          },
+          trend_7d: visitTrend.rows,
+          by_type: visitsByType.rows,
+        },
+        claims: {
+          by_status: claimsByStatus.rows,
+          by_source: claimsBySource.rows,
+          ...(claimsTotals.rows[0] || { total: 0, open: 0, paid: 0, paid_30d_amount: 0 }),
+        },
+        partners: {
+          by_type: partnersByType.rows,
+          regions_total: GHANA_REGIONS.length,
+          ...(partnerMeta.rows[0] || {
+            total: 0,
+            regions_covered: 0,
+            online: 0,
+            busy: 0,
+          }),
+        },
+        queue: queueLive.rows[0] || {},
+        programs: { active: programs.rows[0]?.n || 0 },
+        alerts: {
+          open: openAlerts,
+          by_severity: alertMeta.rows.map((r: any) => ({
+            severity: r.severity,
+            count: Number(r.count || 0),
+          })),
+        },
+        audit_last_24h: audit24h.rows[0]?.count || 0,
+        note:
+          'National admin rollup across clinic visits, insurer/corporate claims, partner network, and live queue. Tenant desks remain org-scoped.',
       });
     } catch (err) {
       console.error(err);

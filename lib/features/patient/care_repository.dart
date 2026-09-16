@@ -446,6 +446,11 @@ class CareRepository {
     return res.data ?? {};
   }
 
+  Future<Map<String, dynamic>> adminNationalAnalytics() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/admin/analytics');
+    return res.data ?? {};
+  }
+
   Future<Map<String, dynamic>> networkCoverage() async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/network/coverage');
     return res.data ?? {};

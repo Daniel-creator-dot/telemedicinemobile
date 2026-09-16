@@ -69,7 +69,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Insurance | `insurance` / `insure123` | Claims desk: approve / query / deny / pay |
 | Finance | `finance` / `fin123` | Receipts, reconcile, settlements |
 | Hospital | `hospital` / `hosp123` | Network desk: inbound/outbound referrals, capacity, partners |
-| Admin | `admin` | Staff, doctors, settings, analytics, support, national net |
+| Admin | `admin` / `admin` | Staff, doctors, clinic Pulse, **Nation Pulse** (visits/claims/partners/queue), support, national net |
 | Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
 
 Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `pharmacy`/`pharm123`, `imaging`/`image123`, `hospital`/`hosp123`, `support`/`support123`, `corporate`/`corp123`, `insurance`/`insure123`, `finance`/`fin123`.
@@ -82,7 +82,7 @@ Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse1
 | 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient journey · Medical Ops board · partner desks |
 | 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership, corporate utilisation, insurer claims desk | Payments, Membership, Corporate, Insurance |
 | 4 Household | Family, programs, vault, assistive helper | Family, Care programs |
-| 5 Nation | 16 regions, follow-up, risk alerts, audit | Ghana network, Care phases |
+| 5 Nation | 16 regions, follow-up, risk alerts, audit, **admin Nation Pulse** | Ghana network, Care phases, Admin → Nation Pulse |
 
 Open **Patient → Care phases** for live counts on all five.
 
@@ -92,7 +92,7 @@ Open **Patient → Care phases** for live counts on all five.
 - **Clinician:** queue cockpit (next patient, SOAP, Rx, chat, video, end visit), assistive SOAP draft, referrals
 - **Network:** nurse triage, lab, pharmacy, imaging, hospital desk, medical operations (queue assign + partner re-route)
 - **Business:** corporate, insurance, finance/billing (phase 3 APIs)
-- **Admin:** staff registry, clinic/SMS settings (API key masked), ops snapshot from authenticated APIs
+- **Admin:** staff registry, clinic/SMS settings (API key masked), clinic Pulse, **Nation Pulse** national analytics, ops snapshot from authenticated APIs
 
 ### Phase 2 — closed-loop Medical Ops
 
@@ -174,6 +174,17 @@ This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRE
 - **Risk alerts:** Rule-based from tracker (high BP/glucose) and overdue program tasks. Labeled assistive, not a diagnosis.
 - **Consents:** `POST /api/consents/me` for telemedicine, data, communication, sharing, AI assist.
 
+### Phase 5 — Nation Pulse (admin analytics)
+
+- **Login:** `admin` / `admin`
+- **Open:** Admin → Launch pad → **Nation Pulse** (or `/admin/analytics`)
+- **Overview:** 7-day visits, open claims, partner count, patients waiting now; programs, risk alerts, audit 24h
+- **Visits tab:** daily trend, today-by-status, Consult Now vs scheduled mix
+- **Claims tab:** cross-tenant rollup by status and source (insurance / corporate) — insurer/corporate desks stay org-scoped
+- **Network tab:** partners by type + live queue (labs/scans/pharmacy/referrals)
+- Demo seed adds a few recent visits, sample claims, and an open risk alert when sparse so the board is demonstrable immediately
+- API: `GET /api/admin/analytics` (admin only)
+
 This is still not a production national deployment: Jitsi is public-hosted with unguessable room names. Paystack keys must be set (env or Admin → Settings) before live collection. Vault files live in Postgres (2 MB cap), not object storage.
 
 ### Completeness pass
@@ -186,6 +197,7 @@ This is still not a production national deployment: Jitsi is public-hosted with 
 - **Visual system:** Paper canvas, forest primary, gold secondary, Source Serif headlines + DM Sans UI. Quiet bottom navigation. Editorial login and launch copy. Nurse, pharmacy, imaging, and ops desks use the same chrome.
 - **Directory:** Filter clinicians by language (English, Twi, Ga, Ewe, Hausa).
 - **Hospital network desk:** `hospital` / `hosp123` — inbound/outbound referrals, bed/ICU capacity stub, partner status.
+- **Nation Pulse:** `admin` / `admin` — national visits/claims/partners/queue analytics (`GET /api/admin/analytics`).
 - **Follow-up:** Book the review visit from the follow-up list.
 
 Default local extra: `support` / `support123`.

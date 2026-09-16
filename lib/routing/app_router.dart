@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/session.dart';
+import '../features/admin/admin_analytics_screen.dart';
 import '../features/admin/admin_home_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
@@ -185,6 +186,7 @@ GoRouter createAppRouter(Session session) {
         routes: [
           GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
           GoRoute(path: 'network', builder: (context, state) => const NationalCoverageScreen()),
+          GoRoute(path: 'analytics', builder: (context, state) => const AdminAnalyticsScreen()),
         ],
       ),
       GoRoute(path: '/lab-technician', builder: (context, state) => const LabTechnicianHomeScreen()),

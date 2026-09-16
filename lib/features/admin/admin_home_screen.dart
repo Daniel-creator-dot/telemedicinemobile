@@ -651,6 +651,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               _quickActionCard('Systems', 'SMS & pay', Icons.tune_rounded, AdminPalette.rose, () => setState(() => _currentTab = 6)),
               _quickActionCard('Support', 'Desk tickets', Icons.support_agent_rounded, AdminPalette.lime, () => context.push('/admin/support')),
               _quickActionCard('Nation', 'Coverage', Icons.public_rounded, AdminPalette.gold, () => context.push('/admin/network')),
+              _quickActionCard('Nation Pulse', 'Visits · claims · queue', Icons.analytics_rounded, AdminPalette.cyan, () => context.push('/admin/analytics')),
             ],
           ).animate().fadeIn(duration: 420.ms, delay: 140.ms).slideY(begin: 0.06, end: 0),
           const SizedBox(height: 22),
