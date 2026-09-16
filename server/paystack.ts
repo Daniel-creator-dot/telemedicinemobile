@@ -199,3 +199,44 @@ export async function isPaystackConfigured() {
   const secret = await getPaystackSecretKey();
   return Boolean(secret);
 }
+
+/**
+ * Request a Paystack refund for a successful charge reference.
+ * Demo digidemo_ refs are never sent to Paystack — callers should handle those locally.
+ */
+export async function refundPaystackTransaction(reference: string, amountGhs?: number) {
+  const ref = String(reference || '').trim();
+  if (!ref) throw new Error('Payment reference is required');
+  if (isDemoPaymentReference(ref)) {
+    throw new Error('Demo payments are refunded locally, not via Paystack.');
+  }
+
+  const secretKey = await getPaystackSecretKey();
+  if (!secretKey) {
+    throw new Error('Paystack secret key is not configured.');
+  }
+
+  const body: Record<string, unknown> = { transaction: ref };
+  if (amountGhs != null && Number.isFinite(amountGhs) && amountGhs > 0) {
+    body.amount = Math.round(amountGhs * 100);
+  }
+
+  try {
+    const response = await axios.post('https://api.paystack.co/refund', body, {
+      headers: { Authorization: `Bearer ${secretKey}`, 'Content-Type': 'application/json' },
+    });
+    if (!response.data?.status) {
+      throw new Error(response.data?.message || 'Paystack could not refund this payment');
+    }
+    return {
+      reference: ref,
+      status: String(response.data.data?.status || 'pending'),
+      gateway: 'paystack' as const,
+    };
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.data?.message) {
+      throw new Error(String(err.response.data.message));
+    }
+    throw err;
+  }
+}

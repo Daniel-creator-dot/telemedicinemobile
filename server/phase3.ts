@@ -4,6 +4,7 @@ import { query } from './db';
 import { getPatientForUser } from './phase1';
 import { commercialOrgId } from './phase5';
 import { getActiveMembership, membershipEligibilityOverlay } from './membership';
+import { isDemoPaymentReference, refundPaystackTransaction } from './paystack';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -158,6 +159,18 @@ export async function initPhase3Schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='copay_amount') THEN
         ALTER TABLE payments ADD COLUMN copay_amount DECIMAL(10,2) DEFAULT 50;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='reconciled_at') THEN
+        ALTER TABLE payments ADD COLUMN reconciled_at TIMESTAMP;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='reconciled_by') THEN
+        ALTER TABLE payments ADD COLUMN reconciled_by INTEGER REFERENCES users(id);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='refunded_at') THEN
+        ALTER TABLE payments ADD COLUMN refunded_at TIMESTAMP;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='refund_notes') THEN
+        ALTER TABLE payments ADD COLUMN refund_notes TEXT;
+      END IF;
     END $$;
   `);
 
@@ -189,6 +202,7 @@ export async function initPhase3Schema() {
 
   await seedCommercial();
   await seedInsuranceClaimsDesk();
+  await seedFinancePaymentsDesk();
   console.log('Phase 3 schema ready');
 }
 
@@ -327,6 +341,150 @@ async function seedInsuranceClaimsDesk() {
   }
 
   console.log('Seeded insurance claims desk demo queue');
+}
+
+async function seedFinancePaymentsDesk() {
+  const paid = await query(
+    `SELECT COUNT(*)::int AS n FROM payments WHERE status IN ('paid', 'refunded')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(paid.rows[0]?.n || 0) >= 3) return;
+
+  const patients = await query(
+    `SELECT pt.id AS patient_id, pt.full_name, pt.phone_number, pt.email,
+            a.id AS appointment_id, a.appointment_id AS apt_code, a.doctor_id
+     FROM patients pt
+     LEFT JOIN LATERAL (
+       SELECT id, appointment_id, doctor_id FROM appointments
+       WHERE patient_id = pt.id ORDER BY id DESC LIMIT 1
+     ) a ON true
+     WHERE pt.id IS NOT NULL
+     ORDER BY pt.id ASC LIMIT 4`
+  ).catch(() => ({ rows: [] as any[] }));
+  if (!patients.rows[0]) return;
+
+  const demos: Array<{
+    gateway: string;
+    amount: number;
+    covered: number;
+    copay: number;
+    coverage: string | null;
+    reconcile: boolean;
+    refund: boolean;
+    refPrefix: string;
+    patientIdx: number;
+  }> = [
+    {
+      gateway: 'demo',
+      amount: 50,
+      covered: 0,
+      copay: 50,
+      coverage: null,
+      reconcile: false,
+      refund: false,
+      refPrefix: 'digidemo_finance_',
+      patientIdx: 0,
+    },
+    {
+      gateway: 'paystack',
+      amount: 20,
+      covered: 30,
+      copay: 20,
+      coverage: 'insurance',
+      reconcile: true,
+      refund: false,
+      refPrefix: 'digihealth_finance_',
+      patientIdx: Math.min(1, patients.rows.length - 1),
+    },
+    {
+      gateway: 'paystack',
+      amount: 15,
+      covered: 35,
+      copay: 15,
+      coverage: 'corporate',
+      reconcile: false,
+      refund: false,
+      refPrefix: 'digihealth_finance_',
+      patientIdx: Math.min(2, patients.rows.length - 1),
+    },
+    {
+      gateway: 'demo',
+      amount: 50,
+      covered: 0,
+      copay: 50,
+      coverage: null,
+      reconcile: false,
+      refund: true,
+      refPrefix: 'digidemo_refund_',
+      patientIdx: 0,
+    },
+  ];
+
+  const financeUser = await query(`SELECT id FROM users WHERE username = 'finance' LIMIT 1`);
+  const reconcilerId = financeUser.rows[0]?.id || null;
+
+  for (const demo of demos) {
+    const row = patients.rows[demo.patientIdx] || patients.rows[0];
+    let appointmentId = row.appointment_id as number | null;
+    if (!appointmentId) {
+      const aptCode = `APT-FIN-${row.patient_id}-${Date.now().toString(36).slice(-4)}`.toUpperCase();
+      const created = await query(
+        `INSERT INTO appointments (
+           appointment_id, patient_id, full_name, phone_number, email, doctor_id,
+           preferred_date, preferred_time, service, status, payment_status
+         ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, '10:00', 'general consultation', 'approved', 'paid')
+         RETURNING id`,
+        [
+          aptCode,
+          row.patient_id,
+          row.full_name || 'Demo Patient',
+          row.phone_number || '0240000000',
+          row.email || null,
+          row.doctor_id || null,
+        ]
+      ).catch(() => ({ rows: [] as any[] }));
+      appointmentId = created.rows[0]?.id || null;
+    }
+    if (!appointmentId) continue;
+
+    const reference = `${demo.refPrefix}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const status = demo.refund ? 'refunded' : 'paid';
+    await query(
+      `INSERT INTO payments (
+         appointment_id, amount, currency, status, reference, gateway,
+         coverage_source, covered_amount, copay_amount,
+         reconciled_at, reconciled_by, refunded_at, refund_notes
+       ) VALUES (
+         $1, $2, 'GHS', $3, $4, $5,
+         $6, $7, $8,
+         $9, $10, $11, $12
+       )
+       ON CONFLICT (reference) DO NOTHING`,
+      [
+        appointmentId,
+        demo.amount,
+        status,
+        reference,
+        demo.gateway,
+        demo.coverage,
+        demo.covered,
+        demo.copay,
+        demo.reconcile ? new Date() : null,
+        demo.reconcile ? reconcilerId : null,
+        demo.refund ? new Date() : null,
+        demo.refund ? 'Demo refund — patient cancelled before consult.' : null,
+      ]
+    ).catch(() => null);
+
+    if (!demo.refund) {
+      await query(
+        `UPDATE appointments SET payment_status = 'paid', payment_ref = COALESCE(payment_ref, $1)
+         WHERE id = $2 AND (payment_status IS NULL OR payment_status = 'unpaid')`,
+        [reference, appointmentId]
+      ).catch(() => null);
+    }
+  }
+
+  console.log('Seeded finance payments / receipts demo queue');
 }
 
 async function seedCoverageDirectory() {
@@ -1284,7 +1442,12 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
           (SELECT COALESCE(SUM(amount),0) FROM doctor_earnings WHERE status = 'accrued') AS doctor_pay_due,
           (SELECT COALESCE(SUM(amount),0) FROM doctor_earnings WHERE status = 'settled') AS doctor_pay_settled,
           (SELECT COALESCE(SUM(amount),0) FROM settlements WHERE status = 'pending') AS partner_pay_due,
-          (SELECT COALESCE(SUM(amount),0) FROM claims WHERE status = 'submitted') AS open_claims
+          (SELECT COALESCE(SUM(amount),0) FROM claims WHERE status = 'submitted') AS open_claims,
+          (SELECT COUNT(*)::int FROM payments WHERE status = 'paid' AND reconciled_at IS NULL) AS unreconciled_receipts,
+          (SELECT COUNT(*)::int FROM payments WHERE status = 'paid' AND reconciled_at IS NOT NULL) AS reconciled_receipts,
+          (SELECT COUNT(*)::int FROM payments WHERE status = 'refunded') AS refunded_receipts,
+          (SELECT COALESCE(SUM(copay_amount),0) FROM payments WHERE status = 'paid' AND gateway = 'demo') AS demo_collected,
+          (SELECT COALESCE(SUM(copay_amount),0) FROM payments WHERE status = 'paid' AND gateway = 'paystack') AS paystack_collected
       `);
       const earnings = await query(
         `SELECT e.*, u.name as doctor_name, a.appointment_id as apt_code
@@ -1297,12 +1460,126 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       const claims = await query(
         `SELECT c.*, pt.full_name FROM claims c JOIN patients pt ON c.patient_id = pt.id ORDER BY c.submitted_at DESC LIMIT 50`
       );
+      const payments = await query(
+        `SELECT p.*,
+                a.appointment_id AS apt_code,
+                a.preferred_date,
+                a.preferred_time,
+                a.service,
+                a.payment_status AS visit_payment_status,
+                COALESCE(pt.full_name, a.full_name) AS patient_name,
+                pt.phone_number AS patient_phone,
+                ru.name AS reconciled_by_name
+         FROM payments p
+         LEFT JOIN appointments a ON a.id = p.appointment_id
+         LEFT JOIN patients pt ON pt.id = a.patient_id
+         LEFT JOIN users ru ON ru.id = p.reconciled_by
+         ORDER BY p.created_at DESC
+         LIMIT 100`
+      );
       res.json({
         stats: stats.rows[0],
         earnings: earnings.rows,
         settlements: settlements.rows,
         claims: claims.rows,
+        payments: payments.rows,
+        note:
+          'Reconcile paid visit receipts against bank/MoMo statements. Demo gateway rows never hit Paystack; live Paystack refunds call the Paystack refund API when keys are configured.',
       });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.patch('/api/finance/payments/:id', authenticate, async (req: AuthedRequest, res) => {
+    if (!['finance', 'admin'].includes(req.user!.role)) return res.status(403).json({ message: 'Forbidden' });
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ message: 'Invalid payment id' });
+
+      const existing = await query('SELECT * FROM payments WHERE id = $1 LIMIT 1', [id]);
+      const payment = existing.rows[0];
+      if (!payment) return res.status(404).json({ message: 'Payment not found' });
+
+      const action = String(req.body.action || '').trim().toLowerCase();
+      const notes = req.body.notes != null ? String(req.body.notes).trim() : null;
+
+      if (action === 'reconcile') {
+        if (payment.status !== 'paid') {
+          return res.status(400).json({ message: 'Only paid receipts can be reconciled' });
+        }
+        const result = await query(
+          `UPDATE payments SET reconciled_at = CURRENT_TIMESTAMP, reconciled_by = $1
+           WHERE id = $2 RETURNING *`,
+          [req.user!.id, id]
+        );
+        return res.json(result.rows[0]);
+      }
+
+      if (action === 'unreconcile') {
+        const result = await query(
+          `UPDATE payments SET reconciled_at = NULL, reconciled_by = NULL
+           WHERE id = $1 RETURNING *`,
+          [id]
+        );
+        return res.json(result.rows[0]);
+      }
+
+      if (action === 'refund') {
+        if (payment.status === 'refunded') {
+          return res.status(400).json({ message: 'Payment already refunded' });
+        }
+        if (payment.status !== 'paid') {
+          return res.status(400).json({ message: 'Only paid receipts can be refunded' });
+        }
+
+        const gateway = String(payment.gateway || '').toLowerCase();
+        const reference = String(payment.reference || '');
+        let refundChannel = gateway || 'local';
+
+        if (gateway === 'paystack' && reference && !isDemoPaymentReference(reference)) {
+          try {
+            await refundPaystackTransaction(reference, Number(payment.copay_amount || payment.amount));
+            refundChannel = 'paystack';
+          } catch (err: any) {
+            // Keep desk usable: still mark locally when Paystack declines (e.g. seed digihealth_ refs).
+            refundChannel = 'local';
+            console.warn('Paystack refund skipped:', err?.message || err);
+          }
+        }
+
+        const refundNotes =
+          notes ||
+          (refundChannel === 'paystack'
+            ? 'Refunded via Paystack'
+            : gateway === 'demo' || isDemoPaymentReference(reference)
+              ? 'Demo refund recorded locally'
+              : 'Refund marked locally (gateway settle offline)');
+
+        const result = await query(
+          `UPDATE payments SET
+             status = 'refunded',
+             refunded_at = CURRENT_TIMESTAMP,
+             refund_notes = $1,
+             reconciled_at = COALESCE(reconciled_at, CURRENT_TIMESTAMP),
+             reconciled_by = COALESCE(reconciled_by, $2)
+           WHERE id = $3 RETURNING *`,
+          [refundNotes, req.user!.id, id]
+        );
+
+        if (payment.appointment_id) {
+          await query(
+            `UPDATE appointments SET payment_status = 'refunded'
+             WHERE id = $1 AND payment_status = 'paid'`,
+            [payment.appointment_id]
+          ).catch(() => null);
+        }
+
+        return res.json({ ...result.rows[0], refund_channel: refundChannel });
+      }
+
+      return res.status(400).json({ message: 'action must be reconcile, unreconcile, or refund' });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });

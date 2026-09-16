@@ -341,6 +341,17 @@ class CareRepository {
     await _api.dio.patch('/api/finance/settlements/$id', data: {'status': status});
   }
 
+  Future<Map<String, dynamic>> updateFinancePayment(int id, String action, {String? notes}) async {
+    final res = await _api.dio.patch<Map<String, dynamic>>(
+      '/api/finance/payments/$id',
+      data: {
+        'action': action,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+    return res.data ?? {};
+  }
+
   Future<void> markNotificationsRead() async {
     await _api.dio.patch('/api/notifications/me/read');
   }

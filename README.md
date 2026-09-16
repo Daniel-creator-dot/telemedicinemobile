@@ -67,7 +67,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Imaging | `imaging` / `image123` | Imaging referrals + reports |
 | Corporate | `corporate` / `corp123` | Staff roster and utilisation (no clinical notes) |
 | Insurance | `insurance` / `insure123` | Claims desk: approve / query / deny / pay |
-| Finance | `finance` / `fin123` | Collections and settlements |
+| Finance | `finance` / `fin123` | Receipts, reconcile, settlements |
 | Hospital | `hospital` / `hosp123` | Inbound specialist referrals |
 | Admin | `admin` | Staff, doctors, settings, analytics, support, national net |
 | Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
@@ -106,13 +106,23 @@ Open **Patient → Care phases** for live counts on all five.
 ### Phase 3 — insurance claims desk
 
 - **Login:** `insurance` / `insure123` (Star Health Ghana; tenant-scoped via `org_accounts`)
-- **Also:** `corporate` / `corp123` (GPA staff roster), `finance` / `fin123` (collections + settlements)
+- **Also:** `corporate` / `corp123` (GPA staff roster), `finance` / `fin123` (receipts + settlements)
 - **Overview:** open / queried / approved / paid / denied claim counts plus pending preauths and active policies
 - **Claims tab:** filter Open → Queried → Approved → Closed; **Approve**, **Query** (notes to patient), **Deny**, **Mark paid**
 - **Preauths tab:** approve or deny pending pre-authorisations
 - Each decision writes an in-app notification (and push when registered) for the patient
 - Demo seed creates open + queried claims (and a pending preauth) when the insurer queue is empty
 - Patient eligibility check / attach cover remains on Patient → Payments (`DEMO-SHG-1001`, `GPA-STAFF-9001`, …)
+
+### Phase 3 — finance receipts desk
+
+- **Login:** `finance` / `fin123`
+- **Overview:** copay / covered totals, unreconciled vs reconciled counts, demo vs Paystack collections, doctor/partner pay due
+- **Receipts tab:** filter Open → Reconciled → Demo → Paystack → Refunded; **Reconcile**, **Unreconcile**, **Refund**
+- Demo gateway refunds stay local; live Paystack refs attempt `POST /refund` when keys are configured (seed `digihealth_finance_*` refs mark locally if Paystack declines)
+- **Settlements tab:** run clinician/pharmacy settlements and mark paid (unchanged)
+- Demo seed creates a few paid visit receipts (demo + Paystack-labeled, one refunded) when the payments table is sparse
+- APIs: `GET /api/finance/dashboard` (includes `payments`), `PATCH /api/finance/payments/:id` (`reconcile` | `unreconcile` | `refund`)
 
 ### Phase 4 flows
 
