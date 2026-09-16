@@ -12,7 +12,7 @@ import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { getActiveMembership } from './membership';
 
 const AI_DISCLAIMER =
-  'Assistive draft only. Not a diagnosis, not medical advice, and not a substitute for a licensed clinician. Digi Health does not claim HIPAA certification.';
+  'Assistive draft only. Not a diagnosis, not medical advice, and not a substitute for a licensed clinician. Medilynks does not claim HIPAA certification.';
 
 const PROGRAM_CATALOG: {
   key: string;
@@ -219,7 +219,7 @@ function ruleBasedSymptomHelper(complaint: string, symptoms: string) {
   }
   return {
     questions: flags,
-    next_step: 'Book or join a Digi Health consult so a clinician can assess you. This helper cannot diagnose.',
+    next_step: 'Book or join a Medilynks consult so a clinician can assess you. This helper cannot diagnose.',
   };
 }
 

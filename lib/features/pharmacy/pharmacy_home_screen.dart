@@ -44,8 +44,19 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
   Future<void> _setStatus(Map<String, dynamic> rx, String status) async {
     final id = rx['id'] as int?;
     if (id == null) return;
-    await context.read<CareRepository>().updatePharmacyStatus(id, status);
-    await _load();
+    try {
+      await context.read<CareRepository>().updatePharmacyStatus(id, status);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Marked ${rx['medication_name'] ?? 'Rx'} as $status')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update status: $e')),
+      );
+    }
   }
 
   @override
@@ -114,11 +125,17 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
+                                runSpacing: 6,
                                 children: [
                                   if (status == 'sent')
                                     FilledButton(
                                       onPressed: () => _setStatus(rx, 'received'),
                                       child: const Text('Receive'),
+                                    ),
+                                  if (status == 'received')
+                                    FilledButton(
+                                      onPressed: () => _setStatus(rx, 'preparing'),
+                                      child: const Text('Start preparing'),
                                     ),
                                   if (status == 'received' || status == 'preparing')
                                     FilledButton(

@@ -20,6 +20,7 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
   String? _error;
 
   final _name = TextEditingController();
+  final _phone = TextEditingController();
   final _email = TextEditingController();
   final _dob = TextEditingController();
   final _sex = TextEditingController();
@@ -52,7 +53,7 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
   @override
   void dispose() {
     for (final c in [
-      _name, _email, _dob, _sex, _region, _town, _address, _occupation,
+      _name, _phone, _email, _dob, _sex, _region, _town, _address, _occupation,
       _emergencyName, _emergencyPhone, _kinName, _kinPhone, _blood, _genotype,
       _allergies, _chronic, _meds, _diagnoses, _surgeries, _family, _social,
       _location, _nationwide,
@@ -67,6 +68,7 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
       final profile = await context.read<CareRepository>().getMyProfile();
       _profile = profile;
       _name.text = profile.fullName;
+      _phone.text = profile.phoneNumber;
       _email.text = profile.email ?? '';
       _dob.text = profile.dateOfBirth?.split('T').first ?? '';
       _sex.text = profile.sex ?? '';
@@ -103,6 +105,7 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
     try {
       final saved = await context.read<CareRepository>().saveMyProfile({
         'full_name': _name.text.trim(),
+        'phone_number': _phone.text.trim(),
         'email': _email.text.trim(),
         'date_of_birth': _dob.text.trim(),
         'sex': _sex.text.trim(),
@@ -126,20 +129,20 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
         'preferred_location': _location.text.trim(),
         'nationwide_id': _nationwide.text.trim(),
       });
+      if (!mounted) return;
       final session = context.read<Session>();
       if (session.user != null) {
         session.patchUser(session.user!.copyWith(
           name: saved.fullName,
+          phoneNumber: saved.phoneNumber,
           email: saved.email,
           patientCode: saved.patientCode,
         ));
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Medical profile saved.')),
-        );
-        Navigator.of(context).maybePop();
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Medical profile saved.')),
+      );
+      Navigator.of(context).maybePop();
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -167,6 +170,7 @@ class _MedicalProfileScreenState extends State<MedicalProfileScreen> {
                 const SizedBox(height: 12),
                 _section('Demographics'),
                 _field(_name, 'Full name'),
+                _field(_phone, 'Phone number (SMS)'),
                 _field(_email, 'Email'),
                 _field(_dob, 'Date of birth (YYYY-MM-DD)'),
                 _field(_sex, 'Sex'),

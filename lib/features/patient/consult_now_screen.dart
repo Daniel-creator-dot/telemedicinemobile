@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -33,19 +35,35 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
   bool _paying = false;
   Appointment? _queued;
   String? _error;
+  Timer? _queueTimer;
 
   @override
   void initState() {
     super.initState();
     _checkQueue();
+    _queueTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (!mounted || _queued == null) return;
+      _checkQueue(silent: true);
+    });
   }
 
   @override
   void dispose() {
+    _queueTimer?.cancel();
     for (final c in [_complaint, _duration, _symptoms, _meds, _allergies, _conditions, _bp, _temp, _pulse, _spo2]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  bool get _canEnterVideo {
+    final q = _queued;
+    if (q == null) return false;
+    if (q.paymentStatus == 'paid') return true;
+    if ((q.meetingLink ?? '').trim().isNotEmpty) return true;
+    if (q.doctorId != null || (q.doctorName ?? '').trim().isNotEmpty) return true;
+    final s = q.status.toLowerCase();
+    return s == 'approved' || s == 'consulting' || s == 'arrived';
   }
 
   Future<void> _payQueued() async {
@@ -62,10 +80,17 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
     }
   }
 
-  Future<void> _checkQueue() async {
+  Future<void> _checkQueue({bool silent = false}) async {
     try {
       final q = await context.read<CareRepository>().getQueue();
-      if (q.isNotEmpty) setState(() => _queued = q.first);
+      if (!mounted) return;
+      if (q.isEmpty) {
+        if (!silent && _queued != null) {
+          setState(() => _queued = null);
+        }
+        return;
+      }
+      setState(() => _queued = q.first);
     } catch (_) {}
   }
 
@@ -110,6 +135,14 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
         title: Text('Consult Now', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
+        actions: [
+          if (_queued != null)
+            IconButton(
+              tooltip: 'Refresh queue',
+              onPressed: () => _checkQueue(),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+        ],
       ),
       body: _queued != null ? _queueCard() : _form(),
     );
@@ -117,6 +150,7 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
 
   Widget _queueCard() {
     final q = _queued!;
+    final waitingForDoctor = q.doctorName == null || q.doctorName!.trim().isEmpty;
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -128,12 +162,23 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
           const SizedBox(height: 8),
           Text('Estimated wait: ${q.etaMinutes ?? 12} minutes'),
           Text('Status: ${q.status}'),
-          if (q.doctorName != null) Text('Assigned clinician: ${q.doctorName}'),
+          Text(
+            waitingForDoctor
+                ? 'Assigned clinician: waiting for nurse / ops match…'
+                : 'Assigned clinician: ${q.doctorName}',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Live updates every few seconds.',
+            style: GoogleFonts.roboto(fontSize: 12, color: Colors.black54),
+          ),
           const SizedBox(height: 16),
           Text(
             q.paymentStatus == 'paid'
                 ? 'Copay received. A nurse will review your triage. You will be notified when a doctor is ready.'
-                : 'Pay the visit copay with MoMo or card (same Paystack checkout as Bytz Go), then wait for a clinician.',
+                : _canEnterVideo
+                    ? 'A clinician is ready. You can enter the video room (pay later if needed).'
+                    : 'Pay the visit copay with MoMo or card, or wait for a nurse to assign a doctor.',
           ),
           const SizedBox(height: 24),
           if (q.paymentStatus != 'paid')
@@ -146,8 +191,9 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
                 foregroundColor: Colors.black,
                 minimumSize: const Size.fromHeight(48),
               ),
-            )
-          else
+            ),
+          if (_canEnterVideo) ...[
+            if (q.paymentStatus != 'paid') const SizedBox(height: 10),
             ElevatedButton.icon(
               onPressed: () => openVideoConsult(context, q),
               icon: const Icon(Icons.videocam_rounded),
@@ -158,6 +204,7 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
                 minimumSize: const Size.fromHeight(48),
               ),
             ),
+          ],
           const SizedBox(height: 10),
           OutlinedButton(
             onPressed: () {
@@ -198,49 +245,49 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
           onChanged: (v) => setState(() => _consultType = v ?? _consultType),
           decoration: const InputDecoration(labelText: 'Consultation type', border: OutlineInputBorder()),
         ),
-        const SizedBox(height: 10),
-        _field(_complaint, 'Main complaint'),
-        _field(_duration, 'How long has this lasted?'),
-        _field(_symptoms, 'Symptoms', maxLines: 2),
-        _field(_meds, 'Current medications'),
-        _field(_allergies, 'Known allergies'),
-        _field(_conditions, 'Existing conditions'),
-        Row(children: [
-          Expanded(child: _field(_bp, 'BP')),
-          const SizedBox(width: 8),
-          Expanded(child: _field(_temp, 'Temp')),
-        ]),
-        Row(children: [
-          Expanded(child: _field(_pulse, 'Pulse')),
-          const SizedBox(width: 8),
-          Expanded(child: _field(_spo2, 'SpO2')),
-        ]),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _complaint,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Main complaint *', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 12),
+        TextField(controller: _duration, decoration: const InputDecoration(labelText: 'How long?', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: _symptoms, decoration: const InputDecoration(labelText: 'Symptoms', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: _meds, decoration: const InputDecoration(labelText: 'Current medications', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: _allergies, decoration: const InputDecoration(labelText: 'Allergies', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        TextField(controller: _conditions, decoration: const InputDecoration(labelText: 'Chronic conditions', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: TextField(controller: _bp, decoration: const InputDecoration(labelText: 'BP', border: OutlineInputBorder()))),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: _temp, decoration: const InputDecoration(labelText: 'Temp', border: OutlineInputBorder()))),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: TextField(controller: _pulse, decoration: const InputDecoration(labelText: 'Pulse', border: OutlineInputBorder()))),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: _spo2, decoration: const InputDecoration(labelText: 'SpO2', border: OutlineInputBorder()))),
+          ],
+        ),
+        const SizedBox(height: 24),
         ElevatedButton(
           onPressed: _submitting ? null : _submit,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFEF4444),
-            foregroundColor: Colors.white,
+            backgroundColor: const Color(0xFF00D2C4),
+            foregroundColor: Colors.black,
             minimumSize: const Size.fromHeight(48),
           ),
           child: Text(_submitting ? 'Joining queue…' : 'Join live queue'),
         ),
       ],
-    );
-  }
-
-  Widget _field(TextEditingController c, String label, {int maxLines = 1}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextField(
-        controller: c,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
     );
   }
 }

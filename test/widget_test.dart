@@ -1,4 +1,4 @@
-// Basic smoke tests for the Digi Health Telemedicine app.
+// Basic smoke tests for the Medilynks app.
 //
 // Widget tests intentionally avoid FlutterSecureStorage (requires platform
 // channels) by testing individual views in isolation rather than the full
@@ -13,13 +13,13 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: Center(
-            child: Text('Digi Health Telemedicine'),
+            child: Text('Medilynks'),
           ),
         ),
       ),
     );
 
-    expect(find.text('Digi Health Telemedicine'), findsOneWidget);
+    expect(find.text('Medilynks'), findsOneWidget);
   });
 
   testWidgets('Smoke test: login screen placeholder renders', (WidgetTester tester) async {
@@ -32,7 +32,7 @@ void main() {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text(
-                'Welcome to Digi Health',
+                'Welcome to Medilynks',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
@@ -46,7 +46,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Welcome to Digi Health'), findsOneWidget);
+    expect(find.text('Welcome to Medilynks'), findsOneWidget);
     expect(find.text('Login'), findsOneWidget);
     expect(find.byType(ElevatedButton), findsOneWidget);
   });

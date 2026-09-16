@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
+import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../models/appointment.dart';
 import '../../models/auth_user.dart';
@@ -422,19 +423,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [AdminPalette.cyan, AdminPalette.gold],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [BoxShadow(color: AdminPalette.cyan.withValues(alpha: 0.45), blurRadius: 16)],
-          ),
-          child: const Icon(Icons.public_rounded, color: Colors.black, size: 20),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.asset(AppBrand.logoAsset, width: 36, height: 36, fit: BoxFit.cover),
         ),
         if (!compact) ...[
           const SizedBox(width: 10),
@@ -442,7 +433,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Digi Health', style: adminSerif(size: 15, weight: FontWeight.w700)),
+              Text(AppBrand.name, style: adminSerif(size: 15, weight: FontWeight.w700)),
               Text('OPS NIGHT', style: adminSans(size: 9, weight: FontWeight.w800, color: AdminPalette.gold, letterSpacing: 1.4)),
             ],
           ),

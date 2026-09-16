@@ -100,7 +100,7 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
       'Six dependents (household)',
       'Same-day queue, first to be seen',
       'Concierge nurse line in-app',
-      'Every Digi Health care surface included',
+      'Every Medilynks care surface included',
     ],
   },
 ];
@@ -157,7 +157,7 @@ export function membershipEligibilityOverlay(membership: Awaited<ReturnType<type
     copay: plan.copay,
     covered_amount: Math.max(0, 50 - plan.copay),
     coverage_percent: plan.coveragePercent,
-    payer_name: 'Digi Health membership',
+    payer_name: 'Medilynks membership',
     plan_name: `${plan.name} ${membership.period === 'yearly' ? 'yearly' : 'monthly'}`,
     policy_number: membership.reference,
     policy_id: null,

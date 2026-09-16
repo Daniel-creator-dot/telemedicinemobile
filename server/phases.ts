@@ -120,7 +120,7 @@ export function registerPhaseOverviewRoutes(app: Express) {
           name: 'Network',
           title: 'Labs, imaging, pharmacy',
           summary: 'Closed-loop requests return to your record — not a separate app.',
-          route: '/patient/phases',
+          route: '/patient/journey',
           open: labsOpen + scansOpen + rxOpen + refsOpen,
           total: labsOpen + scansOpen + rxOpen + refsOpen,
           status: labsOpen + scansOpen + rxOpen + refsOpen > 0 ? 'live' : 'ready',

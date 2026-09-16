@@ -32,6 +32,8 @@ const CONSULT_TYPES = [
   'other',
 ];
 
+const DEFAULT_WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 function notifyDebugOtp() {
   return process.env.NODE_ENV !== 'production';
 }
@@ -285,17 +287,22 @@ export async function initPhase1Schema() {
   }
 
   await ensureDemoClinicians();
+  await ensureDemoPatient();
 
   await query(`
     UPDATE doctors SET
       title = COALESCE(title, 'Dr'),
-      facility = COALESCE(facility, 'Digi Health Virtual Clinic'),
+      facility = COALESCE(facility, 'Medilynks Virtual Clinic'),
       languages = COALESCE(languages, 'English, Twi'),
       consultation_fee = COALESCE(consultation_fee, 50),
       years_experience = COALESCE(years_experience, 5),
       qualifications = COALESCE(qualifications, 'MBChB'),
-      biography = COALESCE(biography, 'Licensed clinician on the Digi Health network.')
-    WHERE title IS NULL OR facility IS NULL
+      biography = COALESCE(biography, 'Licensed clinician on the Medilynks network.'),
+      working_days = COALESCE(working_days, ARRAY['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']::text[]),
+      start_time = COALESCE(start_time, '09:00'),
+      end_time = COALESCE(end_time, '17:00'),
+      slot_duration = COALESCE(NULLIF(slot_duration, 0), 30)
+    WHERE title IS NULL OR facility IS NULL OR working_days IS NULL
   `);
 
   console.log('Phase 1 schema ready');
@@ -311,7 +318,7 @@ async function ensureDemoClinicians() {
       langs: 'English, Twi',
       fee: 50,
       years: 12,
-      bio: 'Family physician at Digi Health Virtual Clinic, Accra.',
+      bio: 'Family physician at Medilynks Virtual Clinic, Accra.',
     },
     {
       username: 'dr_mensah',
@@ -320,7 +327,7 @@ async function ensureDemoClinicians() {
       langs: 'English, Ga, Twi',
       fee: 60,
       years: 9,
-      bio: 'Paediatrician covering child consults and follow-up on the Digi Health network.',
+      bio: 'Paediatrician covering child consults and follow-up on the Medilynks network.',
     },
     {
       username: 'dr_doe',
@@ -354,14 +361,71 @@ async function ensureDemoClinicians() {
     if (!profile.rows[0]) {
       await query(
         `INSERT INTO doctors (
-           user_id, name, specialization, slot_duration, start_time, end_time,
+           user_id, name, specialization, slot_duration, start_time, end_time, working_days,
            title, languages, consultation_fee, years_experience, qualifications, biography, facility, is_active, is_online
-         ) VALUES ($1, $2, $3, 20, '08:00', '17:00', 'Dr', $4, $5, $6, 'MBChB, MWACP', $7, 'Digi Health Virtual Clinic', TRUE, TRUE)`,
-        [userId, d.name, d.spec, d.langs, d.fee, d.years, d.bio]
+         ) VALUES ($1, $2, $3, 30, '09:00', '17:00', $8, 'Dr', $4, $5, $6, 'MBChB, MWACP', $7, 'Medilynks Virtual Clinic', TRUE, FALSE)`,
+        [userId, d.name, d.spec, d.langs, d.fee, d.years, d.bio, DEFAULT_WORKING_DAYS]
+      );
+    } else {
+      await query(
+        `UPDATE doctors SET
+           working_days = COALESCE(working_days, $1),
+           start_time = COALESCE(start_time, '09:00'),
+           end_time = COALESCE(end_time, '17:00'),
+           slot_duration = COALESCE(NULLIF(slot_duration, 0), 30),
+           is_active = TRUE
+         WHERE user_id = $2`,
+        [DEFAULT_WORKING_DAYS, userId]
       );
     }
   }
   console.log('Demo clinicians ready (dr_appiah / dr_mensah / dr_doe, password staff123)');
+}
+
+async function ensureDemoPatient() {
+  const phone = '0241555000';
+  const hashed = await bcrypt.hash('patient123', 10);
+  const found = await query(
+    `SELECT id FROM users WHERE username = $1 OR phone_number = $1 OR phone_number = $2`,
+    [phone, '233241555000']
+  );
+  let userId: number;
+  if (found.rows[0]) {
+    userId = found.rows[0].id;
+    await query(
+      `UPDATE users SET password = $1, role = 'patient', name = COALESCE(NULLIF(name, ''), $2), phone_number = $3, username = $3 WHERE id = $4`,
+      [hashed, 'Abena Mensah', phone, userId]
+    );
+  } else {
+    const user = await query(
+      `INSERT INTO users (username, password, role, name, phone_number) VALUES ($1, $2, 'patient', $3, $1) RETURNING id`,
+      [phone, hashed, 'Abena Mensah']
+    );
+    userId = user.rows[0].id;
+  }
+
+  const patient = await query('SELECT id, patient_code FROM patients WHERE user_id = $1', [userId]);
+  if (!patient.rows[0]) {
+    const code = await nextPatientCode();
+    await query(
+      `INSERT INTO patients (user_id, patient_code, full_name, phone_number, email)
+       VALUES ($1, $2, 'Abena Mensah', $3, 'abena@example.com')`,
+      [userId, code, phone]
+    );
+    const pid = (await query('SELECT id FROM patients WHERE user_id = $1', [userId])).rows[0]?.id;
+    if (pid) {
+      for (const type of ['telemedicine', 'privacy', 'comms']) {
+        await query(
+          'INSERT INTO consents (patient_id, consent_type, accepted) VALUES ($1, $2, TRUE)',
+          [pid, type]
+        );
+      }
+    }
+  } else if (!patient.rows[0].patient_code) {
+    const code = await nextPatientCode();
+    await query('UPDATE patients SET patient_code = $1 WHERE user_id = $2', [code, userId]);
+  }
+  console.log('Demo patient ready (0241555000 / patient123)');
 }
 
 async function nextPatientCode() {
@@ -385,6 +449,97 @@ async function notifyUser(
   if (userId) {
     await deps.sendPushNotification([userId], title, message, { type });
   }
+}
+
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function addDaysIso(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return localDateStr(d);
+}
+
+function doctorWorkingDays(doctor: any): string[] {
+  const raw = doctor.working_days;
+  if (Array.isArray(raw) && raw.length > 0) return raw.map(String);
+  return DEFAULT_WORKING_DAYS;
+}
+
+function doctorSchedule(doctor: any): { start: string; end: string; duration: number } {
+  // Prefer explicit schedule; otherwise sensible clinic defaults (09:00–17:00 / 30 min).
+  const hasStart = doctor.start_time != null && String(doctor.start_time).trim() !== '';
+  const hasEnd = doctor.end_time != null && String(doctor.end_time).trim() !== '';
+  const hasDuration = doctor.slot_duration != null && Number(doctor.slot_duration) > 0;
+  return {
+    start: String(hasStart ? doctor.start_time : '09:00:00').slice(0, 5),
+    end: String(hasEnd ? doctor.end_time : '17:00:00').slice(0, 5),
+    duration: hasDuration ? Number(doctor.slot_duration) : 30,
+  };
+}
+
+async function buildSlotsForDoctor(doctor: any, date: string): Promise<string[]> {
+  const dayName = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
+  // Demo-friendly: always offer Mon–Sat. Only Sunday is closed unless doctor explicitly works Sundays.
+  const working = doctorWorkingDays(doctor);
+  if (dayName === 'Sunday' && !working.includes('Sunday')) return [];
+
+  const { start, end, duration } = doctorSchedule(doctor);
+  const booked = await query(
+    `SELECT preferred_time FROM appointments
+     WHERE doctor_id = $1 AND preferred_date = $2
+       AND status NOT IN ('cancelled', 'missed')`,
+    [doctor.id, date]
+  );
+  const taken = new Set(booked.rows.map((r: any) => String(r.preferred_time).slice(0, 5)));
+
+  const todayStr = localDateStr(new Date());
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  const slots: string[] = [];
+  let [h, m] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  // Guard against bad schedules that never produce slots.
+  const step = Number.isFinite(duration) && duration > 0 ? duration : 30;
+  let guard = 0;
+  while ((h < eh || (h === eh && m < em)) && guard < 200) {
+    guard += 1;
+    const label = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const slotMins = h * 60 + m;
+    const isPastToday = date === todayStr && slotMins <= nowMins;
+    if (!taken.has(label) && !isPastToday) slots.push(label);
+    m += step;
+    while (m >= 60) {
+      m -= 60;
+      h += 1;
+    }
+  }
+  // Last-resort fallback so patients are never stuck with an empty chip row on a clinic day.
+  if (slots.length === 0 && dayName !== 'Sunday') {
+    for (let hour = 9; hour < 17; hour++) {
+      for (const minute of [0, 30]) {
+        const label = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        const slotMins = hour * 60 + minute;
+        const isPastToday = date === todayStr && slotMins <= nowMins;
+        if (!taken.has(label) && !isPastToday) slots.push(label);
+      }
+    }
+  }
+  return slots;
+}
+
+async function findNextAvailableDate(doctor: any, fromDate: string, maxDays: number): Promise<string | null> {
+  for (let i = 1; i <= maxDays; i++) {
+    const candidate = addDaysIso(fromDate, i);
+    const slots = await buildSlotsForDoctor(doctor, candidate);
+    if (slots.length > 0) return candidate;
+  }
+  return null;
 }
 
 function publicUser(user: any, extras: Record<string, unknown> = {}) {
@@ -445,7 +600,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       console.log(`[OTP ${usePurpose}] ${phone}: ${otp}`);
       await sendSMS(
         phone,
-        `Digi Health: your ${usePurpose === 'register' ? 'registration' : 'password reset'} code is ${otp}. It expires in 10 minutes.`
+        `Medilynks: your ${usePurpose === 'register' ? 'registration' : 'password reset'} code is ${otp}. It expires in 10 minutes.`
       );
 
       res.json({
@@ -531,7 +686,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         { expiresIn: '24h' }
       );
 
-      await notifyUser(deps, user.id, 'Welcome to Digi Health', `Your Patient ID is ${patientCode}.`, 'account');
+      await notifyUser(deps, user.id, 'Welcome to Medilynks', `Your Patient ID is ${patientCode}.`, 'account');
 
       res.status(201).json({
         token,
@@ -564,35 +719,51 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
 
       const b = req.body;
+      const phone =
+        typeof b.phone_number === 'string' && b.phone_number.trim()
+          ? b.phone_number.trim()
+          : null;
+
+      if (phone) {
+        const clash = await query(
+          'SELECT id FROM users WHERE (phone_number = $1 OR username = $1) AND id <> $2',
+          [phone, req.user!.id]
+        );
+        if (clash.rows.length) {
+          return res.status(409).json({ message: 'Phone number already in use' });
+        }
+      }
+
       const result = await query(
         `UPDATE patients SET
           full_name = COALESCE($1, full_name),
           email = COALESCE($2, email),
-          date_of_birth = COALESCE($3, date_of_birth),
-          sex = COALESCE($4, sex),
-          region = COALESCE($5, region),
-          town = COALESCE($6, town),
-          address = COALESCE($7, address),
-          occupation = COALESCE($8, occupation),
-          emergency_name = COALESCE($9, emergency_name),
-          emergency_phone = COALESCE($10, emergency_phone),
-          next_of_kin_name = COALESCE($11, next_of_kin_name),
-          next_of_kin_phone = COALESCE($12, next_of_kin_phone),
-          blood_group = COALESCE($13, blood_group),
-          genotype = COALESCE($14, genotype),
-          allergies = COALESCE($15, allergies),
-          chronic_conditions = COALESCE($16, chronic_conditions),
-          current_medications = COALESCE($17, current_medications),
-          previous_diagnoses = COALESCE($18, previous_diagnoses),
-          surgeries = COALESCE($19, surgeries),
-          family_history = COALESCE($20, family_history),
-          social_history = COALESCE($21, social_history),
-          preferred_location = COALESCE($22, preferred_location),
-          nationwide_id = COALESCE($23, nationwide_id),
+          phone_number = COALESCE($3, phone_number),
+          date_of_birth = COALESCE($4, date_of_birth),
+          sex = COALESCE($5, sex),
+          region = COALESCE($6, region),
+          town = COALESCE($7, town),
+          address = COALESCE($8, address),
+          occupation = COALESCE($9, occupation),
+          emergency_name = COALESCE($10, emergency_name),
+          emergency_phone = COALESCE($11, emergency_phone),
+          next_of_kin_name = COALESCE($12, next_of_kin_name),
+          next_of_kin_phone = COALESCE($13, next_of_kin_phone),
+          blood_group = COALESCE($14, blood_group),
+          genotype = COALESCE($15, genotype),
+          allergies = COALESCE($16, allergies),
+          chronic_conditions = COALESCE($17, chronic_conditions),
+          current_medications = COALESCE($18, current_medications),
+          previous_diagnoses = COALESCE($19, previous_diagnoses),
+          surgeries = COALESCE($20, surgeries),
+          family_history = COALESCE($21, family_history),
+          social_history = COALESCE($22, social_history),
+          preferred_location = COALESCE($23, preferred_location),
+          nationwide_id = COALESCE($24, nationwide_id),
           profile_complete = TRUE
-         WHERE id = $24 RETURNING *`,
+         WHERE id = $25 RETURNING *`,
         [
-          b.full_name, b.email, b.date_of_birth || null, b.sex, b.region, b.town, b.address,
+          b.full_name, b.email, phone, b.date_of_birth || null, b.sex, b.region, b.town, b.address,
           b.occupation, b.emergency_name, b.emergency_phone, b.next_of_kin_name, b.next_of_kin_phone,
           b.blood_group, b.genotype, b.allergies, b.chronic_conditions, b.current_medications,
           b.previous_diagnoses, b.surgeries, b.family_history, b.social_history, b.preferred_location,
@@ -600,11 +771,20 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         ]
       );
 
-      if (b.full_name) {
-        await query('UPDATE users SET name = $1, email = COALESCE($2, email) WHERE id = $3', [
-          b.full_name, b.email || null, req.user!.id,
-        ]);
-      }
+      // Keep login + SMS in sync with the patient profile phone/email/name.
+      await query(
+        `UPDATE users SET
+          name = COALESCE($1, name),
+          email = COALESCE($2, email),
+          phone_number = COALESCE($3, phone_number),
+          username = CASE
+            WHEN $3::text IS NOT NULL AND (username = phone_number OR username = $4)
+            THEN $3
+            ELSE username
+          END
+         WHERE id = $5`,
+        [b.full_name || null, b.email || null, phone, patient.phone_number || null, req.user!.id]
+      );
 
       res.json(result.rows[0]);
     } catch (err) {
@@ -650,44 +830,24 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
 
   app.get('/api/doctors/:id/slots', authenticate, async (req, res) => {
     try {
-      const doctorId = Number(req.params.id);
-      const date = String(req.query.date || new Date().toISOString().slice(0, 10));
-      const doc = await query('SELECT * FROM doctors WHERE id = $1 AND is_active = TRUE', [doctorId]);
+      const rawId = Number(req.params.id);
+      // Accept doctors.id, or fall back to users.id → doctors.user_id (directory vs legacy mismatch).
+      let doc = await query('SELECT * FROM doctors WHERE id = $1 AND is_active = TRUE', [rawId]);
+      if (!doc.rows[0]) {
+        doc = await query('SELECT * FROM doctors WHERE user_id = $1 AND is_active = TRUE', [rawId]);
+      }
       if (!doc.rows[0]) return res.status(404).json({ message: 'Doctor not found' });
 
       const doctor = doc.rows[0];
-      const dayName = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
-      const working: string[] = doctor.working_days || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-      if (working.length && !working.includes(dayName)) {
-        return res.json({ date, slots: [] });
-      }
+      const doctorId = doctor.id as number;
+      const date = String(req.query.date || localDateStr(new Date()));
 
-      const start = String(doctor.start_time || '08:00:00').slice(0, 5);
-      const end = String(doctor.end_time || '17:00:00').slice(0, 5);
-      const duration = Number(doctor.slot_duration || 15);
-      const booked = await query(
-        `SELECT preferred_time FROM appointments
-         WHERE doctor_id = $1 AND preferred_date = $2
-           AND status NOT IN ('cancelled', 'missed')`,
-        [doctorId, date]
-      );
-      const taken = new Set(
-        booked.rows.map((r: any) => String(r.preferred_time).slice(0, 5))
-      );
-
-      const slots: string[] = [];
-      let [h, m] = start.split(':').map(Number);
-      const [eh, em] = end.split(':').map(Number);
-      while (h < eh || (h === eh && m < em)) {
-        const label = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        if (!taken.has(label)) slots.push(label);
-        m += duration;
-        while (m >= 60) {
-          m -= 60;
-          h += 1;
-        }
+      const slots = await buildSlotsForDoctor(doctor, date);
+      let nextAvailableDate: string | null = null;
+      if (slots.length === 0) {
+        nextAvailableDate = await findNextAvailableDate(doctor, date, 14);
       }
-      res.json({ date, slots });
+      res.json({ date, slots, doctor_id: doctorId, next_available_date: nextAvailableDate });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -698,19 +858,63 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     if (req.user!.role !== 'doctor') return res.status(403).json({ message: 'Forbidden' });
     try {
       const { is_online, working_days, start_time, end_time, slot_duration, consultation_fee } = req.body;
+      const online =
+        typeof is_online === 'boolean'
+          ? is_online
+          : is_online === 'true' || is_online === 1 || is_online === '1'
+            ? true
+            : is_online === 'false' || is_online === 0 || is_online === '0'
+              ? false
+              : null;
+
       const result = await query(
         `UPDATE doctors SET
-          is_online = COALESCE($1, is_online),
+          is_online = CASE WHEN $1::boolean IS NULL THEN is_online ELSE $1::boolean END,
           working_days = COALESCE($2, working_days),
           start_time = COALESCE($3, start_time),
           end_time = COALESCE($4, end_time),
           slot_duration = COALESCE($5, slot_duration),
           consultation_fee = COALESCE($6, consultation_fee)
          WHERE user_id = $7 RETURNING *`,
-        [is_online, working_days || null, start_time || null, end_time || null, slot_duration || null, consultation_fee || null, req.user!.id]
+        [online, working_days || null, start_time || null, end_time || null, slot_duration || null, consultation_fee || null, req.user!.id]
       );
       if (!result.rows[0]) return res.status(404).json({ message: 'Doctor profile not found' });
       res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/doctors/me', authenticate, async (req: AuthedRequest, res) => {
+    if (req.user!.role !== 'doctor') return res.status(403).json({ message: 'Forbidden' });
+    try {
+      const result = await query(
+        `SELECT d.*, u.name as user_name, u.phone_number
+         FROM doctors d
+         LEFT JOIN users u ON d.user_id = u.id
+         WHERE d.user_id = $1
+         LIMIT 1`,
+        [req.user!.id]
+      );
+      if (!result.rows[0]) return res.status(404).json({ message: 'Doctor profile not found' });
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Lightweight presence map for patient UIs to poll. */
+  app.get('/api/doctors/presence', authenticate, async (_req, res) => {
+    try {
+      const result = await query(
+        `SELECT id, COALESCE(is_online, FALSE) AS is_online, name
+         FROM doctors
+         WHERE is_active = TRUE
+         ORDER BY is_online DESC, name ASC`
+      );
+      res.json(result.rows);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -886,7 +1090,15 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       }
       sql += ' ORDER BY a.queue_number ASC NULLS LAST, a.created_at ASC';
       const result = await query(sql, params);
-      res.json(result.rows);
+      res.json(
+        result.rows.map((row: any) => ({
+          ...row,
+          preferred_date:
+            row.preferred_date instanceof Date
+              ? row.preferred_date.toISOString().slice(0, 10)
+              : String(row.preferred_date || '').slice(0, 10),
+        }))
+      );
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -897,7 +1109,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     const allowed = ['nurse', 'medical_ops', 'admin'];
     if (!allowed.includes(req.user!.role)) return res.status(403).json({ message: 'Forbidden' });
     try {
-      const { doctor_id, urgency, status } = req.body;
+      const { doctor_id, urgency, status, notes, triage_urgency } = req.body;
       const result = await query(
         `UPDATE appointments SET
           doctor_id = COALESCE($1, doctor_id),
@@ -906,7 +1118,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
          WHERE id = $4 RETURNING *`,
         [doctor_id || null, urgency || null, status || null, req.params.id]
       );
-      if (req.body.urgency || req.body.notes) {
+      if (triage_urgency || notes || req.body.urgency) {
         await query(
           `UPDATE triage_records SET
             urgency = COALESCE($1, urgency),
@@ -914,10 +1126,41 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
             nurse_id = $3,
             status = 'reviewed'
            WHERE appointment_id = $4`,
-          [req.body.urgency || null, req.body.notes || null, req.user!.id, req.params.id]
+          [triage_urgency || null, notes || req.body.notes || null, req.user!.id, req.params.id]
         );
       }
-      res.json(result.rows[0]);
+      const apt = result.rows[0];
+      // Notify assigned doctor and patient
+      if (doctor_id) {
+        const doc = await query('SELECT user_id, name FROM doctors WHERE id = $1', [doctor_id]);
+        const uid = doc.rows[0]?.user_id;
+        if (uid) {
+          await notifyUser(
+            deps,
+            uid,
+            'Patient assigned to you',
+            `A triage patient was handed to ${doc.rows[0]?.name || 'you'} from the live queue.`,
+            'queue'
+          );
+        }
+        if (apt?.patient_id) {
+          const patient = await query(
+            'SELECT user_id, full_name FROM patients WHERE id = $1',
+            [apt.patient_id]
+          );
+          const patientUserId = patient.rows[0]?.user_id;
+          if (patientUserId) {
+            await notifyUser(
+              deps,
+              patientUserId,
+              'Doctor ready for your visit',
+              `${doc.rows[0]?.name || 'Your clinician'} is ready. Open Consult Now to join the video room.`,
+              'queue'
+            );
+          }
+        }
+      }
+      res.json(apt);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -1022,6 +1265,19 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         [req.user!.id]
       );
       res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/notifications/me/unread-count', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const result = await query(
+        `SELECT COUNT(*)::int AS count FROM notifications
+         WHERE (user_id = $1 OR user_id IS NULL) AND is_read = FALSE`,
+        [req.user!.id]
+      );
+      res.json({ count: result.rows[0]?.count ?? 0 });
     } catch (err) {
       res.status(500).json({ message: 'Server error' });
     }

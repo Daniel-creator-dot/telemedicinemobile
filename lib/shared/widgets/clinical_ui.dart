@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/brand.dart';
+
 const digiForest = Color(0xFF1F4A3A);
 const digiGold = Color(0xFFC4A574);
 const digiPaper = Color(0xFFF6F3EE);
@@ -21,27 +23,28 @@ class DigiBrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: 'Digi',
-            style: GoogleFonts.sourceSerif4(
-              fontSize: size,
-              fontWeight: FontWeight.w600,
-              color: light ? Colors.white : digiForest,
-            ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(size * 0.28),
+          child: Image.asset(
+            AppBrand.logoAsset,
+            width: size * 1.35,
+            height: size * 1.35,
+            fit: BoxFit.cover,
           ),
-          TextSpan(
-            text: ' Health',
-            style: GoogleFonts.sourceSerif4(
-              fontSize: size,
-              fontWeight: FontWeight.w600,
-              color: light ? const Color(0xFFE8D5A3) : digiGold,
-            ),
+        ),
+        SizedBox(width: size * 0.35),
+        Text(
+          AppBrand.name,
+          style: GoogleFonts.sourceSerif4(
+            fontSize: size,
+            fontWeight: FontWeight.w600,
+            color: light ? Colors.white : digiForest,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

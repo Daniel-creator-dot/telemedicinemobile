@@ -20,7 +20,9 @@ class _ReferralDialogState extends State<ReferralDialog> {
   final _reason = TextEditingController();
   final _summary = TextEditingController();
   List<DoctorProfile> _doctors = [];
+  List<Map<String, dynamic>> _hospitals = [];
   int? _toDoctorId;
+  int? _toOrgId;
   String _specialty = 'Cardiology';
   String _urgency = 'routine';
   bool _loading = true;
@@ -53,9 +55,20 @@ class _ReferralDialogState extends State<ReferralDialog> {
   }
 
   Future<void> _load() async {
-    final docs = await context.read<CareRepository>().getDirectory();
+    final care = context.read<CareRepository>();
+    final docs = await care.getDirectory();
+    List<Map<String, dynamic>> hospitals = [];
+    try {
+      hospitals = await care.getPartners(type: 'hospital');
+    } catch (_) {}
     setState(() {
       _doctors = docs;
+      _hospitals = hospitals;
+      final preferred = _hospitals.cast<Map<String, dynamic>?>().firstWhere(
+            (h) => (h?['name']?.toString() ?? '').contains('Tamale'),
+            orElse: () => _hospitals.isNotEmpty ? _hospitals.first : null,
+          );
+      _toOrgId = preferred?['id'] as int?;
       _loading = false;
     });
   }
@@ -68,6 +81,7 @@ class _ReferralDialogState extends State<ReferralDialog> {
         'appointment_id': widget.appointment.id,
         'patient_id': widget.patientId,
         'to_doctor_id': _toDoctorId,
+        'to_org_id': _toOrgId,
         'specialty': _specialty,
         'reason': _reason.text.trim(),
         'clinical_summary': _summary.text.trim(),
@@ -107,6 +121,25 @@ class _ReferralDialogState extends State<ReferralDialog> {
                           .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(color: Colors.white))))
                           .toList(),
                       onChanged: (v) => setState(() => _specialty = v ?? _specialty),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int?>(
+                      value: _toOrgId,
+                      dropdownColor: const Color(0xFF1E293B),
+                      decoration: _deco('Network hospital'),
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('No facility (doctor only)', style: TextStyle(color: Colors.white70))),
+                        ..._hospitals.map(
+                          (h) => DropdownMenuItem<int?>(
+                            value: h['id'] as int?,
+                            child: Text(
+                              '${h['name'] ?? 'Hospital'} · ${h['town'] ?? h['region'] ?? ''}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _toOrgId = v),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int?>(

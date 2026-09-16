@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'core/api_client.dart';
+import 'core/brand.dart';
 import 'core/session.dart';
 import 'core/notification_service.dart';
 import 'features/auth/auth_repository.dart';
@@ -60,7 +61,7 @@ class TelemedicineApp extends StatefulWidget {
 class _TelemedicineAppState extends State<TelemedicineApp> {
   late final GoRouter _router;
   bool _splashDone = false;
-  String _loadingMessage = 'Opening Digi Health…';
+  String _loadingMessage = 'Opening ${AppBrand.name}…';
 
   @override
   void initState() {
@@ -82,7 +83,7 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
     if (mounted) {
       setState(() => _loadingMessage = 'Preparing your care workspace…');
     }
-    const minSplash = Duration(milliseconds: 1600);
+    const minSplash = Duration(milliseconds: 3000);
     final elapsed = DateTime.now().difference(started);
     if (elapsed < minSplash) {
       await Future.delayed(minSplash - elapsed);
@@ -103,7 +104,7 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Digi Health Telemedicine',
+      title: AppBrand.name,
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.light,
       theme: ThemeData(

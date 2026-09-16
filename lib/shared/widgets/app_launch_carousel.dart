@@ -1,55 +1,20 @@
-import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class _LaunchSlide {
-  const _LaunchSlide({
-    required this.asset,
-    required this.title,
-    required this.subtitle,
-    required this.accent,
-  });
+import '../../core/brand.dart';
+import '../../features/admin/admin_chrome.dart';
 
-  final String asset;
-  final String title;
-  final String subtitle;
-  final Color accent;
-}
-
+/// Cinematic Medilynks boot intro.
 class AppLaunchCarousel extends StatefulWidget {
   const AppLaunchCarousel({
     super.key,
-    this.message = 'Initializing medical tunnels…',
+    this.message = 'Opening Medilynks…',
   });
 
   final String message;
-
-  static const _slides = [
-    _LaunchSlide(
-      asset: 'assets/branding/onboarding_1.png',
-      title: 'A quiet place to begin',
-      subtitle: 'See a clinician from home — then keep every next step in one record',
-      accent: Color(0xFF00D2C4),
-    ),
-    _LaunchSlide(
-      asset: 'assets/branding/onboarding_2.png',
-      title: 'Labs and images, returned',
-      subtitle: 'Nearby partners collect the work. Results come back to your clinician.',
-      accent: Color(0xFF8B5CF6),
-    ),
-    _LaunchSlide(
-      asset: 'assets/branding/onboarding_3.png',
-      title: 'Connected care',
-      subtitle: 'Consultations, labs, imaging and pharmacy stay in one patient record',
-      accent: Color(0xFF00D2C4),
-    ),
-    _LaunchSlide(
-      asset: 'assets/branding/onboarding_4.png',
-      title: 'One continuous journey',
-      subtitle: 'From first consult through pharmacy and follow-up — never fragmented',
-      accent: Color(0xFF8B5CF6),
-    ),
-  ];
 
   @override
   State<AppLaunchCarousel> createState() => _AppLaunchCarouselState();
@@ -57,434 +22,245 @@ class AppLaunchCarousel extends StatefulWidget {
 
 class _AppLaunchCarouselState extends State<AppLaunchCarousel>
     with TickerProviderStateMixin {
-  final _pageController = PageController();
-  int _page = 0;
-  Timer? _autoTimer;
-  late final AnimationController _loaderSpin;
-  late final AnimationController _loaderPulse;
+  late final AnimationController _spin;
+  late final AnimationController _pulse;
+  late final AnimationController _sweep;
 
   @override
   void initState() {
     super.initState();
-    _loaderSpin = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-    _loaderPulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _autoTimer = Timer.periodic(const Duration(milliseconds: 3400), (_) {
-      if (!_pageController.hasClients) return;
-      final next = (_page + 1) % AppLaunchCarousel._slides.length;
-      _pageController.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 700),
-        curve: Curves.easeOutCubic,
-      );
-    });
+    _spin = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat();
+    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+    _sweep = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat();
   }
 
   @override
   void dispose() {
-    _autoTimer?.cancel();
-    _pageController.dispose();
-    _loaderSpin.dispose();
-    _loaderPulse.dispose();
+    _spin.dispose();
+    _pulse.dispose();
+    _sweep.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
-
-    return Material(
-      color: const Color(0xFFFFFFFF), // White background
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const _AmbientGlow(),
-          SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: RichText(
-                      text: TextSpan(
-                        style: GoogleFonts.roboto(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.5,
-                        ),
-                        children: [
-                          TextSpan(
-                            text: 'Digi',
-                            style: GoogleFonts.roboto(color: Color(0xFF8B5CF6)),
-                          ),
-                          TextSpan(
-                            text: ' Health',
-                            style: GoogleFonts.roboto(color: Color(0xFF00D2C4)),
-                          ),
-                        ],
+    return Scaffold(
+      backgroundColor: AdminPalette.bg,
+      body: AdminMeshBackdrop(
+        child: SafeArea(
+          child: Column(
+            children: [
+              const Spacer(flex: 3),
+              SizedBox(
+                width: 220,
+                height: 220,
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_spin, _pulse]),
+                  builder: (context, _) {
+                    return CustomPaint(
+                      painter: _IntroRingsPainter(
+                        spin: _spin.value,
+                        pulse: _pulse.value,
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    onPageChanged: (i) => setState(() => _page = i),
-                    itemCount: AppLaunchCarousel._slides.length,
-                    itemBuilder: (context, index) {
-                      return _SlideCard(
-                        slide: AppLaunchCarousel._slides[index],
-                        active: index == _page,
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _PageDots(count: AppLaunchCarousel._slides.length, index: _page),
-                const SizedBox(height: 25),
-                _RingLaunchLoader(
-                  spin: _loaderSpin,
-                  pulse: _loaderPulse,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  widget.message,
-                  style: GoogleFonts.roboto(
-                    color: const Color(0xFF64748B), // Dark slate — readable on white
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                SizedBox(height: 16 + bottomPad),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AmbientGlow extends StatelessWidget {
-  const _AmbientGlow();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          Positioned(
-            top: -80,
-            right: -40,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    Color(0x2500D2C4), // primary teal
-                    Colors.transparent,
-                  ],
+                      child: Center(
+                        child: Container(
+                          width: 108,
+                          height: 108,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AdminPalette.cyan.withValues(alpha: 0.45),
+                                blurRadius: 36,
+                              ),
+                              BoxShadow(
+                                color: AdminPalette.gold.withValues(alpha: 0.22),
+                                blurRadius: 24,
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: Image.asset(AppBrand.logoAsset, fit: BoxFit.cover),
+                          ),
+                        )
+                            .animate()
+                            .fadeIn(duration: 600.ms)
+                            .scale(begin: const Offset(0.55, 0.55), curve: Curves.easeOutBack, duration: 780.ms),
+                      ),
+                    );
+                  },
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            bottom: 120,
-            left: -60,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    Color(0x208B5CF6), // electric violet
-                    Colors.transparent,
-                  ],
+              const SizedBox(height: 28),
+              Text(
+                AppBrand.name,
+                style: GoogleFonts.sourceSerif4(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w700,
+                  color: AdminPalette.ink,
+                  letterSpacing: -0.8,
+                  height: 1,
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SlideCard extends StatelessWidget {
-  const _SlideCard({required this.slide, required this.active});
-
-  final _LaunchSlide slide;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: active ? 1.0 : 0.94,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-        child: Column(
-          children: [
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: slide.accent.withValues(alpha: active ? 0.35 : 0.1),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: slide.accent.withValues(alpha: 0.15),
-                      blurRadius: active ? 28 : 12,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
+              )
+                  .animate()
+                  .fadeIn(delay: 280.ms, duration: 520.ms)
+                  .slideY(begin: 0.18, curve: Curves.easeOutCubic),
+              const SizedBox(height: 8),
+              Text(
+                AppBrand.tagline,
+                style: GoogleFonts.dmSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AdminPalette.gold,
+                  letterSpacing: 0.4,
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.asset(
-                      slide.asset,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                    ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.15),
-                            Colors.black.withValues(alpha: 0.75),
+              )
+                  .animate()
+                  .fadeIn(delay: 520.ms, duration: 500.ms)
+                  .slideY(begin: 0.2, curve: Curves.easeOutCubic),
+              const SizedBox(height: 22),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: const [
+                  _IntroChip(label: 'Live queue'),
+                  _IntroChip(label: 'Records'),
+                  _IntroChip(label: 'Specialists'),
+                ],
+              )
+                  .animate()
+                  .fadeIn(delay: 780.ms, duration: 480.ms)
+                  .slideY(begin: 0.16, curve: Curves.easeOutCubic),
+              const Spacer(flex: 2),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 56),
+                child: AnimatedBuilder(
+                  animation: _sweep,
+                  builder: (context, _) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: SizedBox(
+                        height: 3,
+                        child: Stack(
+                          children: [
+                            Container(color: Colors.white.withValues(alpha: 0.08)),
+                            FractionallySizedBox(
+                              widthFactor: 0.42,
+                              alignment: Alignment(-1 + _sweep.value * 2, 0),
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.transparent, AdminPalette.cyan, AdminPalette.gold, Colors.transparent],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
-                          stops: const [0.35, 0.65, 1.0],
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
-            _CaptionPanel(slide: slide),
-          ],
+              const SizedBox(height: 14),
+              Text(
+                widget.message,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AdminPalette.mute,
+                  letterSpacing: 0.6,
+                ),
+              ).animate(onPlay: (c) => c.repeat(reverse: true)).fade(begin: 0.45, end: 1, duration: 900.ms),
+              const SizedBox(height: 36),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _CaptionPanel extends StatelessWidget {
-  const _CaptionPanel({required this.slide});
-
-  final _LaunchSlide slide;
+class _IntroChip extends StatelessWidget {
+  const _IntroChip({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.92), // Slate container
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: slide.accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'DIGI HEALTH',
-              style: GoogleFonts.roboto(
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.4,
-                color: slide.accent,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            slide.title,
-            style: GoogleFonts.roboto(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              height: 1.1,
-              color: const Color(0xFFF8FAFC),
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            slide.subtitle,
-            style: GoogleFonts.roboto(
-              fontSize: 13,
-              color: const Color(0xFF94A3B8),
-              height: 1.35,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: GoogleFonts.dmSans(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AdminPalette.ink.withValues(alpha: 0.82),
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }
 }
 
-class _PageDots extends StatelessWidget {
-  const _PageDots({required this.count, required this.index});
+class _IntroRingsPainter extends CustomPainter {
+  _IntroRingsPainter({required this.spin, required this.pulse});
 
-  final int count;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(count, (i) {
-        final active = i == index;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOutCubic,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: active ? 28 : 8,
-          height: 8,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: active
-                ? const Color(0xFF00D2C4)
-                : const Color(0xFFCBD5E1), // Light grey — visible on white
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF00D2C4).withValues(alpha: 0.45),
-                      blurRadius: 8,
-                    ),
-                  ]
-                : null,
-          ),
-        );
-      }),
-    );
-  }
-}
-
-class _RingLaunchLoader extends StatelessWidget {
-  const _RingLaunchLoader({
-    required this.spin,
-    required this.pulse,
-  });
-
-  final AnimationController spin;
-  final AnimationController pulse;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([spin, pulse]),
-      builder: (context, child) {
-        final scale = 0.92 + pulse.value * 0.08;
-        return Transform.scale(
-          scale: scale,
-          child: SizedBox(
-            width: 52,
-            height: 52,
-            child: CustomPaint(
-              painter: _RingLoaderPainter(rotation: spin.value),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _RingLoaderPainter extends CustomPainter {
-  _RingLoaderPainter({required this.rotation});
-
-  final double rotation;
+  final double spin;
+  final double pulse;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 4;
+    final c = size.center(Offset.zero);
+    for (var i = 0; i < 3; i++) {
+      final t = ((pulse + i / 3) % 1.0);
+      final r = 48 + t * 62;
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = AdminPalette.cyan.withValues(alpha: 0.28 * (1 - t)),
+      );
+    }
 
-    final track = Paint()
-      ..color = const Color(0xFFE2E8F0) // Light grey track — visible on white
+    final orbit = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, radius, track);
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(rotation * 6.28318);
-
-    final mintArc = Paint()
-      ..shader = const SweepGradient(
+      ..strokeWidth = 1.2
+      ..shader = SweepGradient(
+        startAngle: spin * math.pi * 2,
         colors: [
-          Color(0x0800D2C4),
-          Color(0xFF00D2C4),
+          Colors.transparent,
+          AdminPalette.gold.withValues(alpha: 0.9),
+          AdminPalette.cyan.withValues(alpha: 0.9),
+          Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
+      ).createShader(Rect.fromCircle(center: c, radius: 86));
+    canvas.drawCircle(c, 86, orbit);
 
-    final violetArc = Paint()
-      ..color = const Color(0xFF8B5CF6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset.zero, radius: radius),
-      0,
-      2.1,
-      false,
-      mintArc,
+    final p = Offset(
+      c.dx + math.cos(spin * math.pi * 2) * 86,
+      c.dy + math.sin(spin * math.pi * 2) * 86,
     );
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset.zero, radius: radius),
-      2.4,
-      1.2,
-      false,
-      violetArc,
+    canvas.drawCircle(p, 4.5, Paint()..color = AdminPalette.gold);
+    canvas.drawCircle(
+      Offset(
+        c.dx + math.cos(spin * math.pi * 2 + math.pi) * 86,
+        c.dy + math.sin(spin * math.pi * 2 + math.pi) * 86,
+      ),
+      3.2,
+      Paint()..color = AdminPalette.cyan,
     );
-    canvas.restore();
-
-    final dot = Paint()..color = const Color(0xFF00D2C4);
-    canvas.drawCircle(center, 3.5, dot);
   }
 
   @override
-  bool shouldRepaint(covariant _RingLoaderPainter old) =>
-      old.rotation != rotation;
+  bool shouldRepaint(covariant _IntroRingsPainter oldDelegate) =>
+      oldDelegate.spin != spin || oldDelegate.pulse != pulse;
 }

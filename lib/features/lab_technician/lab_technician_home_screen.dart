@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/brand.dart';
 import '../../core/session.dart';
 
 class LabTechnicianHomeScreen extends StatefulWidget {
@@ -289,7 +290,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Digi Health',
+                        AppBrand.name,
                         style: GoogleFonts.roboto(
                           color: Colors.white,
                           fontSize: 18,

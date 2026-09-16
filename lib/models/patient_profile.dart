@@ -92,6 +92,7 @@ class PatientProfile {
   Map<String, dynamic> toPayload() => {
         'full_name': fullName,
         'email': email,
+        'phone_number': phoneNumber,
         'date_of_birth': dateOfBirth?.split('T').first,
         'sex': sex,
         'region': region,

@@ -24,6 +24,8 @@ import {
   requireRoles,
   canAccessPatient,
   getDoctorForUser,
+  resolveDoctorId,
+  serializeAppointment,
   assertAppointmentAccess,
   publicSettings,
   checkOtpRateLimit,
@@ -181,7 +183,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       ]);
       await sendSMS(
         user.phone_number,
-        `Digi Health: your password reset code is ${otp}. It expires in 10 minutes.`
+        `Medilynks: your password reset code is ${otp}. It expires in 10 minutes.`
       );
     }
 
@@ -259,11 +261,11 @@ app.get('/api/config/paystack', async (_req, res) => {
 function paystackReturnHtml() {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Digi Health</title>
+<title>Medilynks</title>
 <style>body{font-family:system-ui,sans-serif;background:#F6F3EE;color:#1F4A3A;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
 .card{background:#fff;padding:28px 24px;border-radius:16px;max-width:360px;text-align:center;box-shadow:0 8px 30px rgba(31,74,58,.08)}
 h1{font-size:20px;margin:0 0 8px}p{margin:0;color:#5C6B66;line-height:1.45}</style></head>
-<body><div class="card"><h1>Payment received</h1><p>Return to the Digi Health app to confirm your visit. You can close this page.</p></div></body></html>`;
+<body><div class="card"><h1>Payment received</h1><p>Return to the Medilynks app to confirm your visit. You can close this page.</p></div></body></html>`;
 }
 
 app.get('/api/paystack/callback', (_req, res) => {
@@ -429,7 +431,7 @@ app.get('/api/appointments', authenticate, async (req: any, res) => {
     queryText += ' ORDER BY a.preferred_date DESC, a.preferred_time DESC';
     
     const result = await query(queryText, queryParams);
-    res.json(result.rows);
+    res.json(result.rows.map(serializeAppointment));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -448,7 +450,7 @@ app.get('/api/appointments/my', authenticate, async (req: any, res) => {
       WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2
       ORDER BY a.preferred_date DESC, a.preferred_time DESC
     `, [ids, phone || '']);
-    res.json(result.rows);
+    res.json(result.rows.map(serializeAppointment));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -462,7 +464,7 @@ app.get('/api/appointments/:id', authenticate, async (req: any, res) => {
   try {
     const apt = await assertAppointmentAccess(req, res, id);
     if (!apt) return;
-    res.json(apt);
+    res.json(serializeAppointment(apt));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -471,7 +473,7 @@ app.get('/api/appointments/:id', authenticate, async (req: any, res) => {
 app.post('/api/appointments', authenticate, async (req: any, res) => {
     const { 
     fullName, whoIsComing, phoneNumber, email, staffId, nationwideId, department, 
-    reason, preferredDate, preferredTime, priority, notes, doctor_id, service, isTelemedicine,
+    reason, preferredDate, preferredTime, priority, notes, doctor_id, doctorId, service, isTelemedicine,
     consult_type, booking_type, dependent_patient_id
   } = req.body;
   
@@ -518,6 +520,12 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
       patient = newPatient.rows[0];
     }
 
+    // Always store doctors.id (never users.id) so doctor list filters match.
+    const resolvedDoctorId = await resolveDoctorId(doctor_id ?? doctorId);
+    if ((doctor_id ?? doctorId) != null && (doctor_id ?? doctorId) !== '' && resolvedDoctorId == null) {
+      return res.status(400).json({ message: 'Unknown doctor. Pick a clinician from the directory.' });
+    }
+
     const appointmentId = 'APT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
     const visitName = dependent_patient_id ? patient.full_name : fullName;
 
@@ -525,47 +533,71 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
       INSERT INTO appointments (
         appointment_id, patient_id, full_name, who_is_coming, phone_number, email, staff_id, nationwide_id,
         department, notes, preferred_date, preferred_time, priority, doctor_id, service, is_telemedicine,
-        consult_type, booking_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        consult_type, booking_type, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'pending')
       RETURNING *
     `, [
       appointmentId, patient.id, visitName, whoIsComing, phoneNumber, email, staffId, nationwideId,
-      department, reason + (notes ? ' | ' + notes : ''), preferredDate, preferredTime, priority, doctor_id, service, !!isTelemedicine,
+      department, reason + (notes ? ' | ' + notes : ''), preferredDate, preferredTime, priority || 'Medium', resolvedDoctorId, service, !!isTelemedicine,
       consult_type || service || 'general consultation', booking_type || 'scheduled'
     ]);
 
-    await sendSMS(
+    // Never block the booking response on SMS latency.
+    sendSMS(
       phoneNumber,
-      `Digi Health: appointment ${appointmentId} is booked for ${preferredDate} at ${preferredTime}. Open the app to manage your visit.`
-    );
-    
-    // Admin Alerts
-    console.log(`Admin Alert: New appointment ${appointmentId} booked by ${fullName}.`);
-    
-    // Send SMS to Admin
-    await sendSMS('+233200024081', `Admin Alert: New appointment ${appointmentId} booked by ${fullName} for ${preferredDate} at ${preferredTime}.`).catch(e => console.error('Admin SMS Error:', e));
+      `Medilynks: appointment ${appointmentId} is booked for ${preferredDate} at ${preferredTime}. Open the app to manage your visit.`
+    ).catch((e) => console.error('Patient SMS Error:', e));
+    sendSMS(
+      '+233200024081',
+      `Admin Alert: New appointment ${appointmentId} booked by ${fullName} for ${preferredDate} at ${preferredTime}.`
+    ).catch((e) => console.error('Admin SMS Error:', e));
 
-    // Send Push Notification to all Admin users
+    console.log(`Admin Alert: New appointment ${appointmentId} booked by ${fullName}.`);
+
+    // Notify assigned doctor (users.id via doctors.user_id) + admins
     try {
+      const notifyIds: number[] = [];
+      if (resolvedDoctorId) {
+        const docUser = await query('SELECT user_id, name FROM doctors WHERE id = $1', [resolvedDoctorId]);
+        const doctorUserId = docUser.rows[0]?.user_id;
+        if (doctorUserId) {
+          notifyIds.push(Number(doctorUserId));
+          await query(
+            `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+            [
+              doctorUserId,
+              'New appointment booked',
+              `${visitName} booked for ${preferredDate} at ${preferredTime}.`,
+              'appointment',
+            ]
+          ).catch(() =>
+            query('INSERT INTO notifications (message) VALUES ($1)', [
+              `New appointment ${appointmentId} for Dr. ${docUser.rows[0]?.name || resolvedDoctorId}`,
+            ])
+          );
+        }
+      }
       const adminUsers = await query("SELECT id FROM users WHERE role = 'admin'");
-      const adminIds = adminUsers.rows.map(r => r.id);
-      if (adminIds.length > 0) {
-        await sendPushNotification(
-          adminIds,
+      for (const r of adminUsers.rows) notifyIds.push(Number(r.id));
+      const uniqueIds = [...new Set(notifyIds)];
+      if (uniqueIds.length > 0) {
+        sendPushNotification(
+          uniqueIds,
           'New Appointment Booked',
           `New appointment ${appointmentId} booked by ${fullName} for ${preferredDate} at ${preferredTime}.`,
-          { type: 'new-appointment', appointmentId: appointmentId }
-        );
+          { type: 'new-appointment', appointmentId: appointmentId, doctorId: String(resolvedDoctorId || '') }
+        ).catch((e) => console.error('Booking push error:', e));
       }
-    } catch (pushErr) {
-      console.error('Error sending push notifications to admin users:', pushErr);
+    } catch (notifyErr) {
+      console.error('Booking notify error:', notifyErr);
     }
 
     await query('INSERT INTO notifications (message) VALUES ($1)', [
       `New appointment booked: ${appointmentId} by ${fullName}`
     ]);
 
-    res.status(201).json(result.rows[0]);
+    const created = serializeAppointment(result.rows[0]);
+    res.status(201).json(created);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -605,15 +637,15 @@ app.patch('/api/appointments/:id', authenticate, async (req: any, res) => {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'a Physician';
         const dateStr = apt.preferred_date ? new Date(apt.preferred_date).toLocaleDateString() : 'the scheduled date';
-        const msg = `Digi Health: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app to join or view details.`;
+        const msg = `Medilynks: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app to join or view details.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Approve:', e));
       } else if (status === 'completed') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'our team';
-        const msg = `Digi Health: your visit ${apt.appointment_id} with ${doctorName} is complete. Review notes and prescriptions in the app.`;
+        const msg = `Medilynks: your visit ${apt.appointment_id} with ${doctorName} is complete. Review notes and prescriptions in the app.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Complete:', e));
       } else if (status === 'cancelled') {
-        const msg = `Digi Health: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
+        const msg = `Medilynks: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Cancel:', e));
       }
 
@@ -689,7 +721,7 @@ app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CL
     const apt = result.rows[0];
     if (apt) {
       const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
-      const msg = `Digi Health: your video visit ${apt.appointment_id} is ready for ${scheduledInfo}. Open the app to join.`;
+      const msg = `Medilynks: your video visit ${apt.appointment_id} is ready for ${scheduledInfo}. Open the app to join.`;
       await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in manual link gen:', e));
     }
 
@@ -733,7 +765,7 @@ async function markAppointmentPaid(apt: any, paymentRef: string, gateway = 'pays
     const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
     await sendSMS(
       apt.phone_number,
-      `Digi Health: payment confirmed for your visit on ${scheduledInfo}. Open the app to join.`
+      `Medilynks: payment confirmed for your visit on ${scheduledInfo}. Open the app to join.`
     ).catch((e) => console.error('SMS Error after pay:', e));
   }
 
@@ -877,19 +909,19 @@ app.patch('/api/appointments/:id/status', authenticate, async (req: any, res) =>
         
         let msg = '';
         if (apt.is_telemedicine && apt.meeting_link) {
-          msg = `Digi Health: your video visit ${apt.appointment_id} with ${doctorName} is confirmed for ${dateStr} at ${apt.preferred_time}. Open the app to join.`;
+          msg = `Medilynks: your video visit ${apt.appointment_id} with ${doctorName} is confirmed for ${dateStr} at ${apt.preferred_time}. Open the app to join.`;
         } else {
-          msg = `Digi Health: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app for details.`;
+          msg = `Medilynks: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app for details.`;
         }
         
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Approve:', e));
       } else if (status === 'completed') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'our team';
-        const msg = `Digi Health: your visit ${apt.appointment_id} with ${doctorName} is complete. Review your care plan in the app.`;
+        const msg = `Medilynks: your visit ${apt.appointment_id} with ${doctorName} is complete. Review your care plan in the app.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Complete:', e));
       } else if (status === 'cancelled') {
-        const msg = `Digi Health: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
+        const msg = `Medilynks: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
         await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Cancel:', e));
       }
 
@@ -1068,7 +1100,7 @@ app.post('/api/prescriptions', authenticate, async (req: any, res) => {
     
     const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
     if (aptResult.rows[0]) {
-      await sendSMS(aptResult.rows[0].phone_number, `Digi Health: a new prescription is ready in your app. Open Prescriptions to review instructions.`);
+      await sendSMS(aptResult.rows[0].phone_number, `Medilynks: a new prescription is ready in your app. Open Prescriptions to review instructions.`);
     }
 
     res.status(201).json(result.rows[0]);
@@ -1146,7 +1178,7 @@ app.post('/api/consultations', authenticate, async (req: any, res) => {
     if (status === 'completed' && diagnosis) {
       const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
       if (aptResult.rows[0]) {
-        await sendSMS(aptResult.rows[0].phone_number, `Digi Health: your consultation is complete. Open the app to review your care plan and prescriptions.`);
+        await sendSMS(aptResult.rows[0].phone_number, `Medilynks: your consultation is complete. Open the app to review your care plan and prescriptions.`);
       }
     }
 
@@ -1182,7 +1214,7 @@ app.put('/api/consultations/:id', authenticate, async (req: any, res) => {
     if (status === 'completed' && oldCons.rows[0]?.status !== 'completed' && diagnosis) {
       const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [oldCons.rows[0].appointment_id]);
       if (aptResult.rows[0]) {
-        await sendSMS(aptResult.rows[0].phone_number, `Digi Health: your consultation is complete. Open the app to review your care plan and prescriptions.`);
+        await sendSMS(aptResult.rows[0].phone_number, `Medilynks: your consultation is complete. Open the app to review your care plan and prescriptions.`);
       }
     }
 

@@ -45,11 +45,72 @@ export async function initClinicalSchema() {
   `);
 }
 
+function journeyIsOpen(kind: string, status: string) {
+  const s = (status || '').toLowerCase();
+  if (kind === 'prescription') return !['dispensed', 'cancelled', 'unsent'].includes(s);
+  if (kind === 'lab' || kind === 'imaging') return !['completed', 'cancelled'].includes(s);
+  if (kind === 'referral') return !['completed', 'cancelled'].includes(s);
+  if (kind === 'consultation') return ['queued', 'pending', 'approved', 'consulting'].includes(s);
+  return false;
+}
+
+function journeyStatusLabel(kind: string, status: string) {
+  const s = (status || '').toLowerCase();
+  const labels: Record<string, string> = {
+    unsent: 'Not sent',
+    sent: 'Sent to pharmacy',
+    received: 'Pharmacy received',
+    preparing: 'Preparing',
+    ready: 'Ready for pickup',
+    dispensed: 'Dispensed',
+    unavailable: 'Unavailable',
+    pending: 'Pending',
+    scheduled: 'Scheduled',
+    sample_collected: 'Sample collected',
+    processing: 'Processing',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    queued: 'In queue',
+    approved: 'Approved',
+    consulting: 'In consult',
+    accepted: 'Accepted',
+  };
+  if (labels[s]) return labels[s];
+  if (kind === 'consultation') return s.replace(/_/g, ' ');
+  return s.replace(/_/g, ' ') || 'In progress';
+}
+
+function journeySubtitle(kind: string, status: string, partner?: string | null, ref?: string | null) {
+  const loc = partner ? ` · ${partner}` : '';
+  const s = (status || '').toLowerCase();
+  if (kind === 'lab') {
+    if (s === 'completed') return `Results returned${loc}`;
+    if (s === 'sample_collected') return `Sample collected${loc}`;
+    if (s === 'processing') return `Processing at lab${loc}`;
+    return `Lab request${loc || ' · Awaiting collection'}`;
+  }
+  if (kind === 'imaging') {
+    if (s === 'completed') return `Report available${loc}`;
+    if (s === 'scheduled') return `Appointment scheduled${loc}`;
+    return `Imaging request${loc || ' · In progress'}`;
+  }
+  if (kind === 'prescription') {
+    if (s === 'unsent') return ref ? 'Prescription on chart' : 'Not yet sent to pharmacy';
+    if (s === 'ready') return `Ready for pickup${loc}`;
+    if (s === 'dispensed') return `Collected${loc}`;
+    return `${journeyStatusLabel(kind, s)}${loc}`;
+  }
+  if (kind === 'referral') {
+    return partner ? `Referred to ${partner}` : 'Specialist referral on network';
+  }
+  return ref || 'Care event on your chart';
+}
+
 export function registerClinicalRoutes(app: Express) {
   app.get('/api/journey/me', authenticate, async (req: AuthedRequest, res: Response) => {
     try {
       const patient = await getPatientForUser(req.user!.id);
-      if (!patient) return res.json({ events: [] });
+      if (!patient) return res.json({ events: [], open_count: 0, active: [] });
 
       const [apts, labs, scans, rxs, refs] = await Promise.all([
         query(
@@ -60,70 +121,113 @@ export function registerClinicalRoutes(app: Express) {
           [patient.id]
         ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, test_name, status, created_at, completed_at FROM lab_requests
-           WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
+          `SELECT lr.id, lr.test_name, lr.status, lr.created_at, lr.completed_at, o.name as partner_name
+           FROM lab_requests lr
+           LEFT JOIN partner_orgs o ON lr.partner_id = o.id
+           WHERE lr.patient_id = $1 ORDER BY lr.created_at DESC LIMIT 20`,
           [patient.id]
         ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, scan_type, status, created_at, completed_at FROM scan_requests
-           WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
+          `SELECT sr.id, sr.scan_type, sr.status, sr.created_at, sr.completed_at, o.name as partner_name
+           FROM scan_requests sr
+           LEFT JOIN partner_orgs o ON sr.partner_id = o.id
+           WHERE sr.patient_id = $1 ORDER BY sr.created_at DESC LIMIT 20`,
           [patient.id]
         ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, medication_name, COALESCE(dispense_status, 'unsent') AS status, prescription_ref, created_at
-           FROM prescriptions
-           WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
+          `SELECT pr.id, pr.medication_name, COALESCE(pr.dispense_status, 'unsent') AS status,
+                  pr.prescription_ref, pr.created_at, o.name as pharmacy_name
+           FROM prescriptions pr
+           LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
+           WHERE pr.patient_id = $1 ORDER BY pr.created_at DESC LIMIT 20`,
           [patient.id]
         ).catch(() => ({ rows: [] })),
         query(
-          `SELECT id, specialty, status, reason, created_at FROM referrals
-           WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 20`,
+          `SELECT r.id, r.specialty, r.status, r.reason, r.created_at, o.name as org_name
+           FROM referrals r
+           LEFT JOIN partner_orgs o ON r.to_org_id = o.id
+           WHERE r.patient_id = $1 ORDER BY r.created_at DESC LIMIT 20`,
           [patient.id]
         ).catch(() => ({ rows: [] })),
       ]);
 
       const events = [
-        ...apts.rows.map((r: any) => ({
-          kind: 'consultation',
-          title: r.consult_type || r.service || 'Consultation',
-          subtitle: r.doctor_name ? `With ${r.doctor_name}` : 'Clinician to be assigned',
-          status: r.status,
-          at: r.created_at || r.preferred_date,
-          ref: r.appointment_id,
-        })),
-        ...labs.rows.map((r: any) => ({
-          kind: 'lab',
-          title: r.test_name || 'Laboratory request',
-          subtitle: r.status === 'completed' ? 'Results available' : 'Investigation in progress',
-          status: r.status,
-          at: r.created_at,
-        })),
-        ...scans.rows.map((r: any) => ({
-          kind: 'imaging',
-          title: r.scan_type || 'Imaging request',
-          subtitle: r.status === 'completed' ? 'Report available' : 'Imaging in progress',
-          status: r.status,
-          at: r.created_at,
-        })),
-        ...rxs.rows.map((r: any) => ({
-          kind: 'prescription',
-          title: r.medication_name,
-          subtitle: r.prescription_ref || 'Electronic prescription',
-          status: r.status,
-          at: r.created_at,
-        })),
-        ...refs.rows.map((r: any) => ({
-          kind: 'referral',
-          title: r.specialty || 'Specialist referral',
-          subtitle: r.reason || 'Closed-loop referral',
-          status: r.status,
-          at: r.created_at,
-        })),
+        ...apts.rows.map((r: any) => {
+          const status = r.status;
+          return {
+            kind: 'consultation',
+            title: r.consult_type || r.service || 'Consultation',
+            subtitle: r.doctor_name ? `With ${r.doctor_name}` : 'Clinician to be assigned',
+            status,
+            status_label: journeyStatusLabel('consultation', status),
+            partner_name: r.doctor_name || null,
+            is_open: journeyIsOpen('consultation', status),
+            at: r.created_at || r.preferred_date,
+            ref: r.appointment_id,
+          };
+        }),
+        ...labs.rows.map((r: any) => {
+          const status = r.status || 'pending';
+          return {
+            kind: 'lab',
+            title: r.test_name || 'Laboratory request',
+            subtitle: journeySubtitle('lab', status, r.partner_name),
+            status,
+            status_label: journeyStatusLabel('lab', status),
+            partner_name: r.partner_name || null,
+            is_open: journeyIsOpen('lab', status),
+            at: r.created_at,
+          };
+        }),
+        ...scans.rows.map((r: any) => {
+          const status = r.status || 'pending';
+          return {
+            kind: 'imaging',
+            title: r.scan_type || 'Imaging request',
+            subtitle: journeySubtitle('imaging', status, r.partner_name),
+            status,
+            status_label: journeyStatusLabel('imaging', status),
+            partner_name: r.partner_name || null,
+            is_open: journeyIsOpen('imaging', status),
+            at: r.created_at,
+          };
+        }),
+        ...rxs.rows.map((r: any) => {
+          const status = r.status || 'unsent';
+          return {
+            kind: 'prescription',
+            title: r.medication_name,
+            subtitle: journeySubtitle('prescription', status, r.pharmacy_name, r.prescription_ref),
+            status,
+            status_label: journeyStatusLabel('prescription', status),
+            partner_name: r.pharmacy_name || null,
+            is_open: journeyIsOpen('prescription', status),
+            at: r.created_at,
+            ref: r.prescription_ref,
+          };
+        }),
+        ...refs.rows.map((r: any) => {
+          const status = r.status || 'pending';
+          return {
+            kind: 'referral',
+            title: r.specialty || 'Specialist referral',
+            subtitle: journeySubtitle('referral', status, r.org_name) + (r.reason ? ` · ${r.reason}` : ''),
+            status,
+            status_label: journeyStatusLabel('referral', status),
+            partner_name: r.org_name || null,
+            is_open: journeyIsOpen('referral', status),
+            at: r.created_at,
+          };
+        }),
       ].sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime());
+
+      const open = events.filter((e) => e.is_open);
 
       res.json({
         patient_code: patient.patient_code,
         events,
+        open_count: open.length,
+        active: open.slice(0, 6),
       });
     } catch (err) {
       console.error(err);

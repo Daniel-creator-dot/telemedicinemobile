@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Digi Health</string>
+	<string>Medilynks</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>telemedicinemobile</string>
+	<string>Medilynks</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -71,10 +71,10 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Digi Health needs camera access for in-app video consultations.</string>
+	<string>Medilynks needs camera access for in-app video consultations.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Digi Health needs microphone access for in-app video consultations.</string>
+	<string>Medilynks needs microphone access for in-app video consultations.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Digi Health uses your photo library so you can add a letter, lab, or scan to your medical vault.</string>
+	<string>Medilynks uses your photo library so you can add a letter, lab, or scan to your medical vault.</string>
 </dict>
 </plist>

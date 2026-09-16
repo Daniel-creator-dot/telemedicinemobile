@@ -64,33 +64,31 @@ class Appointment {
     }
 
     return Appointment(
-      id: json['id'] as int? ?? 0,
+      id: _readInt(json['id']) ?? 0,
       appointmentId: json['appointment_id']?.toString() ?? '',
       fullName: json['full_name']?.toString() ?? '',
       phoneNumber: json['phone_number']?.toString() ?? '',
       email: json['email']?.toString(),
-      preferredDate: json['preferred_date']?.toString() ?? '',
-      preferredTime: json['preferred_time']?.toString() ?? '',
+      preferredDate: _dateOnly(json['preferred_date']),
+      preferredTime: _timeOnly(json['preferred_time']),
       status: json['status']?.toString() ?? 'pending',
       isTelemedicine: _readBool(json['is_telemedicine']) ||
           json['booking_type']?.toString() == 'consult_now',
       paymentStatus: json['payment_status']?.toString() ?? 'unpaid',
       meetingLink: _readLink(json['meeting_link']),
       doctorName: json['doctor_name']?.toString(),
-      doctorId: json['doctor_id'] as int?,
+      doctorId: _readInt(json['doctor_id']),
       service: json['service']?.toString(),
       priority: json['priority']?.toString(),
       notes: json['notes']?.toString(),
       staffId: json['staff_id']?.toString(),
       nationwideId: json['nationwide_id']?.toString(),
       whoIsComing: whoIsComing,
-      patientId: json['patient_id'] as int?,
+      patientId: _readInt(json['patient_id']),
       bookingType: json['booking_type']?.toString(),
       consultType: json['consult_type']?.toString(),
-      queueNumber: json['queue_number'] as int?,
-      etaMinutes: json['eta_minutes'] is int
-          ? json['eta_minutes'] as int
-          : int.tryParse(json['eta_minutes']?.toString() ?? ''),
+      queueNumber: _readInt(json['queue_number']),
+      etaMinutes: _readInt(json['eta_minutes']),
       complaint: json['complaint']?.toString(),
     );
   }
@@ -128,6 +126,28 @@ class Appointment {
   bool get hasMeetingLink => meetingLink != null && meetingLink!.trim().isNotEmpty;
 
   bool get isVideoConsult => isTelemedicine || isConsultNow || hasMeetingLink;
+
+  static int? _readInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
+  static String _dateOnly(dynamic value) {
+    final s = value?.toString() ?? '';
+    if (s.isEmpty) return '';
+    final m = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(s);
+    return m?.group(1) ?? s;
+  }
+
+  static String _timeOnly(dynamic value) {
+    final s = value?.toString() ?? '';
+    if (s.isEmpty) return '';
+    // Accept "HH:MM:SS", "HH:MM", or DateTime-ish strings.
+    final m = RegExp(r'(\d{1,2}:\d{2}(?::\d{2})?)').firstMatch(s);
+    return m?.group(1) ?? s;
+  }
 
   static bool _readBool(dynamic value) {
     if (value == true || value == 1) return true;

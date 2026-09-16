@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/env.dart';
 import '../../core/session.dart';
+import '../admin/admin_chrome.dart';
+import 'auth_chrome.dart';
 import 'auth_repository.dart';
 
-enum _AuthMode { signIn, signUp, forgot, reset }
+enum _AuthMode { signIn, forgot, reset }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,29 +21,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _username = TextEditingController();
   final _password = TextEditingController();
-  final _name = TextEditingController();
-  final _phoneNumber = TextEditingController();
-  final _email = TextEditingController();
   final _otpCode = TextEditingController();
   final _newPassword = TextEditingController();
 
   _AuthMode _mode = _AuthMode.signIn;
   bool _loading = false;
   bool _obscure = true;
-  bool _otpSent = false;
-  bool _consentTele = false;
-  bool _consentPrivacy = false;
-  bool _consentComms = true;
-  String? _debugOtp;
   String? _error;
 
   @override
   void dispose() {
     _username.dispose();
     _password.dispose();
-    _name.dispose();
-    _phoneNumber.dispose();
-    _email.dispose();
     _otpCode.dispose();
     _newPassword.dispose();
     super.dispose();
@@ -53,8 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _mode = mode;
       _error = null;
-      _otpSent = false;
-      _debugOtp = null;
     });
   }
 
@@ -77,42 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           await session.setSession(token: result.token, user: result.user);
           if (!mounted) return;
-          _navigateHome(result.user.role.name);
-          break;
-
-        case _AuthMode.signUp:
-          if (!_consentTele || !_consentPrivacy) {
-            setState(() => _error = 'Accept telemedicine and privacy terms to continue.');
-            break;
-          }
-          if (!_otpSent) {
-            final debug = await repo.requestOtp(phone: _phoneNumber.text, purpose: 'register');
-            if (!mounted) return;
-            setState(() {
-              _otpSent = true;
-              _debugOtp = debug;
-              _username.text = _phoneNumber.text;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(debug != null ? 'OTP sent. Dev code: $debug' : 'OTP sent to your phone.')),
-            );
-            break;
-          }
-          final result = await repo.registerWithOtp(
-            phone: _phoneNumber.text,
-            code: _otpCode.text,
-            password: _password.text,
-            name: _name.text,
-            email: _email.text,
-            telemedicineConsent: _consentTele,
-            privacyConsent: _consentPrivacy,
-            communicationConsent: _consentComms,
-          );
-          await session.setSession(token: result.token, user: result.user);
-          if (!mounted) return;
-          _navigateHome(result.user.role.name);
-          break;
-
+          goHomeForRole(context, result.user.role.name);
         case _AuthMode.forgot:
           await repo.forgotPassword(_username.text);
           if (!mounted) return;
@@ -120,8 +72,6 @@ class _LoginScreenState extends State<LoginScreen> {
             const SnackBar(content: Text('If an account exists, a reset code has been sent.')),
           );
           _setMode(_AuthMode.reset);
-          break;
-
         case _AuthMode.reset:
           await repo.resetPassword(
             username: _username.text,
@@ -133,7 +83,6 @@ class _LoginScreenState extends State<LoginScreen> {
             const SnackBar(content: Text('Password reset successful. Please sign in.')),
           );
           _setMode(_AuthMode.signIn);
-          break;
       }
     } catch (e) {
       setState(() => _error = AuthRepository.errorMessage(e));
@@ -142,444 +91,192 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _navigateHome(String role) {
-    if (role == 'doctor') {
-      context.go('/doctor');
-    } else if (role == 'admin') {
-      context.go('/admin');
-    } else if (role == 'lab_technician') {
-      context.go('/lab-technician');
-    } else if (role == 'nurse') {
-      context.go('/nurse');
-    } else if (role == 'medical_ops') {
-      context.go('/ops');
-    } else if (role == 'pharmacy') {
-      context.go('/pharmacy');
-    } else if (role == 'imaging') {
-      context.go('/imaging');
-    } else if (role == 'corporate') {
-      context.go('/corporate');
-    } else if (role == 'insurance') {
-      context.go('/insurance');
-    } else if (role == 'finance') {
-      context.go('/finance');
-    } else if (role == 'hospital') {
-      context.go('/hospital');
-    } else {
-      context.go('/patient');
+  String get _title {
+    switch (_mode) {
+      case _AuthMode.signIn:
+        return 'Welcome back';
+      case _AuthMode.forgot:
+        return 'Forgot password';
+      case _AuthMode.reset:
+        return 'Reset password';
+    }
+  }
+
+  String get _subtitle {
+    switch (_mode) {
+      case _AuthMode.signIn:
+        return 'Sign in to your clinical workspace';
+      case _AuthMode.forgot:
+        return 'Enter your username or phone to receive an SMS code';
+      case _AuthMode.reset:
+        return 'Enter the verification code and a new password';
     }
   }
 
   String get _primaryLabel {
     switch (_mode) {
       case _AuthMode.signIn:
-        return 'Sign In';
-      case _AuthMode.signUp:
-        return _otpSent ? 'Verify OTP & Join' : 'Send Registration OTP';
+        return 'Sign in';
       case _AuthMode.forgot:
-        return 'Send OTP';
+        return 'Send reset code';
       case _AuthMode.reset:
-        return 'Reset Password';
+        return 'Save new password';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final _ = Theme.of(context); // Keep context-aware rebuild; see _inputDeco
     final isSignIn = _mode == _AuthMode.signIn;
-    final isSignUp = _mode == _AuthMode.signUp;
-    final isForgot = _mode == _AuthMode.forgot;
     final isReset = _mode == _AuthMode.reset;
 
-    return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Background photo provided by the user
-          Image.asset(
-            'assets/branding/hero_login.png',
-            fit: BoxFit.cover,
-          ),
-          // Subtle gradient overlays for readibility
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.4),
-                  Colors.black.withOpacity(0.85),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
-              child: Form(
-                key: _formKey,
+    return AuthScaffold(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              const SizedBox(height: 18),
+              const AuthBrandHeader(),
+              const SizedBox(height: 32),
+              AuthGlassPanel(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 40),
-                    // Brand icon
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF00D2C4).withOpacity(0.15),
-                        border: Border.all(color: const Color(0xFF00D2C4).withOpacity(0.4), width: 2),
-                      ),
-                      child: const Icon(Icons.public_rounded, color: Color(0xFF00D2C4), size: 42),
-                    ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.85, 0.85)),
-                    const SizedBox(height: 20),
                     Text(
-                      'Digi Health',
+                      _title,
                       style: GoogleFonts.sourceSerif4(
-                        fontSize: 42,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
                         color: Colors.white,
-                        height: 1.05,
                       ),
-                      textAlign: TextAlign.center,
-                    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1, end: 0),
-                    Text(
-                      'Connected care for Ghana',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 14,
-                        color: const Color(0xFFD4C4A8),
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.2,
-                      ),
-                      textAlign: TextAlign.center,
-                    ).animate().fadeIn(delay: 100.ms),
-                    const SizedBox(height: 8),
-                    Text(
-                      AppEnv.isLocalOverride ? 'Local clinic API' : 'Live clinic · Ghana',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 11,
-                        color: Colors.white.withOpacity(0.55),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 42),
-
-                    // Glassmorphic Input Container
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.55),
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.08),
-                          width: 1.2,
+                    const SizedBox(height: 4),
+                    Text(
+                      _subtitle,
+                      style: GoogleFonts.dmSans(fontSize: 13, color: AdminPalette.mute, height: 1.35),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 14),
+                      AuthErrorBanner(message: _error!),
+                    ],
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _username,
+                      style: GoogleFonts.dmSans(color: Colors.white),
+                      textInputAction: isSignIn ? TextInputAction.next : TextInputAction.done,
+                      decoration: authFieldDeco(
+                        isSignIn ? 'Username or phone' : 'Username',
+                        Icons.account_circle_outlined,
+                      ),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Username is required' : null,
+                    ),
+                    if (isSignIn) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _password,
+                        obscureText: _obscure,
+                        style: GoogleFonts.dmSans(color: Colors.white),
+                        onFieldSubmitted: (_) => _submit(),
+                        decoration: authFieldDeco('Password', Icons.lock_outline).copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              color: Colors.white60,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                        validator: (v) => v == null || v.length < 4 ? 'Enter a valid password' : null,
+                      ),
+                    ],
+                    if (isReset) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _otpCode,
+                        keyboardType: TextInputType.number,
+                        style: GoogleFonts.dmSans(color: Colors.white),
+                        decoration: authFieldDeco('OTP from SMS', Icons.lock_clock_outlined),
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Enter verification code' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _newPassword,
+                        obscureText: _obscure,
+                        style: GoogleFonts.dmSans(color: Colors.white),
+                        decoration: authFieldDeco('New password', Icons.lock_outline).copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              color: Colors.white60,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                        validator: (v) => v == null || v.length < 5 ? 'Min 5 characters required' : null,
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    AuthPrimaryButton(label: _primaryLabel, onPressed: _submit, loading: _loading),
+                    const SizedBox(height: 10),
+                    if (isSignIn) ...[
+                      TextButton(
+                        onPressed: () => _setMode(_AuthMode.forgot),
+                        child: Text(
+                          'Forgot password?',
+                          style: GoogleFonts.dmSans(color: AdminPalette.violet, fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      const SizedBox(height: 6),
+                      Row(
                         children: [
-                          Text(
-                            isSignIn
-                                ? 'Welcome Back'
-                                : isSignUp
-                                    ? 'Join Digi Health'
-                                    : isForgot
-                                        ? 'Forgot Password'
-                                        : 'Reset Password',
-                            style: GoogleFonts.roboto(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                          Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text('New patient?', style: GoogleFonts.dmSans(color: AdminPalette.mute, fontSize: 12)),
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            isSignIn
-                                ? 'Sign in to access your clinical dashboard'
-                                : isSignUp
-                                    ? 'Register as a patient to schedule visits'
-                                    : isForgot
-                                        ? 'Enter your username to receive an SMS verification code'
-                                        : 'Enter the verification code & your new password',
-                            style: GoogleFonts.roboto(
-                              fontSize: 12,
-                              color: Color(0xFF94A3B8),
-                            ),
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 15),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.red.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Text(
-                                _error!,
-                                style: GoogleFonts.roboto(
-                                  color: Color(0xFFFCA5A5),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ).animate().shake(),
-                          ],
-                          const SizedBox(height: 20),
-
-                          // Form fields based on mode
-                          if (isSignUp) ...[
-                            TextFormField(
-                              controller: _name,
-                              style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('Full Name', Icons.person_outline),
-                              validator: (v) => v == null || v.trim().isEmpty
-                                  ? 'Full name is required'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _email,
-                              keyboardType: TextInputType.emailAddress,
-                              style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('Email Address', Icons.email_outlined),
-                              validator: (v) => v == null || !v.contains('@')
-                                  ? 'Enter a valid email'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _phoneNumber,
-                              keyboardType: TextInputType.phone,
-                              style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('Mobile number (Ghana)', Icons.phone_outlined),
-                              validator: (v) => v == null || v.trim().isEmpty
-                                  ? 'Phone number is required'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            if (_otpSent) ...[
-                              TextFormField(
-                                controller: _otpCode,
-                                keyboardType: TextInputType.number,
-                                style: GoogleFonts.roboto(color: Colors.white),
-                                decoration: _inputDeco('OTP from SMS', Icons.lock_clock_outlined),
-                                validator: (v) => v == null || v.trim().length < 4
-                                    ? 'Enter the OTP'
-                                    : null,
-                              ),
-                              if (_debugOtp != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text('Dev OTP: $_debugOtp', style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 12)),
-                                ),
-                              const SizedBox(height: 12),
-                            ],
-                            CheckboxListTile(
-                              value: _consentTele,
-                              onChanged: (v) => setState(() => _consentTele = v ?? false),
-                              activeColor: const Color(0xFF00D2C4),
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('I consent to telemedicine care', style: GoogleFonts.roboto(color: Colors.white, fontSize: 12)),
-                            ),
-                            CheckboxListTile(
-                              value: _consentPrivacy,
-                              onChanged: (v) => setState(() => _consentPrivacy = v ?? false),
-                              activeColor: const Color(0xFF00D2C4),
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('I accept privacy and data-processing terms', style: GoogleFonts.roboto(color: Colors.white, fontSize: 12)),
-                            ),
-                            CheckboxListTile(
-                              value: _consentComms,
-                              onChanged: (v) => setState(() => _consentComms = v ?? false),
-                              activeColor: const Color(0xFF00D2C4),
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('Send me SMS, email and push updates', style: GoogleFonts.roboto(color: Colors.white, fontSize: 12)),
-                            ),
-                          ],
-
-                          if (!isSignUp)
-                          TextFormField(
-                            controller: _username,
-                            style: GoogleFonts.roboto(color: Colors.white),
-                            decoration: _inputDeco(isSignIn ? 'Username or phone' : 'Username', Icons.account_circle_outlined),
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? 'Username is required'
-                                : null,
-                          ),
-
-                          if (isReset) ...[
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _otpCode,
-                              keyboardType: TextInputType.number,
-                              style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('OTP Verification Code', Icons.lock_clock_outlined),
-                              validator: (v) => v == null || v.trim().isEmpty
-                                  ? 'Enter verification code'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _newPassword,
-                              obscureText: _obscure,
-                              style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('New Password', Icons.lock_outline),
-                              validator: (v) => v == null || v.length < 5
-                                  ? 'Min 5 characters required'
-                                  : null,
-                            ),
-                          ],
-
-                          if (isSignIn || isSignUp) ...[
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _password,
-                              obscureText: _obscure,
-                              style: GoogleFonts.roboto(color: Colors.white),
-                              decoration: _inputDeco('Password', Icons.lock_outline).copyWith(
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                    color: Colors.white60,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => setState(() => _obscure = !_obscure),
-                                ),
-                              ),
-                              validator: (v) => v == null || v.length < 4
-                                  ? 'Enter a valid password'
-                                  : null,
-                            ),
-                          ],
-
-                          const SizedBox(height: 25),
-
-                          // Submit Button
-                          ElevatedButton(
-                            onPressed: _loading ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00D2C4),
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: _loading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.black,
-                                    ),
-                                  )
-                                : Text(
-                                    _primaryLabel,
-                                    style: GoogleFonts.roboto(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-
-                          const SizedBox(height: 15),
-
-                          // Toggles for modes
-                          if (isSignIn) ...[
-                            Center(
-                              child: TextButton(
-                                onPressed: () => _setMode(_AuthMode.forgot),
-                                child: Text(
-                                  'Forgot Password?',
-                                  style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 13),
-                                ),
-                              ),
-                            ),
-                          ] else if (isSignUp) ...[
-                            Center(
-                              child: TextButton(
-                                onPressed: () => _setMode(_AuthMode.signIn),
-                                child: Text(
-                                  'Already have an account? Sign In',
-                                  style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 13),
-                                ),
-                              ),
-                            ),
-                          ] else if (isForgot) ...[
-                            Wrap(
-                              alignment: WrapAlignment.spaceBetween,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                TextButton(
-                                  onPressed: () => _setMode(_AuthMode.signIn),
-                                  child: Text(
-                                    'Back to Sign In',
-                                    style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 13),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () => _setMode(_AuthMode.reset),
-                                  child: Text(
-                                    'Enter Code',
-                                    style: GoogleFonts.roboto(color: Color(0xFF8B5CF6), fontSize: 13),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ] else if (isReset) ...[
-                            Center(
-                              child: TextButton(
-                                onPressed: () => _setMode(_AuthMode.signIn),
-                                child: Text(
-                                  'Back to Sign In',
-                                  style: GoogleFonts.roboto(color: Color(0xFF94A3B8), fontSize: 13),
-                                ),
-                              ),
-                            ),
-                          ]
+                          Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
                         ],
                       ),
-                    ).animate().fadeIn(delay: 200.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () => context.go('/signup'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AdminPalette.cyan,
+                            side: BorderSide(color: AdminPalette.cyan.withValues(alpha: 0.55)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: Text('Create an account', style: GoogleFonts.dmSans(fontWeight: FontWeight.w800, fontSize: 15)),
+                        ),
+                      ),
+                    ] else ...[
+                      TextButton(
+                        onPressed: () => _setMode(_AuthMode.signIn),
+                        child: Text(
+                          'Back to sign in',
+                          style: GoogleFonts.dmSans(color: AdminPalette.mute, fontSize: 13),
+                        ),
+                      ),
+                      if (_mode == _AuthMode.forgot)
+                        TextButton(
+                          onPressed: () => _setMode(_AuthMode.reset),
+                          child: Text(
+                            'I already have a code',
+                            style: GoogleFonts.dmSans(color: AdminPalette.violet, fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _inputDeco(String hintText, IconData prefixIcon) {
-    return InputDecoration(
-      hintText: hintText,
-      hintStyle: GoogleFonts.roboto(color: Colors.white38, fontSize: 14),
-      prefixIcon: Icon(prefixIcon, color: const Color(0xFF00D2C4), size: 20),
-      filled: true,
-      fillColor: Colors.white.withOpacity(0.06),
-      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF00D2C4), width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.red.withOpacity(0.3)),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        ),
       ),
     );
   }

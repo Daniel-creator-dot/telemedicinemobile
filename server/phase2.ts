@@ -113,7 +113,7 @@ async function seedPartnersAndStaff() {
         ('Ridge Imaging Centre', 'imaging', 'Greater Accra', 'Accra', 'Ridge Hospital Road, Accra', '0302003001'),
         ('Tamale Regional Hospital', 'hospital', 'Northern', 'Tamale', 'Hospital Road, Tamale', '0372004001')
     `);
-    console.log('Seeded Digi Health partner network');
+    console.log('Seeded Medilynks partner network');
   }
 
   await ensurePartnerUser('pharmacy', 'pharm123', 'pharmacy', 'Ama Boateng', '0240000101', 'Accra Central Pharmacy');
@@ -209,7 +209,14 @@ async function notifyUser(
 
 async function patientUserId(patientId: number | null | undefined) {
   if (!patientId) return null;
-  const r = await query('SELECT user_id, phone_number FROM patients WHERE id = $1', [patientId]);
+  const r = await query(
+    `SELECT p.user_id,
+            COALESCE(NULLIF(p.phone_number, ''), u.phone_number) as phone_number
+     FROM patients p
+     LEFT JOIN users u ON u.id = p.user_id
+     WHERE p.id = $1`,
+    [patientId]
+  );
   return r.rows[0] || null;
 }
 
@@ -224,7 +231,7 @@ export async function notifyDiagnosticClosedLoop(
   const patient = await patientUserId(row.patient_id);
   if (patient?.user_id) await notifyUser(deps, patient.user_id, title, body, 'result');
   if (patient?.phone_number) {
-    await deps.sendSMS(patient.phone_number, `Digi Health: ${body}`);
+    await deps.sendSMS(patient.phone_number, `Medilynks: ${body}`);
   }
   if (row.doctor_id) await notifyUser(deps, row.doctor_id, title, `Result returned for your patient. ${body}`, 'result');
 }
@@ -343,7 +350,7 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
       if (patient?.phone_number) {
         await deps.sendSMS(
           patient.phone_number,
-          `Digi Health: Your prescription ${rx.rows[0].prescription_ref || ''} was sent to ${pharmacyName}.`
+          `Medilynks: Your prescription ${rx.rows[0].prescription_ref || ''} was sent to ${pharmacyName}.`
         );
       }
       const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [pharmacyId]);
@@ -397,14 +404,29 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
       if (!allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
 
       const user = await query('SELECT name FROM users WHERE id = $1', [req.user!.id]);
+      const org = await orgForUser(req.user!.id);
+      if (req.user!.role === 'pharmacy' && org) {
+        const owned = await query(
+          'SELECT id FROM prescriptions WHERE id = $1 AND pharmacy_id = $2',
+          [req.params.id, org.id]
+        );
+        if (!owned.rows[0]) return res.status(404).json({ message: 'Not found' });
+      }
+
       const result = await query(
         `UPDATE prescriptions
-         SET dispense_status = $1,
+         SET dispense_status = $1::varchar(20),
              pharmacy_notes = COALESCE($2, pharmacy_notes),
              dispensed_by = $3,
-             dispensed_at = CASE WHEN $1 = 'dispensed' THEN CURRENT_TIMESTAMP ELSE dispensed_at END
-         WHERE id = $4 RETURNING *`,
-        [status, notes || null, user.rows[0]?.name || req.user!.username, req.params.id]
+             dispensed_at = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE dispensed_at END
+         WHERE id = $5 RETURNING *`,
+        [
+          status,
+          notes || null,
+          user.rows[0]?.name || req.user!.username,
+          status === 'dispensed',
+          req.params.id,
+        ]
       );
       if (!result.rows[0]) return res.status(404).json({ message: 'Not found' });
 
@@ -417,9 +439,28 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
         unavailable: 'Pharmacy could not fill this prescription',
       };
       const title = labels[status];
-      if (patient?.user_id) await notifyUser(deps, patient.user_id, title, result.rows[0].medication_name, 'pharmacy');
+      const detail = `${result.rows[0].medication_name}${org?.name ? ` · ${org.name}` : ''}`;
+      if (patient?.user_id) await notifyUser(deps, patient.user_id, title, detail, 'pharmacy');
       if (patient?.phone_number && (status === 'ready' || status === 'dispensed')) {
-        await deps.sendSMS(patient.phone_number, `Digi Health: ${title} — ${result.rows[0].medication_name}`);
+        await deps.sendSMS(patient.phone_number, `Medilynks: ${title} — ${result.rows[0].medication_name}`);
+      }
+      // Notify prescribing doctor when dispensed or unavailable
+      if (status === 'dispensed' || status === 'unavailable') {
+        const apt = await query(
+          `SELECT a.doctor_id FROM appointments a
+           JOIN prescriptions pr ON pr.appointment_id = a.id
+           WHERE pr.id = $1`,
+          [req.params.id]
+        );
+        if (apt.rows[0]?.doctor_id) {
+          await notifyUser(
+            deps,
+            apt.rows[0].doctor_id,
+            status === 'dispensed' ? 'Prescription dispensed' : 'Prescription not filled',
+            detail,
+            'pharmacy'
+          );
+        }
       }
       res.json(result.rows[0]);
     } catch (err) {
@@ -469,6 +510,12 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
       if (to_doctor_id) {
         await notifyUser(deps, to_doctor_id, 'New specialist referral', `${code}: ${reason}`, 'referral');
       }
+      if (to_org_id) {
+        const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [to_org_id]);
+        for (const s of staff.rows) {
+          await notifyUser(deps, s.user_id, 'Inbound hospital referral', `${code}: ${specialty || 'specialist'} — ${reason}`, 'referral');
+        }
+      }
       const patient = await patientUserId(patient_id);
       if (patient?.user_id) {
         await notifyUser(deps, patient.user_id, 'Specialist referral created', `${code} — ${specialty || 'specialist'}`, 'referral');
@@ -517,7 +564,7 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
   });
 
   app.patch('/api/referrals/:id', authenticate, async (req: AuthedRequest, res) => {
-    if (!['doctor', 'admin', 'medical_ops'].includes(req.user!.role)) {
+    if (!['doctor', 'admin', 'medical_ops', 'hospital'].includes(req.user!.role)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
     try {
@@ -525,18 +572,32 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
       const existing = await query('SELECT * FROM referrals WHERE id = $1', [req.params.id]);
       if (!existing.rows[0]) return res.status(404).json({ message: 'Not found' });
 
+      if (req.user!.role === 'hospital') {
+        const org = await orgForUser(req.user!.id);
+        if (!org || existing.rows[0].to_org_id !== org.id) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+      }
+
       const allowed = ['pending', 'accepted', 'in_progress', 'completed', 'declined'];
       if (status && !allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
 
       const result = await query(
         `UPDATE referrals SET
-           status = COALESCE($1, status),
+           status = COALESCE($1::varchar(20), status),
            result_notes = COALESCE($2, result_notes),
            to_doctor_id = COALESCE($3, to_doctor_id),
-           accepted_at = CASE WHEN $1 = 'accepted' THEN CURRENT_TIMESTAMP ELSE accepted_at END,
-           completed_at = CASE WHEN $1 = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
-         WHERE id = $4 RETURNING *`,
-        [status || null, result_notes || null, to_doctor_id || null, req.params.id]
+           accepted_at = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE accepted_at END,
+           completed_at = CASE WHEN $5 THEN CURRENT_TIMESTAMP ELSE completed_at END
+         WHERE id = $6 RETURNING *`,
+        [
+          status || null,
+          result_notes || null,
+          to_doctor_id || null,
+          status === 'accepted',
+          status === 'completed',
+          req.params.id,
+        ]
       );
       const row = result.rows[0];
       if (status === 'completed' || result_notes) {

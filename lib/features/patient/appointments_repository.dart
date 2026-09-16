@@ -77,24 +77,18 @@ class AppointmentsRepository {
   }
 
   Future<List<AuthUser>> getAvailableDoctors() async {
-    try {
-      final res = await _api.dio.get<List<dynamic>>('/api/doctors/directory');
-      if (res.data == null) return [];
-      return res.data!.map((json) {
-        final map = json as Map<String, dynamic>;
-        return AuthUser(
-          id: map['id'].toString(),
-          username: map['name']?.toString() ?? '',
-          name: map['name']?.toString() ?? 'Doctor',
-          role: AppRole.doctor,
-        );
-      }).toList();
-    } catch (_) {
-      final res = await _api.dio.get<List<dynamic>>('/api/users');
-      if (res.data == null) return [];
-      final allUsers = res.data!.map((json) => AuthUser.fromJson(json as Map<String, dynamic>)).toList();
-      return allUsers.where((u) => u.role.name == 'doctor').toList();
-    }
+    final res = await _api.dio.get<List<dynamic>>('/api/doctors/directory');
+    if (res.data == null) return [];
+    // Directory returns doctors.id — never fall back to /api/users (users.id mismatch).
+    return res.data!.map((json) {
+      final map = json as Map<String, dynamic>;
+      return AuthUser(
+        id: map['id'].toString(),
+        username: map['name']?.toString() ?? '',
+        name: map['name']?.toString() ?? 'Doctor',
+        role: AppRole.doctor,
+      );
+    }).toList();
   }
 
   Future<List<Prescription>> getMyPrescriptions() async {

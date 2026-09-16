@@ -275,7 +275,7 @@ class NotificationService {
     switch (data['type']?.toString()) {
       case 'pharmacy':
       case 'result':
-        return '/patient/records';
+        return '/patient/journey';
       case 'referral':
         return '/patient/phases';
       case 'billing':

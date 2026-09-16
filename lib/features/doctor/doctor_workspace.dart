@@ -172,8 +172,11 @@ List<Appointment> activeDoctorQueue(List<Appointment> appointments) {
   return appointments.where((a) {
     final s = a.status.toLowerCase();
     if (['completed', 'cancelled', 'rejected', 'missed'].contains(s)) return false;
-    if (['approved', 'arrived', 'waiting', 'consulting', 'queued'].contains(s)) return true;
-    return a.isVideoConsult && ['pending', 'triage'].contains(s);
+    // Include pending approvals so newly booked visits appear immediately.
+    if (['pending', 'triage', 'approved', 'arrived', 'waiting', 'consulting', 'queued'].contains(s)) {
+      return true;
+    }
+    return a.isVideoConsult;
   }).toList()
     ..sort((a, b) {
       int rank(String s) {
@@ -184,10 +187,13 @@ List<Appointment> activeDoctorQueue(List<Appointment> appointments) {
             return 1;
           case 'queued':
             return 2;
-          case 'approved':
+          case 'pending':
+          case 'triage':
             return 3;
-          default:
+          case 'approved':
             return 4;
+          default:
+            return 5;
         }
       }
       final r = rank(a.status).compareTo(rank(b.status));

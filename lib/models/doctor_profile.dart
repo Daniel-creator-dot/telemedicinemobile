@@ -33,7 +33,9 @@ class DoctorProfile {
 
   factory DoctorProfile.fromJson(Map<String, dynamic> json) {
     return DoctorProfile(
-      id: json['id'] as int? ?? 0,
+      id: json['id'] is int
+          ? json['id'] as int
+          : int.tryParse(json['id']?.toString() ?? '') ?? 0,
       name: json['name']?.toString() ?? json['user_name']?.toString() ?? 'Doctor',
       specialization: json['specialization']?.toString(),
       title: json['title']?.toString(),
@@ -48,9 +50,36 @@ class DoctorProfile {
           ? null
           : double.tryParse(json['consultation_fee'].toString()),
       facility: json['facility']?.toString(),
-      isOnline: json['is_online'] == true,
-      slotDuration: json['slot_duration'] as int? ?? 15,
-      userId: json['user_id'] as int?,
+      isOnline: json['is_online'] == true ||
+          json['is_online'] == 1 ||
+          json['is_online']?.toString().toLowerCase() == 'true' ||
+          json['is_online']?.toString() == 't' ||
+          json['is_online']?.toString() == '1',
+      slotDuration: json['slot_duration'] is int
+          ? json['slot_duration'] as int
+          : int.tryParse(json['slot_duration']?.toString() ?? '') ?? 30,
+      userId: json['user_id'] is int
+          ? json['user_id'] as int
+          : int.tryParse(json['user_id']?.toString() ?? ''),
+    );
+  }
+
+  DoctorProfile copyWith({bool? isOnline}) {
+    return DoctorProfile(
+      id: id,
+      name: name,
+      specialization: specialization,
+      title: title,
+      qualifications: qualifications,
+      registrationNumber: registrationNumber,
+      yearsExperience: yearsExperience,
+      languages: languages,
+      biography: biography,
+      consultationFee: consultationFee,
+      facility: facility,
+      isOnline: isOnline ?? this.isOnline,
+      slotDuration: slotDuration,
+      userId: userId,
     );
   }
 }

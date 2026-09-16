@@ -67,7 +67,8 @@ class ApiClient {
     }
     if (err.type == DioExceptionType.connectionError ||
         err.type == DioExceptionType.connectionTimeout) {
-      return 'Cannot reach the server. Check your internet connection.';
+      final host = AppEnv.resolveApiBaseUrl();
+      return 'Cannot reach $host. Same Wi‑Fi as the PC? Is the API running?';
     }
     return err.message ?? fallback;
   }

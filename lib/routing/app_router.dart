@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/session.dart';
 import '../features/admin/admin_home_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/signup_screen.dart';
 import '../features/doctor/doctor_home_screen.dart';
 import '../features/lab_technician/lab_technician_home_screen.dart';
 import '../features/nurse/nurse_home_screen.dart';
@@ -21,6 +22,7 @@ import '../features/patient/consult_now_screen.dart';
 import '../features/patient/doctor_directory_screen.dart';
 import '../features/patient/health_journey_screen.dart';
 import '../features/patient/health_tracker_screen.dart';
+import '../features/patient/edit_profile_screen.dart';
 import '../features/patient/medical_profile_screen.dart';
 import '../features/patient/care_programs_screen.dart';
 import '../features/patient/family_screen.dart';
@@ -49,13 +51,14 @@ GoRouter createAppRouter(Session session) {
     redirect: (context, state) {
       if (session.isRestoring) return null;
       final loggedIn = session.isAuthenticated;
-      final onLogin = state.matchedLocation == '/login';
+      final loc = state.matchedLocation;
+      final onAuth = loc == '/login' || loc == '/signup';
 
       if (!loggedIn) {
-        return onLogin ? null : '/login';
+        return onAuth ? null : '/login';
       }
 
-      if (onLogin) {
+      if (onAuth) {
         return _homePathFor(session.user!.role.name);
       }
 
@@ -102,10 +105,12 @@ GoRouter createAppRouter(Session session) {
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
       GoRoute(
         path: '/patient',
         builder: (context, state) => const MainNavigationScreen(),
         routes: [
+          GoRoute(path: 'edit-profile', builder: (context, state) => const EditProfileScreen()),
           GoRoute(path: 'profile', builder: (context, state) => const MedicalProfileScreen()),
           GoRoute(path: 'doctors', builder: (context, state) => const DoctorDirectoryScreen()),
           GoRoute(

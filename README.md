@@ -1,4 +1,4 @@
-# Digi Health
+# Medilynks
 
 Connected digital healthcare for Ghana: patients, doctors, triage, labs, imaging, pharmacies, medical operations, corporate schemes, insurers, finance and administrators — one longitudinal record.
 
@@ -58,13 +58,13 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 
 | Role | Username (typical seed) | Home |
 | --- | --- | --- |
-| Patient | phone + OTP register | Consult Now, book, video, chat, Rx, records, tracker |
+| Patient | OTP register, or demo `0241555000` / `patient123` | Consult Now, book, video, chat, Rx, records, tracker |
 | Doctor | `dr_appiah` / `staff123` (also `dr_mensah`, `dr_doe`) | Queue, video consult, SOAP, e-prescribe, referrals |
 | Nurse / triage | `nurse` | Pre-consult triage and urgency |
 | Medical operations | `medops` | Command centre, queue, follow-ups |
 | Lab technician | `labtech` | Lab request lifecycle + result return |
-| Pharmacy | partner staff | E-prescription fulfilment |
-| Imaging | partner staff | Imaging referrals + reports |
+| Pharmacy | `pharmacy` / `pharm123` | E-prescription fulfilment |
+| Imaging | `imaging` / `image123` | Imaging referrals + reports |
 | Corporate | scheme admin | Eligibility and utilization (no clinical notes) |
 | Insurance | insurer desk | Preauth and claims |
 | Finance | finance | Collections and settlements |
@@ -72,7 +72,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Admin | `admin` | Staff, doctors, settings, analytics, support, national net |
 | Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
 
-Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `hospital`/`hosp123`, `support`/`support123`.
+Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `pharmacy`/`pharm123`, `imaging`/`image123`, `hospital`/`hosp123`, `support`/`support123`.
 
 ## Five phases (one record)
 
@@ -107,7 +107,7 @@ This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRE
 
 ## Layout
 
-- `lib/` — Digi Health Flutter app
+- `lib/` — Medilynks Flutter app
 - `server/` — Express API (`index.ts` plus `phase1.ts`–`phase5.ts`, `phases.ts`, `clinical.ts`, `authz.ts`, `paystack.ts`, `membership.ts`)
 - `mobile/` — leftover delivery prototype; not the telemedicine product
 

@@ -1,4 +1,4 @@
-/// Digi Health video rooms.
+/// Medilynks video rooms.
 ///
 /// meet.jit.si (and 8x8.vc) hard-require an authenticated moderator to start a
 /// conference — anonymous External API embeds get stuck on

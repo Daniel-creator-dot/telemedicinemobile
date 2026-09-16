@@ -35,7 +35,7 @@ export async function initCompleteSchema() {
     const hashed = await bcrypt.hash('support123', 10);
     await query(
       `INSERT INTO users (username, password, role, name, phone_number)
-       VALUES ('support', $1, 'admin', 'Digi Health Support', '0240000301')`,
+       VALUES ('support', $1, 'admin', 'Medilynks Support', '0240000301')`,
       [hashed]
     );
     console.log('Support desk user created (support/support123) — admin role for ticket queue');
@@ -246,7 +246,7 @@ export function registerCompleteRoutes(app: Express) {
       res.json({
         hospital: org.rows[0] || null,
         referrals: referrals.rows,
-        note: 'Hospital desk coordinates inbound specialist referrals from the Digi Health network.',
+        note: 'Hospital desk coordinates inbound specialist referrals from the Medilynks network.',
       });
     } catch (err) {
       console.error(err);

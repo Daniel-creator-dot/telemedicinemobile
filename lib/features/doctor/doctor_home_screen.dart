@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../models/appointment.dart';
 import '../admin/admin_chrome.dart';
@@ -14,6 +16,7 @@ import '../consult/open_video_consult.dart';
 import '../patient/appointments_repository.dart';
 import '../patient/care_repository.dart';
 import '../patient/chat_screen.dart';
+import '../patient/notifications_inbox_screen.dart';
 import 'consultation_dialog.dart';
 import 'doctor_queue_tab.dart';
 import 'prescription_dialog.dart';
@@ -49,12 +52,31 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   };
   bool _loading = true;
   bool _online = false;
+  int _unreadNotifications = 0;
   String? _error;
+  Timer? _notificationPoll;
 
   @override
   void initState() {
     super.initState();
     _loadAll();
+    _refreshUnreadCount();
+    _notificationPoll = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _refreshUnreadCount();
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationPoll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshUnreadCount() async {
+    try {
+      final count = await context.read<CareRepository>().unreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifications = count);
+    } catch (_) {}
   }
 
   Future<void> _loadAll() async {
@@ -64,23 +86,67 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     });
     try {
       final api = context.read<ApiClient>();
-      final results = await Future.wait([
-        api.dio.get<List<dynamic>>('/api/appointments'),
-        api.dio.get<Map<String, dynamic>>('/api/analytics/dashboard'),
-        api.dio.get<List<dynamic>>('/api/doctors'),
-      ]);
+      List<dynamic> aptsRaw = const [];
+      Map<String, dynamic> statsRaw = {};
+      List<dynamic> docsRaw = const [];
+
+      // Load independently so one failing endpoint does not blank the panel.
+      try {
+        final aptsRes = await api.dio.get<List<dynamic>>('/api/appointments');
+        aptsRaw = aptsRes.data ?? const [];
+      } catch (e) {
+        rethrow;
+      }
+      try {
+        final statsRes = await api.dio.get<Map<String, dynamic>>('/api/analytics/dashboard');
+        statsRaw = statsRes.data ?? {};
+      } catch (_) {}
+      try {
+        final docsRes = await api.dio.get<List<dynamic>>('/api/doctors');
+        docsRaw = docsRes.data ?? const [];
+      } catch (_) {}
+
       List<Map<String, dynamic>> refs = [];
       try {
         refs = await context.read<CareRepository>().getReferrals();
       } catch (_) {}
-      final aptsRaw = results[0].data as List<dynamic>? ?? [];
-      final statsRaw = results[1].data as Map<String, dynamic>? ?? {};
-      final docsRaw = results[2].data as List<dynamic>? ?? [];
+
+      var online = _online;
+      try {
+        final me = await context.read<CareRepository>().getMyDoctorProfile();
+        online = me.isOnline;
+      } catch (_) {}
+
+      final parsed = <Appointment>[];
+      var parseFailures = 0;
+      for (final j in aptsRaw) {
+        try {
+          parsed.add(Appointment.fromJson(Map<String, dynamic>.from(j as Map)));
+        } catch (e) {
+          parseFailures++;
+          debugPrint('DoctorHome: skipped appointment parse error: $e');
+        }
+      }
+      final pendingLoaded =
+          parsed.where((a) => a.status.toLowerCase() == 'pending').length;
+      debugPrint(
+        'DoctorHome: loaded ${parsed.length} appointments '
+        '($pendingLoaded pending, $parseFailures parse failures)',
+      );
+
       setState(() {
-        _appointments = aptsRaw
-            .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
-            .toList();
-        _stats = statsRaw;
+        _online = online;
+        _appointments = parsed;
+        _stats = statsRaw.isEmpty
+            ? {
+                'stats': {
+                  'total': parsed.length,
+                  'today': parsed.where((a) => a.preferredDate == _todayStr()).length,
+                  'pending': parsed.where((a) => a.status.toLowerCase() == 'pending').length,
+                  'completed': parsed.where((a) => a.status.toLowerCase() == 'completed').length,
+                },
+              }
+            : statsRaw;
         _doctors = docsRaw.map((j) => j as Map<String, dynamic>).toList();
         _referrals = refs;
       });
@@ -89,6 +155,32 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  String _todayStr() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _notificationButton({bool compact = false}) {
+    return IconButton(
+      tooltip: 'Notifications',
+      icon: Badge(
+        isLabelVisible: _unreadNotifications > 0,
+        label: Text('$_unreadNotifications'),
+        child: Icon(
+          Icons.notifications_none_rounded,
+          color: AdminPalette.cyan,
+          size: compact ? 22 : 24,
+        ),
+      ),
+      onPressed: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsInboxScreen()),
+        );
+        if (mounted) await _refreshUnreadCount();
+      },
+    );
   }
 
   Future<void> _updateStatus(Appointment apt, String status) async {
@@ -278,25 +370,18 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     );
   }
 
+  int get _pendingCount =>
+      _appointments.where((a) => a.status.toLowerCase() == 'pending').length;
+
   int get _todayCount {
-    final stats = _stats['stats'];
-    return int.tryParse(stats?['today']?.toString() ?? '0') ?? 0;
+    final today = _todayStr();
+    return _appointments.where((a) => a.preferredDate == today).length;
   }
 
-  int get _pendingCount {
-    final stats = _stats['stats'];
-    return int.tryParse(stats?['pending']?.toString() ?? '0') ?? 0;
-  }
+  int get _completedCount =>
+      _appointments.where((a) => a.status.toLowerCase() == 'completed').length;
 
-  int get _completedCount {
-    final stats = _stats['stats'];
-    return int.tryParse(stats?['completed']?.toString() ?? '0') ?? 0;
-  }
-
-  int get _totalCount {
-    final stats = _stats['stats'];
-    return int.tryParse(stats?['total']?.toString() ?? '0') ?? 0;
-  }
+  int get _totalCount => _appointments.length;
 
   // ---------------------------------------------------------------------------
   // Build
@@ -400,12 +485,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     icon: const Icon(Icons.refresh_rounded, color: AdminPalette.gold),
                     onPressed: _loadAll,
                   ),
+                  _notificationButton(),
                   const SizedBox(width: 4),
                   CircleAvatar(
                     radius: 16,
                     backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
                     child: Text(
-                      (session.user?.name ?? 'D')[0].toUpperCase(),
+                      () {
+                        final n = (session.user?.name ?? 'D').trim();
+                        return n.isEmpty ? 'D' : n[0].toUpperCase();
+                      }(),
                       style: adminSans(size: 13, weight: FontWeight.w800, color: AdminPalette.gold),
                     ),
                   ),
@@ -439,11 +528,15 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                     icon: const Icon(Icons.refresh_rounded, color: AdminPalette.gold),
                     onPressed: _loadAll,
                   ),
+                  _notificationButton(compact: true),
                   CircleAvatar(
                     radius: 15,
                     backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
                     child: Text(
-                      (session.user?.name ?? 'D')[0].toUpperCase(),
+                      () {
+                        final n = (session.user?.name ?? 'D').trim();
+                        return n.isEmpty ? 'D' : n[0].toUpperCase();
+                      }(),
                       style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold),
                     ),
                   ),
@@ -464,19 +557,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [AdminPalette.gold, AdminPalette.cyan],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [BoxShadow(color: AdminPalette.gold.withValues(alpha: 0.45), blurRadius: 16)],
-          ),
-          child: const Icon(Icons.health_and_safety_rounded, color: Colors.black, size: 20),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.asset(AppBrand.logoAsset, width: 36, height: 36, fit: BoxFit.cover),
         ),
         if (!compact) ...[
           const SizedBox(width: 10),
@@ -484,7 +567,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Digi Health', style: adminSerif(size: 15, weight: FontWeight.w700)),
+              Text(AppBrand.name, style: adminSerif(size: 15, weight: FontWeight.w700)),
               Text('CLINIC FLOOR', style: adminSans(size: 9, weight: FontWeight.w800, color: AdminPalette.gold, letterSpacing: 1.4)),
             ],
           ),
@@ -1023,14 +1106,28 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             child: SwitchListTile(
               value: _online,
               onChanged: (v) async {
+                final previous = _online;
                 setState(() => _online = v);
                 try {
                   await context.read<CareRepository>().setDoctorOnline(v);
-                } catch (_) {}
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(v ? 'You are online for patients' : 'You are offline'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  setState(() => _online = previous);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not update availability: $e')),
+                  );
+                }
               },
               title: Text('Available for Consult Now', style: adminSans(size: 14, weight: FontWeight.w800)),
               subtitle: Text(
-                _online ? 'Patients can be matched to you now' : 'Go online to receive live queue patients',
+                _online ? 'Patients can see you as online now' : 'Go online so patients can match with you',
                 style: adminSans(size: 12, color: AdminPalette.mute),
               ),
               activeThumbColor: AdminPalette.lime,
@@ -1292,9 +1389,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   List<Appointment> _getLiveAppointmentsList() {
-    final now = DateTime.now();
-    final todayStr =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final todayStr = _todayStr();
 
     final activeList = _appointments.where((apt) {
       final s = apt.status.toLowerCase();
@@ -1303,9 +1398,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
 
     DateTime? parseDt(String dateStr, String timeStr) {
       try {
+        final date = dateStr.contains('T') ? dateStr.split('T').first : dateStr;
         final parts = timeStr.split(':');
         final formattedTime = parts.map((p) => p.padLeft(2, '0')).join(':');
-        return DateTime.parse("${dateStr}T$formattedTime");
+        return DateTime.parse('${date}T$formattedTime');
       } catch (_) {
         return null;
       }
@@ -1324,7 +1420,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       return dtA.compareTo(dtB);
     });
 
-    return activeList.take(5).toList();
+    return activeList.take(8).toList();
   }
 
   Widget _liveRow(Appointment apt) {
@@ -1502,6 +1598,24 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   Widget _liveRowAction(Appointment apt) {
+    final status = apt.status.toLowerCase();
+    if (status == 'pending' || status == 'triage') {
+      return ElevatedButton.icon(
+        onPressed: () => _updateStatus(apt, 'approved'),
+        icon: const Icon(Icons.check_circle_outline_rounded, size: 12),
+        label: const Text('APPROVE'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF16A34A),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          textStyle: GoogleFonts.roboto(fontSize: 10, fontWeight: FontWeight.bold),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
     if (apt.isVideoConsult) {
       if (apt.hasMeetingLink) {
         return ElevatedButton.icon(
@@ -1968,6 +2082,34 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (status == 'pending' || status == 'triage') ...[
+          _actionBtn(
+            'Approve',
+            const Color(0xFF16A34A),
+            () => _updateStatus(apt, 'approved'),
+            icon: Icons.check_circle_outline_rounded,
+          ),
+          _actionBtn(
+            'Start',
+            const Color(0xFF7C3AED),
+            () => _updateStatus(apt, 'consulting'),
+            icon: Icons.play_arrow_rounded,
+          ),
+          _actionBtn(
+            'Decline',
+            const Color(0xFFDC2626),
+            () => _updateStatus(apt, 'cancelled'),
+            icon: Icons.close_rounded,
+          ),
+        ],
+        if (status == 'approved')
+          _actionBtn(
+            'Mark arrived',
+            const Color(0xFF2563EB),
+            () => _updateStatus(apt, 'arrived'),
+            icon: Icons.login_rounded,
+          ),
+
         // Telemedicine: generate link or show JOIN button
         if (apt.isVideoConsult && !apt.hasMeetingLink)
           _actionBtn(

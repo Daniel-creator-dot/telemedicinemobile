@@ -191,9 +191,9 @@ export const initDb = async () => {
 
     // Initialize default settings if they don't exist
     const defaultSettings = [
-      ['clinic_name', 'Digi Health'],
+      ['clinic_name', 'Medilynks'],
       ['sms_base_url', ''],
-      ['sms_sender_id', 'DigiHealth'],
+      ['sms_sender_id', 'Medilynks'],
       ['sms_api_key', ''],
       ['paystack_public_key', ''],
       ['paystack_secret_key', ''],
@@ -383,8 +383,8 @@ export const initDb = async () => {
       FROM appointments a WHERE c.appointment_id = a.id AND c.patient_id IS NULL
     `);
 
-    await query(`UPDATE settings SET value = 'Digi Health' WHERE key = 'clinic_name' AND value ILIKE '%prime%'`);
-    await query(`UPDATE settings SET value = 'DigiHealth' WHERE key = 'sms_sender_id' AND value ILIKE '%prime%'`);
+    await query(`UPDATE settings SET value = 'Medilynks' WHERE key = 'clinic_name' AND (value ILIKE '%prime%' OR value ILIKE '%digi%')`);
+    await query(`UPDATE settings SET value = 'Medilynks' WHERE key = 'sms_sender_id' AND (value ILIKE '%prime%' OR value ILIKE '%digi%')`);
 
     console.log('Database initialized successfully');
   } catch (err) {

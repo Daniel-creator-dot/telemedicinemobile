@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
+import '../../core/brand.dart';
 import '../../core/notification_service.dart';
 import '../admin/admin_chrome.dart';
 import '../consult/open_video_consult.dart';
@@ -16,7 +18,7 @@ import 'care_repository.dart';
 import 'chat_screen.dart';
 import 'pay_visit.dart';
 import '../../models/appointment.dart';
-import '../../models/auth_user.dart';
+import '../../models/doctor_profile.dart';
 import '../../models/prescription.dart';
 import '../../models/consultation.dart';
 
@@ -137,36 +139,109 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView> {
-  List<AuthUser> _doctors = [];
+  List<DoctorProfile> _doctors = [];
   Appointment? _nextAppointment;
+  List<Map<String, dynamic>> _activeCare = [];
+  int _openCareCount = 0;
   bool _loading = true;
   bool _isSearchFocused = false;
+  int _unreadNotifications = 0;
+  Timer? _presenceTimer;
 
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
+    _refreshUnreadCount();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!mounted) return;
+      _refreshPresence();
+      _refreshUnreadCount();
+    });
+  }
+
+  Future<void> _refreshUnreadCount() async {
+    try {
+      final count = await context.read<CareRepository>().unreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifications = count);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _presenceTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshPresence() async {
+    if (_doctors.isEmpty) return;
+    try {
+      final presence = await context.read<CareRepository>().getDoctorPresence();
+      if (!mounted || presence.isEmpty) return;
+      setState(() {
+        _doctors = _doctors.map((d) {
+          final online = presence[d.id];
+          return online == null ? d : d.copyWith(isOnline: online);
+        }).toList()
+          ..sort((a, b) {
+            if (a.isOnline == b.isOnline) return a.name.compareTo(b.name);
+            return a.isOnline ? -1 : 1;
+          });
+      });
+    } catch (_) {}
   }
 
   Future<void> _openMeeting(Appointment apt) async {
     await openVideoConsult(context, apt);
   }
 
+  Future<void> _openBook(DoctorProfile doc) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => BookAppointmentDialog(
+        preselectedDoctorId: doc.id,
+        preselectedDoctorName: doc.name,
+        preselectedSpecialty: doc.specialization,
+      ),
+    );
+    if (mounted) await _loadDashboardData();
+  }
+
   Future<void> _loadDashboardData() async {
     try {
-      final repo = context.read<AppointmentsRepository>();
-      final docs = await repo.getAvailableDoctors();
-      final myApts = await repo.getMyAppointments();
-      
+      final aptRepo = context.read<AppointmentsRepository>();
+      final care = context.read<CareRepository>();
+      final docs = await care.getDirectory();
+      final myApts = await aptRepo.getMyAppointments();
+      List<Map<String, dynamic>> activeCare = [];
+      var openCareCount = 0;
+      try {
+        final journey = await care.healthJourney();
+        activeCare = ((journey['active'] as List?) ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        openCareCount = journey['open_count'] is int
+            ? journey['open_count'] as int
+            : int.tryParse(journey['open_count']?.toString() ?? '') ?? activeCare.length;
+      } catch (_) {}
+
       // Get the next scheduled approved/pending appointment
-      final upcoming = myApts.where((a) => a.status == 'pending' || a.status == 'approved' || a.status == 'queued' || a.status == 'consulting').toList();
-      
+      final upcoming = myApts
+          .where((a) =>
+              a.status == 'pending' ||
+              a.status == 'approved' ||
+              a.status == 'queued' ||
+              a.status == 'consulting')
+          .toList();
+
       // Schedule notifications for upcoming telemedicine appointments
       final notificationService = NotificationService();
       await notificationService.scheduleAppointmentReminders(upcoming);
-      
+
       setState(() {
         _doctors = docs;
+        _activeCare = activeCare;
+        _openCareCount = openCareCount;
         if (upcoming.isNotEmpty) {
           _nextAppointment = upcoming.first;
         } else {
@@ -210,8 +285,15 @@ class _DashboardViewState extends State<DashboardView> {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => context.push('/patient/notifications'),
-                      icon: const Icon(Icons.notifications_none_rounded, color: AdminPalette.ink),
+                      onPressed: () async {
+                        await context.push('/patient/notifications');
+                        if (mounted) await _refreshUnreadCount();
+                      },
+                      icon: Badge(
+                        isLabelVisible: _unreadNotifications > 0,
+                        label: Text('$_unreadNotifications'),
+                        child: const Icon(Icons.notifications_none_rounded, color: AdminPalette.ink),
+                      ),
                     ),
                     const SizedBox(width: 4),
                 Container(
@@ -296,19 +378,13 @@ class _DashboardViewState extends State<DashboardView> {
                         children: [
                           Row(
                             children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF00D2C4).withOpacity(0.15),
-                                  border: Border.all(color: const Color(0xFF00D2C4).withOpacity(0.4), width: 1.5),
-                                ),
-                                child: const Icon(Icons.public_rounded, color: Color(0xFF00D2C4), size: 16),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: Image.asset(AppBrand.logoAsset, width: 28, height: 28, fit: BoxFit.cover),
                               ),
                               const SizedBox(width: 10),
                               Text(
-                                'Digi Health',
+                                AppBrand.name,
                                 style: GoogleFonts.roboto(
                                   color: Colors.white,
                                   fontSize: 12,
@@ -454,12 +530,22 @@ class _DashboardViewState extends State<DashboardView> {
                 _CareChip(label: 'Membership', icon: Icons.workspace_premium_outlined, onTap: () => context.push('/patient/membership')),
                 _CareChip(label: 'Follow-up', icon: Icons.event_available_outlined, onTap: () => context.push('/patient/followups')),
                 _CareChip(label: 'Help', icon: Icons.support_agent_outlined, onTap: () => context.push('/patient/support')),
+                _CareChip(label: 'Edit profile', icon: Icons.edit_outlined, onTap: () => context.push('/patient/edit-profile')),
                 _CareChip(label: 'Consents', icon: Icons.verified_user_outlined, onTap: () => context.push('/patient/consents')),
                 _CareChip(label: 'Medical profile', icon: Icons.badge_outlined, onTap: () => context.push('/patient/profile')),
               ],
             ),
 
             const SizedBox(height: 25),
+
+            if (_openCareCount > 0) ...[
+              _ActiveCareStrip(
+                count: _openCareCount,
+                items: _activeCare,
+                onTap: () => context.push('/patient/journey'),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Next Appointment Card
             if (_nextAppointment != null) ...[
@@ -676,13 +762,19 @@ class _DashboardViewState extends State<DashboardView> {
                           itemCount: _doctors.length,
                           itemBuilder: (context, index) {
                             final doc = _doctors[index];
+                            final fee = doc.consultationFee == null
+                                ? 'Book'
+                                : 'GHS ${doc.consultationFee!.toStringAsFixed(0)}';
                             return _buildDoctorAvatarCard(
                               context,
                               name: doc.name,
-                              specialty: 'Clinical Specialist',
-                              rating: '4.9',
-                              isOnline: true,
+                              specialty: doc.specialization?.trim().isNotEmpty == true
+                                  ? doc.specialization!
+                                  : 'Clinician',
+                              rating: fee,
+                              isOnline: doc.isOnline,
                               initials: doc.name.substring(0, doc.name.length > 1 ? 2 : 1).toUpperCase(),
+                              onTap: () => _openBook(doc),
                             );
                           },
                         ),
@@ -832,10 +924,16 @@ class _DashboardViewState extends State<DashboardView> {
     required String rating,
     required bool isOnline,
     required String initials,
+    VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
 
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
       width: 135,
       margin: const EdgeInsets.only(right: 15),
       padding: const EdgeInsets.all(14),
@@ -967,19 +1065,29 @@ class _DashboardViewState extends State<DashboardView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 14),
+              Icon(
+                rating.startsWith('GHS') ? Icons.payments_outlined : Icons.event_available_rounded,
+                color: const Color(0xFF00D2C4),
+                size: 14,
+              ),
               const SizedBox(width: 4),
-              Text(
-                rating,
-                style: GoogleFonts.roboto(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              Flexible(
+                child: Text(
+                  rating,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.roboto(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
           ),
         ],
+      ),
+        ),
       ),
     );
   }
@@ -1609,6 +1717,18 @@ class _AppointmentsViewState extends State<AppointmentsView> {
 }
 
 // ==================== MESSAGES VIEW ====================
+class _MessageThread {
+  const _MessageThread({
+    required this.appointment,
+    required this.lastMessage,
+    required this.timeLabel,
+  });
+
+  final Appointment appointment;
+  final String lastMessage;
+  final String timeLabel;
+}
+
 class MessagesView extends StatefulWidget {
   const MessagesView({super.key});
 
@@ -1617,7 +1737,7 @@ class MessagesView extends StatefulWidget {
 }
 
 class _MessagesViewState extends State<MessagesView> {
-  List<Appointment> _threads = [];
+  List<_MessageThread> _threads = [];
   bool _loading = true;
 
   @override
@@ -1628,12 +1748,44 @@ class _MessagesViewState extends State<MessagesView> {
 
   Future<void> _load() async {
     try {
-      final list = await context.read<AppointmentsRepository>().getMyAppointments();
+      final apts = await context.read<AppointmentsRepository>().getMyAppointments();
+      final care = context.read<CareRepository>();
+      final open = apts.where((a) => a.status != 'cancelled').toList();
+      final previews = await Future.wait(open.map((apt) async {
+        try {
+          final msgs = await care.getChat(apt.id);
+          if (msgs.isEmpty) {
+            return _MessageThread(
+              appointment: apt,
+              lastMessage: 'Tap to start a clinical message',
+              timeLabel: apt.preferredDate.split('T').first,
+            );
+          }
+          final last = msgs.last;
+          final stamp = last.createdAt;
+          final timeLabel = stamp.length >= 16
+              ? stamp.substring(11, 16)
+              : apt.preferredDate.split('T').first;
+          return _MessageThread(
+            appointment: apt,
+            lastMessage: '${last.senderName}: ${last.body}',
+            timeLabel: timeLabel,
+          );
+        } catch (_) {
+          return _MessageThread(
+            appointment: apt,
+            lastMessage: apt.consultType ?? apt.service ?? 'Consultation thread',
+            timeLabel: apt.preferredDate.split('T').first,
+          );
+        }
+      }));
+      if (!mounted) return;
       setState(() {
-        _threads = list.where((a) => a.status != 'cancelled').toList();
+        _threads = previews;
         _loading = false;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
@@ -1660,25 +1812,30 @@ class _MessagesViewState extends State<MessagesView> {
                 ? const Center(child: CircularProgressIndicator())
                 : _threads.isEmpty
                     ? Center(child: Text('No consultation threads yet.', style: adminSans(color: AdminPalette.mute, size: 13)))
-                    : ListView.builder(
-                        itemCount: _threads.length,
-                        itemBuilder: (context, index) {
-                          final apt = _threads[index];
-                          final name = apt.doctorName ?? 'Care team';
-                          return _buildChatItem(
-                            context,
-                            initials: name.substring(0, name.length > 1 ? 2 : 1).toUpperCase(),
-                            name: name,
-                            lastMessage: apt.consultType ?? apt.service ?? apt.status,
-                            time: apt.preferredDate.split('T').first,
-                            unreadCount: 0,
-                            onTap: () {
-                              Navigator.of(context).push(MaterialPageRoute(
-                                builder: (_) => ClinicalChatScreen(appointment: apt),
-                              ));
-                            },
-                          );
-                        },
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.builder(
+                          itemCount: _threads.length,
+                          itemBuilder: (context, index) {
+                            final thread = _threads[index];
+                            final apt = thread.appointment;
+                            final name = apt.doctorName ?? 'Care team';
+                            return _buildChatItem(
+                              context,
+                              initials: name.substring(0, name.length > 1 ? 2 : 1).toUpperCase(),
+                              name: name,
+                              lastMessage: thread.lastMessage,
+                              time: thread.timeLabel,
+                              unreadCount: 0,
+                              onTap: () async {
+                                await Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (_) => ClinicalChatScreen(appointment: apt),
+                                ));
+                                if (mounted) await _load();
+                              },
+                            );
+                          },
+                        ),
                       ),
           )
         ],
@@ -1921,9 +2078,17 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           
           OutlinedButton.icon(
+            onPressed: () => context.push('/patient/edit-profile'),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Edit profile'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
             onPressed: () => context.push('/patient/profile'),
-            icon: const Icon(Icons.folder_shared_outlined, size: 18),
-            label: const Text('Edit medical profile'),
+            child: Text(
+              'Edit medical profile',
+              style: GoogleFonts.roboto(color: const Color(0xFF00D2C4), fontSize: 13),
+            ),
           ),
           const SizedBox(height: 10),
           ElevatedButton.icon(
@@ -1992,16 +2157,6 @@ class _ProfileViewState extends State<ProfileView> {
                 Text(
                   [
                     if ((pr.pharmacyName ?? '').isNotEmpty) pr.pharmacyName!,
-                    if (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent') pr.dispenseStatus,
-                  ].join(' · '),
-                  style: GoogleFonts.roboto(color: const Color(0xFFF59E0B), fontSize: 11),
-                ),
-              ],
-              if (pr.pharmacyName != null || pr.dispenseStatus != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  [
-                    if (pr.pharmacyName != null && pr.pharmacyName!.isNotEmpty) pr.pharmacyName!,
                     if (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent') pr.dispenseStatus,
                   ].join(' · '),
                   style: GoogleFonts.roboto(color: const Color(0xFFF59E0B), fontSize: 11),
@@ -2176,6 +2331,73 @@ class _ProfileViewState extends State<ProfileView> {
             style: GoogleFonts.roboto(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ActiveCareStrip extends StatelessWidget {
+  const _ActiveCareStrip({
+    required this.count,
+    required this.items,
+    required this.onTap,
+  });
+
+  final int count;
+  final List<Map<String, dynamic>> items;
+  final VoidCallback onTap;
+
+  String _line(Map<String, dynamic> e) {
+    final title = e['title']?.toString() ?? 'Care item';
+    final partner = e['partner_name']?.toString();
+    final label = e['status_label']?.toString() ?? e['status']?.toString() ?? '';
+    if (partner != null && partner.isNotEmpty) return '$title · $partner · $label';
+    return '$title · $label';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AdminGlass(
+          glow: const Color(0xFFF59E0B),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.local_hospital_outlined, color: Color(0xFFF59E0B), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Active care · $count in progress',
+                      style: adminSans(weight: FontWeight.w700, size: 14),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.white54, size: 20),
+                ],
+              ),
+              if (items.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ...items.take(3).map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      _line(e),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.roboto(color: Colors.white70, fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

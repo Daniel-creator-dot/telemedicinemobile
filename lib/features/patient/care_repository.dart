@@ -6,6 +6,20 @@ import '../../models/chat_message.dart';
 import '../../models/doctor_profile.dart';
 import '../../models/patient_profile.dart';
 
+class DoctorSlotsResult {
+  const DoctorSlotsResult({
+    required this.date,
+    required this.slots,
+    this.nextAvailableDate,
+    this.doctorId,
+  });
+
+  final String date;
+  final List<String> slots;
+  final String? nextAvailableDate;
+  final int? doctorId;
+}
+
 class CareRepository {
   CareRepository(this._api);
   final ApiClient _api;
@@ -35,11 +49,18 @@ class CareRepository {
         .toList();
   }
 
-  Future<List<String>> getSlots(int doctorId, String date) async {
+  Future<DoctorSlotsResult> getSlots(int doctorId, String date) async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/doctors/$doctorId/slots', queryParameters: {'date': date});
-    final slots = res.data?['slots'];
-    if (slots is List) return slots.map((e) => e.toString()).toList();
-    return [];
+    final data = res.data ?? {};
+    final slots = data['slots'];
+    return DoctorSlotsResult(
+      date: data['date']?.toString() ?? date,
+      slots: slots is List ? slots.map((e) => e.toString()).toList() : const [],
+      nextAvailableDate: data['next_available_date']?.toString(),
+      doctorId: data['doctor_id'] is int
+          ? data['doctor_id'] as int
+          : int.tryParse(data['doctor_id']?.toString() ?? ''),
+    );
   }
 
   Future<List<String>> getConsultTypes() async {
@@ -86,13 +107,42 @@ class CareRepository {
     return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
+  Future<int> unreadNotificationCount() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/notifications/me/unread-count');
+    final count = res.data?['count'];
+    if (count is int) return count;
+    return int.tryParse(count?.toString() ?? '') ?? 0;
+  }
+
   Future<Map<String, dynamic>> opsDashboard() async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/ops/dashboard');
     return res.data ?? {};
   }
 
+  Future<DoctorProfile> getMyDoctorProfile() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/doctors/me');
+    return DoctorProfile.fromJson(res.data ?? {});
+  }
+
   Future<void> setDoctorOnline(bool online) async {
     await _api.dio.patch('/api/doctors/me/availability', data: {'is_online': online});
+  }
+
+  /// Cheap poll for live online/offline badges.
+  Future<Map<int, bool>> getDoctorPresence() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/doctors/presence');
+    final map = <int, bool>{};
+    for (final row in res.data ?? const []) {
+      if (row is! Map) continue;
+      final id = row['id'] is int ? row['id'] as int : int.tryParse(row['id']?.toString() ?? '');
+      if (id == null) continue;
+      final online = row['is_online'] == true ||
+          row['is_online'] == 1 ||
+          row['is_online']?.toString().toLowerCase() == 'true' ||
+          row['is_online']?.toString() == 't';
+      map[id] = online;
+    }
+    return map;
   }
 
   Future<List<Map<String, dynamic>>> getPartners({String? type, String? region}) async {

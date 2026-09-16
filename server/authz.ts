@@ -43,6 +43,47 @@ export async function getDoctorForUser(userId: number) {
   return result.rows[0] || null;
 }
 
+/** Resolve a client-supplied id to doctors.id (accepts doctors.id or users.id). */
+export async function resolveDoctorId(raw: unknown): Promise<number | null> {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const id = Number(raw);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const byPk = await query('SELECT id FROM doctors WHERE id = $1', [id]);
+  if (byPk.rows[0]) return Number(byPk.rows[0].id);
+  const byUser = await query(
+    'SELECT id FROM doctors WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE ORDER BY id LIMIT 1',
+    [id]
+  );
+  if (byUser.rows[0]) return Number(byUser.rows[0].id);
+  return null;
+}
+
+/** Format DATE/TIMESTAMP values as YYYY-MM-DD for stable client matching. */
+export function dateOnly(value: unknown): string | null {
+  if (value == null) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(value);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : s;
+}
+
+export function serializeAppointment(row: any) {
+  if (!row) return row;
+  return {
+    ...row,
+    preferred_date: dateOnly(row.preferred_date) ?? row.preferred_date,
+    preferred_time:
+      row.preferred_time == null
+        ? row.preferred_time
+        : String(row.preferred_time).slice(0, 8),
+  };
+}
+
 export async function canAccessAppointment(user: AuthedUser, apt: any): Promise<boolean> {
   if (!apt) return false;
   if (['admin', 'medical_ops', 'nurse'].includes(user.role)) return true;

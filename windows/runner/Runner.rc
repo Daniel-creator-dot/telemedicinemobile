@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.telemedicine.mobile" "\0"
-            VALUE "FileDescription", "telemedicinemobile" "\0"
+            VALUE "FileDescription", "Medilynks" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "telemedicinemobile" "\0"
+            VALUE "InternalName", "Medilynks" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.telemedicine.mobile. All rights reserved." "\0"
             VALUE "OriginalFilename", "telemedicinemobile.exe" "\0"
-            VALUE "ProductName", "telemedicinemobile" "\0"
+            VALUE "ProductName", "Medilynks" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

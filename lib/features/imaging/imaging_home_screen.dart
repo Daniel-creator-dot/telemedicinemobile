@@ -94,7 +94,7 @@ class _ImagingHomeScreenState extends State<ImagingHomeScreen> {
               ? const ClinicalEmptyState(
                   icon: Icons.photo_camera_outlined,
                   title: 'No imaging referrals',
-                  message: 'X-ray, ultrasound, CT and MRI requests from Digi Health clinicians will land here for scheduling and report return.',
+                  message: 'X-ray, ultrasound, CT and MRI requests from Medilynks clinicians will land here for scheduling and report return.',
                 )
               : RefreshIndicator(
                   onRefresh: _load,

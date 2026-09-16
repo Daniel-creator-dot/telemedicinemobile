@@ -190,7 +190,7 @@ async function seedCommercial() {
 
   await ensureUser('corporate', 'corp123', 'corporate', 'GPA Benefits Desk', '0240000201');
   await ensureUser('insurance', 'insure123', 'insurance', 'Star Health Adjudicator', '0240000202');
-  await ensureUser('finance', 'fin123', 'finance', 'Digi Health Finance', '0240000203');
+  await ensureUser('finance', 'fin123', 'finance', 'Medilynks Finance', '0240000203');
 
   const patient = await query('SELECT id, staff_id FROM patients WHERE user_id IS NOT NULL ORDER BY id LIMIT 1');
   if (patient.rows[0]) {

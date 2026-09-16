@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -17,20 +19,45 @@ class DoctorDirectoryScreen extends StatefulWidget {
 class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
   List<DoctorProfile> _doctors = [];
   bool _loading = true;
+  bool _onlineOnly = false;
   final _search = TextEditingController();
   String? _specialty;
   String? _language;
+  Timer? _presenceTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!mounted) return;
+      _refreshPresence();
+    });
   }
 
   @override
   void dispose() {
+    _presenceTimer?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshPresence() async {
+    if (_doctors.isEmpty) return;
+    try {
+      final presence = await context.read<CareRepository>().getDoctorPresence();
+      if (!mounted || presence.isEmpty) return;
+      setState(() {
+        _doctors = _doctors.map((d) {
+          final online = presence[d.id];
+          return online == null ? d : d.copyWith(isOnline: online);
+        }).toList()
+          ..sort((a, b) {
+            if (a.isOnline == b.isOnline) return a.name.compareTo(b.name);
+            return a.isOnline ? -1 : 1;
+          });
+      });
+    } catch (_) {}
   }
 
   Future<void> _load() async {
@@ -41,6 +68,10 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
         specialty: _specialty,
         language: _language,
       );
+      list.sort((a, b) {
+        if (a.isOnline == b.isOnline) return a.name.compareTo(b.name);
+        return a.isOnline ? -1 : 1;
+      });
       setState(() {
         _doctors = list;
         _loading = false;
@@ -81,6 +112,16 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             child: Row(
               children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text('Online now', style: GoogleFonts.dmSans(fontSize: 12)),
+                    selected: _onlineOnly,
+                    onSelected: (on) => setState(() => _onlineOnly = on),
+                    selectedColor: const Color(0xFFD8F3E4),
+                    checkmarkColor: const Color(0xFF1F4A3A),
+                  ),
+                ),
                 for (final lang in const ['English', 'Twi', 'Ga', 'Ewe', 'Hausa'])
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
@@ -99,17 +140,24 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _doctors.isEmpty
-                    ? const ClinicalEmptyState(
+                : () {
+                    final visible = _onlineOnly
+                        ? _doctors.where((d) => d.isOnline).toList()
+                        : _doctors;
+                    if (visible.isEmpty) {
+                      return ClinicalEmptyState(
                         icon: Icons.medical_services_outlined,
-                        title: 'No matching clinicians',
-                        message: 'Try another language or clear the search. Availability is shown in real time.',
-                      )
-                    : ListView.builder(
+                        title: _onlineOnly ? 'No doctors online' : 'No matching clinicians',
+                        message: _onlineOnly
+                            ? 'Ask a clinician to flip Available for Consult Now, then wait a few seconds.'
+                            : 'Try another language or clear the search. Availability updates every few seconds.',
+                      );
+                    }
+                    return ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _doctors.length,
+                        itemCount: visible.length,
                         itemBuilder: (_, i) {
-                          final d = _doctors[i];
+                          final d = visible[i];
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: DigiCard(
@@ -146,8 +194,23 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
                                   ),
                                   Column(
                                     children: [
-                                      Icon(Icons.circle, size: 10, color: d.isOnline ? const Color(0xFF1F4A3A) : const Color(0xFFC4BEB4)),
-                                      Text(d.isOnline ? 'Online' : 'Off', style: GoogleFonts.dmSans(fontSize: 10, color: digiSlate)),
+                                      Icon(
+                                        Icons.circle,
+                                        size: 10,
+                                        color: d.isOnline
+                                            ? const Color(0xFF16A34A)
+                                            : const Color(0xFFC4BEB4),
+                                      ),
+                                      Text(
+                                        d.isOnline ? 'Online' : 'Offline',
+                                        style: GoogleFonts.dmSans(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: d.isOnline
+                                              ? const Color(0xFF1F4A3A)
+                                              : digiSlate,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -155,7 +218,8 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
                             ),
                           );
                         },
-                      ),
+                      );
+                  }(),
           ),
         ],
       ),

@@ -96,13 +96,43 @@ class _PhasesScreenState extends State<PhasesScreen> {
                       ),
                       const SizedBox(height: 12),
                       _loopSection('Pharmacy', Icons.local_pharmacy_outlined, (loop['prescriptions'] as List?) ?? [],
-                          (r) => r['medication_name'] ?? 'Prescription', (r) => r['dispense_status'] ?? r['status'] ?? r['pharmacy_name']),
+                          (r) => r['medication_name'] ?? 'Prescription',
+                          (r) {
+                            final bits = <String>[
+                              if ((r['pharmacy_name'] ?? '').toString().isNotEmpty) r['pharmacy_name'].toString(),
+                              if ((r['dispense_status'] ?? r['status'] ?? '').toString().isNotEmpty)
+                                (r['dispense_status'] ?? r['status']).toString(),
+                            ];
+                            return bits.isEmpty ? null : bits.join(' · ');
+                          }),
                       _loopSection('Laboratory', Icons.biotech_outlined, (loop['labs'] as List?) ?? [],
-                          (r) => r['test_name'] ?? 'Lab request', (r) => r['status'] ?? r['partner_name']),
+                          (r) => r['test_name'] ?? 'Lab request',
+                          (r) {
+                            final bits = <String>[
+                              if ((r['partner_name'] ?? '').toString().isNotEmpty) r['partner_name'].toString(),
+                              if ((r['status'] ?? '').toString().isNotEmpty) r['status'].toString(),
+                              if ((r['results'] ?? '').toString().isNotEmpty) 'result ready',
+                            ];
+                            return bits.isEmpty ? null : bits.join(' · ');
+                          }),
                       _loopSection('Imaging', Icons.radar_outlined, (loop['scans'] as List?) ?? [],
-                          (r) => r['scan_type'] ?? 'Scan', (r) => r['status'] ?? r['partner_name']),
+                          (r) => r['scan_type'] ?? 'Scan',
+                          (r) {
+                            final bits = <String>[
+                              if ((r['partner_name'] ?? '').toString().isNotEmpty) r['partner_name'].toString(),
+                              if ((r['status'] ?? '').toString().isNotEmpty) r['status'].toString(),
+                            ];
+                            return bits.isEmpty ? null : bits.join(' · ');
+                          }),
                       _loopSection('Referrals', Icons.assignment_ind_outlined, (loop['referrals'] as List?) ?? [],
-                          (r) => r['specialty'] ?? 'Referral', (r) => r['status'] ?? r['org_name']),
+                          (r) => r['specialty'] ?? r['referral_code'] ?? 'Referral',
+                          (r) {
+                            final bits = <String>[
+                              if ((r['org_name'] ?? '').toString().isNotEmpty) r['org_name'].toString(),
+                              if ((r['status'] ?? '').toString().isNotEmpty) r['status'].toString(),
+                            ];
+                            return bits.isEmpty ? null : bits.join(' · ');
+                          }),
                       const SizedBox(height: 8),
                       SectionLabel('Risk alerts'),
                       const SizedBox(height: 8),

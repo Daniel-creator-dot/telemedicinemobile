@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 /**
- * Digi Health video rooms.
+ * Medilynks video rooms.
  *
  * meet.jit.si / 8x8.vc require an authenticated moderator before a conference
  * can start. Anonymous iframe embeds then hang on "Asking to join meeting...".
@@ -17,11 +17,11 @@ const LOCKED_HOSTS = new Set(['meet.jit.si', '8x8.vc', 'jaas.8x8.vc']);
 
 /** Unguessable public Jitsi room. Never use sequential or short alphabetic names. */
 export function createSecureJitsiLink() {
-  const room = `digihealth-${crypto.randomBytes(18).toString('hex')}`;
+  const room = `medilynks-${crypto.randomBytes(18).toString('hex')}`;
   return `https://${JITSI_DOMAIN}/${room}`;
 }
 
-/** Rewrite legacy meet.jit.si links so both parties land on the same Digi host. */
+/** Rewrite legacy meet.jit.si links so both parties land on the same Medilynks host. */
 export function normalizeJitsiMeetingLink(link: string | null | undefined): string | null {
   if (!link || !String(link).trim()) return null;
   const trimmed = String(link).trim();

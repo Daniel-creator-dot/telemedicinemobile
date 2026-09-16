@@ -16,6 +16,7 @@ class _HealthJourneyScreenState extends State<HealthJourneyScreen> {
   Map<String, dynamic> _data = {};
   bool _loading = true;
   String? _error;
+  _JourneyFilter _filter = _JourneyFilter.all;
 
   @override
   void initState() {
@@ -30,11 +31,13 @@ class _HealthJourneyScreenState extends State<HealthJourneyScreen> {
     });
     try {
       final data = await context.read<CareRepository>().healthJourney();
+      if (!mounted) return;
       setState(() {
         _data = data;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = 'We could not load your health journey.';
         _loading = false;
@@ -42,47 +45,114 @@ class _HealthJourneyScreenState extends State<HealthJourneyScreen> {
     }
   }
 
+  List<Map<String, dynamic>> get _events {
+    final all = ((_data['events'] as List?) ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    switch (_filter) {
+      case _JourneyFilter.open:
+        return all.where((e) => e['is_open'] == true).toList();
+      case _JourneyFilter.done:
+        return all.where((e) => e['is_open'] != true).toList();
+      case _JourneyFilter.all:
+        return all;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final events = ((_data['events'] as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final openCount = _data['open_count'] is int
+        ? _data['open_count'] as int
+        : int.tryParse(_data['open_count']?.toString() ?? '') ?? 0;
+    final events = _events;
+
     return Scaffold(
       backgroundColor: digiCanvas,
       appBar: AppBar(
-        title: Text('Health Journey', style: GoogleFonts.roboto(fontWeight: FontWeight.w800)),
-        backgroundColor: Colors.white,
+        title: Text('Health Journey', style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600)),
+        backgroundColor: digiPaper,
         foregroundColor: digiInk,
+        elevation: 0,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? ClinicalErrorState(message: _error!, onRetry: _load)
-              : events.isEmpty
-                  ? ClinicalEmptyState(
-                      icon: Icons.timeline_rounded,
-                      title: 'Your journey starts here',
-                      message: 'Consultations, labs, imaging, prescriptions and referrals will appear in one timeline.',
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.all(20),
-                        itemCount: events.length + 1,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, i) {
-                          if (i == 0) {
-                            return Text(
-                              'Patient ID ${_data['patient_code'] ?? '—'} · one continuous record',
-                              style: GoogleFonts.roboto(color: digiSlate, fontWeight: FontWeight.w600),
-                            );
-                          }
-                          final e = events[i - 1];
-                          return _JourneyTile(event: e);
-                        },
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Patient ID ${_data['patient_code'] ?? '—'} · labs, pharmacy & visits in one timeline',
+                            style: GoogleFonts.dmSans(color: digiSlate, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                          if (openCount > 0) ...[
+                            const SizedBox(height: 10),
+                            DigiCard(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.local_pharmacy_outlined, color: digiForest, size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '$openCount in progress — pharmacy, lab, imaging or referral',
+                                      style: GoogleFonts.dmSans(fontWeight: FontWeight.w700, color: digiInk, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          SegmentedButton<_JourneyFilter>(
+                            segments: const [
+                              ButtonSegment(value: _JourneyFilter.all, label: Text('All')),
+                              ButtonSegment(value: _JourneyFilter.open, label: Text('In progress')),
+                              ButtonSegment(value: _JourneyFilter.done, label: Text('Done')),
+                            ],
+                            selected: {_filter},
+                            onSelectionChanged: (s) => setState(() => _filter = s.first),
+                            style: ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                              textStyle: WidgetStatePropertyAll(GoogleFonts.dmSans(fontSize: 12)),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    Expanded(
+                      child: events.isEmpty
+                          ? ClinicalEmptyState(
+                              icon: Icons.timeline_rounded,
+                              title: _filter == _JourneyFilter.open
+                                  ? 'Nothing in progress'
+                                  : 'Your journey starts here',
+                              message: _filter == _JourneyFilter.open
+                                  ? 'Completed and closed items appear under Done or All.'
+                                  : 'Consultations, labs, imaging, prescriptions and referrals appear here with live status.',
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _load,
+                              child: ListView.separated(
+                                padding: const EdgeInsets.all(20),
+                                itemCount: events.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                itemBuilder: (context, i) => _JourneyTile(event: events[i]),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
     );
   }
 }
+
+enum _JourneyFilter { all, open, done }
 
 class _JourneyTile extends StatelessWidget {
   const _JourneyTile({required this.event});
@@ -103,34 +173,62 @@ class _JourneyTile extends StatelessWidget {
     }
   }
 
+  Color get _chipColor {
+    if (event['is_open'] == true) return digiForest;
+    final status = event['status']?.toString().toLowerCase() ?? '';
+    if (status == 'completed' || status == 'dispensed') return digiGold;
+    if (status == 'cancelled') return digiSlate;
+    return digiForest;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final label = event['status_label']?.toString() ?? event['status']?.toString() ?? '';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: event['is_open'] == true ? digiForest.withValues(alpha: 0.35) : digiLine,
+          width: event['is_open'] == true ? 1.5 : 1,
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
-            backgroundColor: digiViolet.withValues(alpha: 0.12),
-            child: Icon(_icon, color: digiViolet, size: 20),
+            backgroundColor: digiForest.withValues(alpha: 0.12),
+            child: Icon(_icon, color: digiForest, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${event['title'] ?? 'Care event'}', style: GoogleFonts.roboto(fontWeight: FontWeight.w700)),
-                Text('${event['subtitle'] ?? ''}', style: GoogleFonts.roboto(color: digiSlate, fontSize: 13)),
+                Text(
+                  '${event['title'] ?? 'Care event'}',
+                  style: GoogleFonts.dmSans(fontWeight: FontWeight.w700, color: digiInk),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${event['subtitle'] ?? ''}',
+                  style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, height: 1.35),
+                ),
               ],
             ),
           ),
-          Text(
-            '${event['status'] ?? ''}',
-            style: GoogleFonts.roboto(fontSize: 11, fontWeight: FontWeight.w700, color: digiMint),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _chipColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              label,
+              style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700, color: _chipColor),
+            ),
           ),
         ],
       ),

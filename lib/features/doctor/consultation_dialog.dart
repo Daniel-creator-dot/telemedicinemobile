@@ -342,7 +342,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
   Future<void> _addMedication(String name, String dosage, String freq, String duration, String instructions) async {
     try {
       final api = context.read<ApiClient>();
-      await api.dio.post<Map<String, dynamic>>(
+      final created = await api.dio.post<Map<String, dynamic>>(
         '/api/prescriptions',
         data: {
           'appointment_id': widget.appointment.id,
@@ -355,9 +355,17 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
           'instructions': instructions,
         },
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Prescription medication added.')),
-      );
+      String tip = 'Prescription medication added.';
+      if (created.data?['id'] != null) {
+        try {
+          final sent = await context.read<CareRepository>().sendPrescriptionToPharmacy(created.data!['id'] as int);
+          tip = 'Rx sent to ${sent['pharmacy_name'] ?? 'network pharmacy'}.';
+        } catch (_) {
+          tip = 'Prescription saved (send to pharmacy from the Rx list).';
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tip)));
       _loadAllData();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
