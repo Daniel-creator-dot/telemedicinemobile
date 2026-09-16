@@ -37,6 +37,15 @@ export function paystackPaymentEmail(user: { id: number | string; email?: string
   return `patient${String(user.id).replace(/\D/g, '').slice(0, 12)}@digihealth.app`;
 }
 
+export function isDemoPaymentReference(reference: string) {
+  return /^digidemo_/i.test(String(reference || '').trim());
+}
+
+/** Demo confirmations are allowed only when no Paystack secret is configured. */
+export async function isDemoPayEnabled() {
+  return !(await isPaystackConfigured());
+}
+
 export async function verifyPaystackTransaction(reference: string) {
   const secretKey = await getPaystackSecretKey();
   if (!secretKey) {
@@ -63,6 +72,7 @@ export async function verifyPaystackTransaction(reference: string) {
       amountGhs: Number(data.amount) / 100,
       currency: data.currency as string,
       reference: data.reference as string,
+      gateway: 'paystack' as const,
     };
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.data?.message) {
@@ -70,6 +80,32 @@ export async function verifyPaystackTransaction(reference: string) {
     }
     throw err;
   }
+}
+
+/**
+ * Verify a live Paystack charge, or accept a digidemo_ reference when keys are missing.
+ * Pass expectedAmountGhs so demo confirms match the copay / plan price.
+ */
+export async function resolvePaymentVerification(reference: string, expectedAmountGhs: number) {
+  const ref = String(reference || '').trim();
+  if (!ref) throw new Error('Payment reference is required');
+
+  if (isDemoPaymentReference(ref)) {
+    if (!(await isDemoPayEnabled())) {
+      throw new Error('Demo payments are disabled while Paystack keys are configured.');
+    }
+    if (!Number.isFinite(expectedAmountGhs) || expectedAmountGhs < 1) {
+      throw new Error('Invalid demo payment amount');
+    }
+    return {
+      amountGhs: expectedAmountGhs,
+      currency: 'GHS',
+      reference: ref,
+      gateway: 'demo' as const,
+    };
+  }
+
+  return verifyPaystackTransaction(ref);
 }
 
 export async function initializePaystackCheckout(opts: {
@@ -81,18 +117,27 @@ export async function initializePaystackCheckout(opts: {
   metadata?: Record<string, unknown>;
   referencePrefix?: string;
 }) {
-  const secretKey = await getPaystackSecretKey();
-  if (!secretKey) {
-    throw new Error('Paystack is not configured. Add keys in Admin → Settings or PAYSTACK_SECRET_KEY.');
-  }
-  const publicKey = await getPaystackPublicKey();
-  if (publicKey && !paystackKeysMatch(publicKey, secretKey)) {
-    throw new Error('Paystack public and secret keys must both be test or both be live.');
-  }
-
   const amount = Math.round(opts.amountGhs * 100);
   if (!Number.isFinite(amount) || amount < 100) {
     throw new Error('Minimum charge is GHS 1');
+  }
+
+  // No secret key → offline demo checkout (does not invent Paystack credentials).
+  if (!(await isPaystackConfigured())) {
+    const reference = `digidemo_${Date.now()}_${randomBytes(4).toString('hex')}`;
+    return {
+      reference,
+      authorizationUrl: '',
+      accessCode: undefined,
+      amountGhs: opts.amountGhs,
+      demo: true as const,
+    };
+  }
+
+  const secretKey = await getPaystackSecretKey();
+  const publicKey = await getPaystackPublicKey();
+  if (publicKey && !paystackKeysMatch(publicKey, secretKey)) {
+    throw new Error('Paystack public and secret keys must both be test or both be live.');
   }
 
   const prefix = opts.referencePrefix?.replace(/[^a-z0-9_]/gi, '') || 'digihealth';
@@ -146,6 +191,7 @@ export async function initializePaystackCheckout(opts: {
     authorizationUrl: data.authorization_url as string,
     accessCode: data.access_code as string | undefined,
     amountGhs: opts.amountGhs,
+    demo: false as const,
   };
 }
 

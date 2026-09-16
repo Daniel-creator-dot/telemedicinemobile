@@ -178,20 +178,36 @@ class _ConsultNowScreenState extends State<ConsultNowScreen> {
                 ? 'Copay received. A nurse will review your triage. You will be notified when a doctor is ready.'
                 : _canEnterVideo
                     ? 'A clinician is ready. You can enter the video room (pay later if needed).'
-                    : 'Pay the visit copay with MoMo or card, or wait for a nurse to assign a doctor.',
+                    : 'Pay the visit copay (MoMo/card when Paystack is live, or confirm demo payment if keys are not set).',
           ),
           const SizedBox(height: 24),
           if (q.paymentStatus != 'paid')
             ElevatedButton.icon(
               onPressed: _paying ? null : _payQueued,
               icon: const Icon(Icons.payment_rounded),
-              label: Text(_paying ? 'Opening Paystack…' : 'Pay with MoMo or card'),
+              label: Text(_paying ? 'Confirming payment…' : 'Pay visit copay'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00D2C4),
                 foregroundColor: Colors.black,
                 minimumSize: const Size.fromHeight(48),
               ),
             ),
+          if (q.paymentStatus == 'paid') ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFA7F3D0)),
+              ),
+              child: Text(
+                'Payment confirmed for this visit.',
+                style: GoogleFonts.roboto(fontWeight: FontWeight.w600, color: const Color(0xFF065F46)),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (_canEnterVideo) ...[
             if (q.paymentStatus != 'paid') const SizedBox(height: 10),
             ElevatedButton.icon(

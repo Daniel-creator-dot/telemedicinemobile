@@ -13,10 +13,10 @@ import {
 import { registerPhase3Routes, recordVisitPayment, getEligibility } from './phase3';
 import {
   getPaystackPublicKey,
-  getPaystackSecretKey,
   initializePaystackCheckout,
+  isPaystackConfigured,
   paystackPaymentEmail,
-  verifyPaystackTransaction,
+  resolvePaymentVerification,
 } from './paystack';
 import { registerClinicalRoutes } from './clinical';
 import { registerPhase4Routes } from './phase4';
@@ -258,7 +258,15 @@ app.patch('/api/settings', authenticate, requireRoles('admin'), async (req, res)
 app.get('/api/config/paystack', async (_req, res) => {
   try {
     const publicKey = await getPaystackPublicKey();
-    res.json({ publicKey, configured: Boolean(await getPaystackSecretKey()) });
+    const configured = await isPaystackConfigured();
+    res.json({
+      publicKey,
+      configured,
+      demoMode: !configured,
+      message: configured
+        ? 'Paystack checkout is live.'
+        : 'Paystack keys are not set — visit payments use offline demo confirmation.',
+    });
   } catch {
     res.status(500).json({ error: 'Failed to fetch config' });
   }
@@ -882,12 +890,15 @@ app.post('/api/appointments/:id/pay/initialize', authenticate, async (req: any, 
       authorization_url: checkout.authorizationUrl,
       access_code: checkout.accessCode,
       amount: checkout.amountGhs,
+      demo: Boolean(checkout.demo),
+      message: checkout.demo
+        ? 'Paystack is not configured. Confirm this demo payment in the app to continue.'
+        : undefined,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Could not start payment';
     console.error('Paystack initialize error:', message);
-    const status = message.includes('not configured') ? 503 : 400;
-    res.status(status).json({ message });
+    res.status(400).json({ message });
   }
 });
 
@@ -909,31 +920,33 @@ app.post('/api/appointments/:id/pay', authenticate, async (req: any, res) => {
       });
     }
 
-    const verified = await verifyPaystackTransaction(reference);
+    const elig = await getEligibility(apt.patient_id || 0);
+    const expected = Number(elig.copay);
+    const verified = await resolvePaymentVerification(reference, expected);
     if (verified.currency && verified.currency !== 'GHS') {
       return res.status(400).json({ message: `Unexpected currency: ${verified.currency}` });
     }
 
-    const elig = await getEligibility(apt.patient_id || 0);
-    if (Math.abs(verified.amountGhs - Number(elig.copay)) > 0.05) {
+    if (Math.abs(verified.amountGhs - expected) > 0.05) {
       return res.status(400).json({
         message: `Paid amount GHS ${verified.amountGhs} does not match copay GHS ${elig.copay}`,
       });
     }
 
-    const { billed, meetingLink } = await markAppointmentPaid(apt, verified.reference, 'paystack');
+    const gateway = verified.gateway || 'paystack';
+    const { billed, meetingLink } = await markAppointmentPaid(apt, verified.reference, gateway);
     res.json({
-      message: 'Payment confirmed.',
+      message: gateway === 'demo' ? 'Demo payment confirmed.' : 'Payment confirmed.',
       paymentRef: billed.paymentRef || verified.reference,
       meetingLink,
       eligibility: billed.eligibility,
+      demo: gateway === 'demo',
       alreadyProcessed: (billed as { alreadyProcessed?: boolean }).alreadyProcessed || false,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Payment processing failed';
     console.error('Paystack verify error:', message);
-    const status = message.includes('not configured') ? 503 : 400;
-    res.status(status).json({ message });
+    res.status(400).json({ message });
   }
 });
 

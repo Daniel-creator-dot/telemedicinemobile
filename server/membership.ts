@@ -4,7 +4,7 @@ import { getPatientForUser } from './patients';
 import {
   initializePaystackCheckout,
   paystackPaymentEmail,
-  verifyPaystackTransaction,
+  resolvePaymentVerification,
 } from './paystack';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
@@ -238,12 +238,15 @@ export function registerMembershipRoutes(app: Express, authenticate: any) {
         amount: checkout.amountGhs,
         tier: plan.tier,
         period,
+        demo: Boolean(checkout.demo),
+        message: checkout.demo
+          ? 'Paystack is not configured. Confirm this demo membership payment in the app.'
+          : undefined,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Could not start membership payment';
       console.error('Membership initialize error:', message);
-      const status = message.includes('not configured') ? 503 : 400;
-      res.status(status).json({ message });
+      res.status(400).json({ message });
     }
   });
 
@@ -264,11 +267,11 @@ export function registerMembershipRoutes(app: Express, authenticate: any) {
         return res.json({ alreadyProcessed: true, membership: existing.rows[0] });
       }
 
-      const verified = await verifyPaystackTransaction(reference);
+      const expected = planPrice(plan, period);
+      const verified = await resolvePaymentVerification(reference, expected);
       if (verified.currency && verified.currency !== 'GHS') {
         return res.status(400).json({ message: `Unexpected currency: ${verified.currency}` });
       }
-      const expected = planPrice(plan, period);
       if (Math.abs(verified.amountGhs - expected) > 0.05) {
         return res.status(400).json({
           message: `Paid amount GHS ${verified.amountGhs} does not match ${plan.name} ${period} GHS ${expected}`,

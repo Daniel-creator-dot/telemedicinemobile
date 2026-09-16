@@ -85,7 +85,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     const SizedBox(height: 8),
                     Text(
                       _data['disclaimer']?.toString() ??
-                          'Visit copay is collected with Paystack (card, MoMo, or bank) — same API as Bytz Go.',
+                          'Visit copay uses Paystack (card, MoMo, or bank) when keys are configured. Without keys, the app confirms a demo payment so booking and Consult Now still complete.',
                       style: GoogleFonts.dmSans(color: digiSlate, height: 1.45),
                     ),
                     const SizedBox(height: 16),
@@ -151,7 +151,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                       ? null
                                       : () => _pay(int.parse(o['id'].toString())),
                                   icon: const Icon(Icons.payment, size: 16),
-                                  label: Text(_payingId == o['id'] ? 'Opening Paystack…' : 'Pay with MoMo or card'),
+                                  label: Text(_payingId == o['id'] ? 'Confirming…' : 'Pay visit copay'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF1F4A3A),
                                     foregroundColor: Colors.white,

@@ -13,11 +13,13 @@ class PayVisitResult {
     required this.success,
     required this.message,
     this.cancelled = false,
+    this.demo = false,
   });
 
   final bool success;
   final String message;
   final bool cancelled;
+  final bool demo;
 }
 
 Future<PayVisitResult> completePaystackFlow(
@@ -38,12 +40,42 @@ Future<PayVisitResult> completePaystackFlow(
       );
     }
 
-    final url = init['authorization_url']?.toString() ?? '';
     final reference = init['reference']?.toString() ?? '';
-    if (url.isEmpty || reference.isEmpty) {
+    final amount = init['amount'];
+    final isDemo = init['demo'] == true;
+    final url = init['authorization_url']?.toString() ?? '';
+
+    if (reference.isEmpty) {
       return const PayVisitResult(
         success: false,
-        message: 'Paystack did not return a checkout URL. Add keys in Admin → Settings.',
+        message: 'Payment could not be started. Try again or ask support to check Paystack settings.',
+      );
+    }
+
+    // Offline demo path when server has no Paystack secret key.
+    if (isDemo || url.isEmpty) {
+      final confirmed = await _confirmDemoPayment(
+        context,
+        amount: amount,
+        message: init['message']?.toString(),
+      );
+      if (!context.mounted) {
+        return const PayVisitResult(success: false, message: 'Left the screen.', cancelled: true);
+      }
+      if (!confirmed) {
+        return const PayVisitResult(
+          success: false,
+          message: 'Payment was not completed.',
+          cancelled: true,
+        );
+      }
+      await verify(reference);
+      return PayVisitResult(
+        success: true,
+        demo: true,
+        message: amount != null
+            ? 'Demo payment confirmed. GHS $amount.'
+            : 'Demo payment confirmed. $successFallback',
       );
     }
 
@@ -69,7 +101,6 @@ Future<PayVisitResult> completePaystackFlow(
     }
 
     await verify(useRef);
-    final amount = init['amount'];
     return PayVisitResult(
       success: true,
       message: amount != null ? 'Payment confirmed. GHS $amount.' : successFallback,
@@ -94,6 +125,56 @@ Future<PayVisitResult> payVisitWithPaystack(
     verify: (ref) => repo.verifyPay(appointmentId, ref),
     successFallback: 'Visit payment confirmed.',
   );
+}
+
+Future<bool> _confirmDemoPayment(
+  BuildContext context, {
+  Object? amount,
+  String? message,
+}) async {
+  final amountLabel = amount != null ? 'GHS $amount' : 'the visit copay';
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFFF6F3EE),
+      title: Text('Confirm demo payment', style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message?.isNotEmpty == true
+                ? message!
+                : 'Paystack keys are not configured on this server. Confirm $amountLabel to continue the visit flow.',
+            style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, height: 1.45),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: digiForest.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: digiForest.withValues(alpha: 0.25)),
+            ),
+            child: Text(
+              'Amount due: $amountLabel',
+              style: GoogleFonts.dmSans(fontWeight: FontWeight.w700, color: digiInk),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: FilledButton.styleFrom(backgroundColor: digiForest),
+          child: const Text('Confirm payment'),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
 }
 
 Future<String?> _askManualReference(BuildContext context) {

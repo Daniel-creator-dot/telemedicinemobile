@@ -99,7 +99,13 @@ export function registerCompleteRoutes(app: Express) {
         .filter((v: any) => v.payment_status === 'paid' || v.payment_ref)
         .map((v: any) => {
           const pay = payments.rows.find((p: any) => Number(p.appointment_id) === Number(v.id));
-          const gateway = pay?.gateway || (String(v.payment_ref || '').startsWith('digihealth_') ? 'paystack' : 'paystack');
+          const gateway =
+            pay?.gateway ||
+            (String(v.payment_ref || '').startsWith('digidemo_')
+              ? 'demo'
+              : String(v.payment_ref || '').startsWith('digihealth_')
+                ? 'paystack'
+                : 'paystack');
           return {
             receipt_no: v.payment_ref || `R-${v.id}`,
             appointment_code: v.appointment_id,
@@ -109,7 +115,12 @@ export function registerCompleteRoutes(app: Express) {
             amount: pay?.copay_amount ?? pay?.amount ?? 50,
             currency: 'GHS',
             gateway,
-            note: gateway === 'paystack' ? 'Collected via Paystack (card, MoMo, or bank).' : 'Visit collection recorded.',
+            note:
+              gateway === 'demo'
+                ? 'Demo confirmation (Paystack keys not configured).'
+                : gateway === 'paystack'
+                  ? 'Collected via Paystack (card, MoMo, or bank).'
+                  : 'Visit collection recorded.',
           };
         });
 
@@ -136,7 +147,8 @@ export function registerCompleteRoutes(app: Express) {
         receipts,
         outstanding,
         eligibility: cover,
-        disclaimer: 'Visit copay is collected with the same Paystack initialize/verify API as Bytz Go (GHS, card / MoMo / bank).',
+        disclaimer:
+          'Visit copay uses Paystack (card / MoMo / bank) when keys are set. Without keys, the app confirms an offline demo payment so booking and Consult Now still complete.',
       });
     } catch (err) {
       console.error(err);
