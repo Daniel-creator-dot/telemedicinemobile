@@ -61,8 +61,8 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Patient | OTP register, or demo `0241555000` / `patient123` | Consult Now, book, video, chat, Rx, records, tracker |
 | Doctor | `dr_appiah` / `staff123` (also `dr_mensah`, `dr_doe`) | Queue, video consult, SOAP, e-prescribe, referrals |
 | Nurse / triage | `nurse` | Pre-consult triage and urgency |
-| Medical operations | `medops` | Command centre, queue, follow-ups |
-| Lab technician | `labtech` | Lab request lifecycle + result return |
+| Medical operations | `medops` / `ops123` | Command centre: queue assign, partner re-route (lab/imaging/pharmacy/referral) |
+| Lab technician | `labtech` / `labtech123` | Lab request lifecycle + result return |
 | Pharmacy | `pharmacy` / `pharm123` | E-prescription fulfilment |
 | Imaging | `imaging` / `image123` | Imaging referrals + reports |
 | Corporate | scheme admin | Eligibility and utilization (no clinical notes) |
@@ -79,7 +79,7 @@ Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse1
 | Phase | What it is | In the app |
 | --- | --- | --- |
 | 1 Consult | Book, Consult Now, video, chat, SOAP | Patient home, doctor queue |
-| 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient → Care phases |
+| 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient journey · Medical Ops board · partner desks |
 | 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership | Payments, Membership |
 | 4 Household | Family, programs, vault, assistive helper | Family, Care programs |
 | 5 Nation | 16 regions, follow-up, risk alerts, audit | Ghana network, Care phases |
@@ -90,9 +90,18 @@ Open **Patient → Care phases** for live counts on all five.
 
 - **Patient:** OTP onboarding, medical profile, doctor directory, book + Consult Now, Jitsi video, in-visit chat, prescriptions, labs/imaging, health journey, document vault, health tracker, notifications, family/dependents, chronic care programs, assistive symptom helper, Ghana partner network
 - **Clinician:** queue cockpit (next patient, SOAP, Rx, chat, video, end visit), assistive SOAP draft, referrals
-- **Network:** nurse triage, lab, pharmacy, imaging, hospital desk, medical operations
+- **Network:** nurse triage, lab, pharmacy, imaging, hospital desk, medical operations (queue assign + partner re-route)
 - **Business:** corporate, insurance, finance/billing (phase 3 APIs)
 - **Admin:** staff registry, clinic/SMS settings (API key masked), ops snapshot from authenticated APIs
+
+### Phase 2 — closed-loop Medical Ops
+
+- **Login:** `medops` / `ops123`
+- **Overview:** live counts for waiting patients, open labs/scans/pharmacy/referrals, unassigned loops
+- **Queue tab:** assign or reassign a clinician on Consult Now cases (`PATCH /api/queue/:id/assign`)
+- **Network tab:** route or re-route lab, imaging, pharmacy, and hospital partners (`GET /api/ops/board`, `PATCH /api/ops/partner-assign`)
+- Partner desks (`labtech`, `pharmacy`, `imaging`, `hospital`) still process fulfilment; Medical Ops owns routing when a facility is missing or wrong
+- Demo seed creates a few unassigned open loops when the network queues are empty so assign can be demonstrated immediately
 
 ### Phase 4 flows
 

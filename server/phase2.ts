@@ -99,7 +99,58 @@ export async function initPhase2Schema() {
   `);
 
   await seedPartnersAndStaff();
+  await seedOpsDemoLoops();
   console.log('Phase 2 schema ready');
+}
+
+/** Seed a few open network items so Medical Ops can demo assign / re-route. */
+async function seedOpsDemoLoops() {
+  const patient = await query(
+    `SELECT id FROM patients ORDER BY id ASC LIMIT 1`
+  ).catch(() => ({ rows: [] as any[] }));
+  if (!patient.rows[0]) return;
+  const patientId = patient.rows[0].id;
+
+  const apt = await query(
+    `SELECT id, doctor_id FROM appointments WHERE patient_id = $1 ORDER BY id DESC LIMIT 1`,
+    [patientId]
+  ).catch(() => ({ rows: [] as any[] }));
+  const appointmentId = apt.rows[0]?.id || null;
+  const doctorId = apt.rows[0]?.doctor_id || null;
+
+  const openLabs = await query(
+    `SELECT COUNT(*)::int AS n FROM lab_requests WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(openLabs.rows[0]?.n || 0) === 0) {
+    await query(
+      `INSERT INTO lab_requests (appointment_id, patient_id, doctor_id, test_name, test_type, urgency, status, requested_by, partner_id)
+       VALUES ($1, $2, $3, 'CBC (demo)', 'haematology', 'routine', 'pending', 'ops-seed', NULL)`,
+      [appointmentId, patientId, doctorId]
+    ).catch(() => null);
+  }
+
+  const openScans = await query(
+    `SELECT COUNT(*)::int AS n FROM scan_requests WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(openScans.rows[0]?.n || 0) === 0) {
+    await query(
+      `INSERT INTO scan_requests (appointment_id, patient_id, doctor_id, scan_type, body_part, clinical_indication, urgency, status, requested_by, partner_id)
+       VALUES ($1, $2, $3, 'Chest X-ray (demo)', 'Chest', 'Ops demo — assign imaging partner', 'routine', 'pending', 'ops-seed', NULL)`,
+      [appointmentId, patientId, doctorId]
+    ).catch(() => null);
+  }
+
+  const openRx = await query(
+    `SELECT COUNT(*)::int AS n FROM prescriptions
+     WHERE COALESCE(dispense_status,'unsent') NOT IN ('dispensed','cancelled')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(openRx.rows[0]?.n || 0) === 0 && appointmentId) {
+    await query(
+      `INSERT INTO prescriptions (appointment_id, patient_id, medication_name, dosage, frequency, duration, dispense_status, pharmacy_id)
+       VALUES ($1, $2, 'Amoxicillin 500mg (demo)', '1 capsule', 'TDS', '5 days', 'unsent', NULL)`,
+      [appointmentId, patientId]
+    ).catch(() => null);
+  }
 }
 
 async function seedPartnersAndStaff() {
@@ -757,6 +808,266 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
         referrals: referrals.rows,
         prescriptions: prescriptions.rows,
       });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Phase 2 Medical Ops board: live queue + closed-loop network status. */
+  app.get('/api/ops/board', authenticate, async (req: AuthedRequest, res) => {
+    if (!['medical_ops', 'admin', 'nurse'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const [
+        stats,
+        queue,
+        doctors,
+        labs,
+        scans,
+        pharmacy,
+        referrals,
+        partners,
+      ] = await Promise.all([
+        query(`
+          SELECT
+            (SELECT COUNT(*) FROM doctors
+              WHERE is_active = TRUE
+                AND COALESCE(is_online, FALSE) = TRUE
+                AND last_seen_at IS NOT NULL
+                AND last_seen_at > NOW() - INTERVAL '90 seconds') AS doctors_online,
+            (SELECT COUNT(*) FROM appointments WHERE status = 'consulting') AS consulting_now,
+            (SELECT COUNT(*) FROM appointments
+              WHERE COALESCE(booking_type,'scheduled') = 'consult_now'
+                AND status IN ('queued','pending','approved')) AS patients_waiting,
+            (SELECT COUNT(*) FROM lab_requests
+              WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS pending_labs,
+            (SELECT COUNT(*) FROM scan_requests
+              WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS pending_scans,
+            (SELECT COUNT(*) FROM prescriptions
+              WHERE COALESCE(dispense_status,'unsent') IN ('sent','received','preparing','ready','unsent')) AS pending_pharmacy,
+            (SELECT COUNT(*) FROM referrals
+              WHERE COALESCE(status,'pending') NOT IN ('completed','declined','cancelled')) AS open_referrals,
+            (SELECT COUNT(*) FROM lab_requests
+              WHERE partner_id IS NULL AND COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS unassigned_labs,
+            (SELECT COUNT(*) FROM scan_requests
+              WHERE partner_id IS NULL AND COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS unassigned_scans,
+            (SELECT COUNT(*) FROM prescriptions
+              WHERE pharmacy_id IS NULL
+                AND COALESCE(dispense_status,'unsent') NOT IN ('dispensed','cancelled')) AS unassigned_rx
+        `),
+        query(`
+          SELECT a.id, a.appointment_id, a.full_name, a.status, a.queue_number, a.priority,
+                 a.doctor_id, a.patient_id, a.created_at, a.eta_minutes,
+                 d.name as doctor_name, d.is_online as doctor_online,
+                 t.id as triage_id, t.urgency, t.complaint, t.symptoms, t.status as triage_status,
+                 p.patient_code, p.region, p.town
+          FROM appointments a
+          LEFT JOIN doctors d ON a.doctor_id = d.id
+          LEFT JOIN triage_records t ON t.appointment_id = a.id
+          LEFT JOIN patients p ON p.id = a.patient_id
+          WHERE COALESCE(a.booking_type,'scheduled') = 'consult_now'
+            AND a.status IN ('queued','pending','approved','arrived','consulting')
+          ORDER BY
+            CASE COALESCE(t.urgency, a.priority)
+              WHEN 'emergency' THEN 0 WHEN 'High' THEN 1 WHEN 'urgent' THEN 1
+              WHEN 'Medium' THEN 2 ELSE 3
+            END,
+            a.queue_number ASC NULLS LAST,
+            a.created_at ASC
+          LIMIT 60
+        `),
+        query(`
+          SELECT d.id, d.name, d.specialty, d.region,
+                 COALESCE(d.is_online, FALSE) = TRUE
+                   AND d.last_seen_at IS NOT NULL
+                   AND d.last_seen_at > NOW() - INTERVAL '90 seconds' AS is_online,
+                 (SELECT COUNT(*) FROM appointments a
+                  WHERE a.doctor_id = d.id
+                    AND a.status IN ('queued','pending','approved','arrived','consulting')) AS open_cases
+          FROM doctors d
+          WHERE d.is_active = TRUE
+          ORDER BY is_online DESC, d.name ASC
+        `),
+        query(`
+          SELECT lr.*, p.full_name as patient_name, p.patient_code, o.name as partner_name,
+                 u.name as doctor_name
+          FROM lab_requests lr
+          LEFT JOIN patients p ON p.id = lr.patient_id
+          LEFT JOIN partner_orgs o ON o.id = lr.partner_id
+          LEFT JOIN users u ON u.id = lr.doctor_id
+          WHERE COALESCE(lr.status,'pending') NOT IN ('completed','cancelled')
+          ORDER BY lr.created_at DESC LIMIT 40
+        `),
+        query(`
+          SELECT sr.*, p.full_name as patient_name, p.patient_code, o.name as partner_name,
+                 u.name as doctor_name
+          FROM scan_requests sr
+          LEFT JOIN patients p ON p.id = sr.patient_id
+          LEFT JOIN partner_orgs o ON o.id = sr.partner_id
+          LEFT JOIN users u ON u.id = sr.doctor_id
+          WHERE COALESCE(sr.status,'pending') NOT IN ('completed','cancelled')
+          ORDER BY sr.created_at DESC LIMIT 40
+        `),
+        query(`
+          SELECT pr.*, p.full_name as patient_name, p.patient_code, o.name as pharmacy_name,
+                 a.appointment_id as apt_code
+          FROM prescriptions pr
+          LEFT JOIN patients p ON p.id = pr.patient_id
+          LEFT JOIN partner_orgs o ON o.id = pr.pharmacy_id
+          LEFT JOIN appointments a ON a.id = pr.appointment_id
+          WHERE COALESCE(pr.dispense_status,'unsent') NOT IN ('dispensed','cancelled')
+          ORDER BY pr.created_at DESC LIMIT 40
+        `),
+        query(`
+          SELECT r.*, p.full_name as patient_name, p.patient_code,
+                 fd.name as from_doctor_name, o.name as org_name
+          FROM referrals r
+          LEFT JOIN patients p ON p.id = r.patient_id
+          LEFT JOIN users fd ON fd.id = r.from_doctor_id
+          LEFT JOIN partner_orgs o ON o.id = r.to_org_id
+          WHERE COALESCE(r.status,'pending') NOT IN ('completed','declined','cancelled')
+          ORDER BY r.created_at DESC LIMIT 40
+        `),
+        query(`SELECT id, name, type, region, town, is_active FROM partner_orgs WHERE is_active = TRUE ORDER BY type, name`),
+      ]);
+
+      const byType: Record<string, any[]> = {
+        pharmacy: [],
+        laboratory: [],
+        imaging: [],
+        hospital: [],
+      };
+      for (const p of partners.rows) {
+        const key = String(p.type || '');
+        if (byType[key]) byType[key].push(p);
+      }
+
+      res.json({
+        stats: stats.rows[0] || {},
+        queue: queue.rows,
+        doctors: doctors.rows,
+        labs: labs.rows,
+        scans: scans.rows,
+        pharmacy: pharmacy.rows,
+        referrals: referrals.rows,
+        partners: byType,
+        note: 'Medical Ops assigns clinicians and network partners. Clinical notes stay with the treating doctor.',
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Reassign lab / imaging / pharmacy partner from Medical Ops. */
+  app.patch('/api/ops/partner-assign', authenticate, async (req: AuthedRequest, res) => {
+    if (!['medical_ops', 'admin', 'nurse'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const kind = String(req.body?.kind || '').toLowerCase();
+      const id = Number(req.body?.id);
+      const partnerId = Number(req.body?.partner_id);
+      if (!id || !partnerId || !['lab', 'scan', 'pharmacy', 'referral'].includes(kind)) {
+        return res.status(400).json({ message: 'kind, id and partner_id are required' });
+      }
+
+      const org = await query('SELECT * FROM partner_orgs WHERE id = $1 AND is_active = TRUE', [partnerId]);
+      if (!org.rows[0]) return res.status(404).json({ message: 'Partner not found' });
+
+      const expectedType =
+        kind === 'lab' ? 'laboratory' : kind === 'scan' ? 'imaging' : kind === 'pharmacy' ? 'pharmacy' : 'hospital';
+      if (org.rows[0].type !== expectedType) {
+        return res.status(400).json({ message: `Partner must be type ${expectedType}` });
+      }
+
+      let row: any = null;
+      if (kind === 'lab') {
+        const result = await query(
+          `UPDATE lab_requests SET partner_id = $1 WHERE id = $2
+           AND COALESCE(status,'pending') NOT IN ('completed','cancelled') RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          await notifyDiagnosticOrdered(deps, row, 'lab');
+        }
+      } else if (kind === 'scan') {
+        const result = await query(
+          `UPDATE scan_requests SET partner_id = $1 WHERE id = $2
+           AND COALESCE(status,'pending') NOT IN ('completed','cancelled') RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          await notifyDiagnosticOrdered(deps, row, 'scan');
+        }
+      } else if (kind === 'pharmacy') {
+        const result = await query(
+          `UPDATE prescriptions
+           SET pharmacy_id = $1,
+               dispense_status = CASE
+                 WHEN COALESCE(dispense_status,'unsent') = 'unsent' THEN 'sent'
+                 ELSE dispense_status
+               END
+           WHERE id = $2
+             AND COALESCE(dispense_status,'unsent') NOT IN ('dispensed','cancelled')
+           RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          const patient = await patientUserId(row.patient_id);
+          const pharmacyName = org.rows[0].name;
+          if (patient?.user_id) {
+            await notifyUser(
+              deps,
+              patient.user_id,
+              'Pharmacy updated',
+              `${row.medication_name} was routed to ${pharmacyName}.`,
+              'pharmacy'
+            );
+          }
+          const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [partnerId]);
+          for (const s of staff.rows) {
+            await notifyUser(deps, s.user_id, 'Prescription assigned', `${row.medication_name} ready to dispense.`, 'pharmacy');
+          }
+        }
+      } else {
+        const result = await query(
+          `UPDATE referrals SET to_org_id = $1 WHERE id = $2
+           AND COALESCE(status,'pending') NOT IN ('completed','declined','cancelled') RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [partnerId]);
+          for (const s of staff.rows) {
+            await notifyUser(
+              deps,
+              s.user_id,
+              'Referral routed',
+              `${row.referral_code}: ${row.specialty || 'specialist'} — ${row.reason}`,
+              'referral'
+            );
+          }
+          const patient = await patientUserId(row.patient_id);
+          if (patient?.user_id) {
+            await notifyUser(
+              deps,
+              patient.user_id,
+              'Referral facility updated',
+              `${row.referral_code} was sent to ${org.rows[0].name}.`,
+              'referral'
+            );
+          }
+        }
+      }
+
+      if (!row) return res.status(404).json({ message: 'Open request not found' });
+      res.json({ ...row, partner_name: org.rows[0].name, partner_type: org.rows[0].type });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });

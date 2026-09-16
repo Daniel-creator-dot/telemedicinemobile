@@ -135,6 +135,23 @@ class CareRepository {
     return res.data ?? {};
   }
 
+  Future<Map<String, dynamic>> opsBoard() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/ops/board');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> opsAssignPartner({
+    required String kind,
+    required int id,
+    required int partnerId,
+  }) async {
+    final res = await _api.dio.patch<Map<String, dynamic>>(
+      '/api/ops/partner-assign',
+      data: {'kind': kind, 'id': id, 'partner_id': partnerId},
+    );
+    return res.data ?? {};
+  }
+
   Future<DoctorProfile> getMyDoctorProfile() async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/doctors/me');
     return DoctorProfile.fromJson(res.data ?? {});
