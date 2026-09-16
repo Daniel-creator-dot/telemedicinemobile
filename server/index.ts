@@ -3,7 +3,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDb, query } from './db';
 import { registerPhase1Routes, getPatientForUser } from './phase1';
-import { registerPhase2Routes, assignNearestPartner, notifyDiagnosticClosedLoop } from './phase2';
+import {
+  registerPhase2Routes,
+  assignNearestPartner,
+  notifyDiagnosticClosedLoop,
+  notifyDiagnosticOrdered,
+  notifyDiagnosticProgress,
+} from './phase2';
 import { registerPhase3Routes, recordVisitPayment, getEligibility } from './phase3';
 import {
   getPaystackPublicKey,
@@ -1231,9 +1237,12 @@ app.get('/api/labs', authenticate, async (req: any, res) => {
     const { patient_id, status } = req.query;
     let sql = `
       SELECT lr.*, a.full_name as patient_name, a.appointment_id as apt_code, u.name as doctor_name,
-             o.name as partner_name
+             o.name as partner_name,
+             COALESCE(NULLIF(p.phone_number, ''), a.phone_number) as patient_phone,
+             p.patient_code
       FROM lab_requests lr
       LEFT JOIN appointments a ON lr.appointment_id = a.id
+      LEFT JOIN patients p ON lr.patient_id = p.id
       LEFT JOIN users u ON lr.doctor_id = u.id
       LEFT JOIN partner_orgs o ON lr.partner_id = o.id
     `;
@@ -1293,6 +1302,13 @@ app.post('/api/labs', authenticate, async (req: any, res) => {
       INSERT INTO lab_requests (consultation_id, appointment_id, patient_id, doctor_id, test_name, test_type, urgency, requested_by, partner_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
     `, [consultation_id || null, appointment_id, resolvedPatientId, req.user.id, test_name, test_type || 'blood', urgency || 'routine', doctorName, nearest?.id || null]);
+    if (result.rows[0]) {
+      await notifyDiagnosticOrdered(
+        { sendSMS, sendPushNotification },
+        result.rows[0],
+        'lab'
+      );
+    }
     res.status(201).json({ ...result.rows[0], partner_name: nearest?.name || null });
   } catch (err) {
     console.error(err);
@@ -1309,7 +1325,9 @@ app.put('/api/labs/:id', authenticate, async (req: any, res) => {
   try {
     const userResult = await query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const completedBy = userResult.rows[0]?.name || 'Unknown';
-    
+    const prev = await query('SELECT status FROM lab_requests WHERE id = $1', [req.params.id]);
+    const prevStatus = prev.rows[0]?.status;
+
     const result = await query(`
       UPDATE lab_requests SET status=$1, results=$2, result_notes=$3, 
         completed_by=$4,
@@ -1317,12 +1335,21 @@ app.put('/api/labs/:id', authenticate, async (req: any, res) => {
         result_returned_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'result_returned_at'}
       WHERE id=$5 RETURNING *
     `, [status, results, result_notes, completedBy, req.params.id]);
-    if (status === 'completed' && result.rows[0]) {
-      await notifyDiagnosticClosedLoop(
-        { sendSMS, sendPushNotification },
-        result.rows[0],
-        'lab'
-      );
+    if (result.rows[0] && status !== prevStatus) {
+      if (status === 'completed') {
+        await notifyDiagnosticClosedLoop(
+          { sendSMS, sendPushNotification },
+          result.rows[0],
+          'lab'
+        );
+      } else {
+        await notifyDiagnosticProgress(
+          { sendSMS, sendPushNotification },
+          result.rows[0],
+          'lab',
+          status
+        );
+      }
     }
     res.json(result.rows[0]);
   } catch (err) {
@@ -1337,9 +1364,12 @@ app.get('/api/scans', authenticate, async (req: any, res) => {
     const { patient_id, status } = req.query;
     let sql = `
       SELECT sr.*, a.full_name as patient_name, a.appointment_id as apt_code, u.name as doctor_name,
-             o.name as partner_name
+             o.name as partner_name,
+             COALESCE(NULLIF(p.phone_number, ''), a.phone_number) as patient_phone,
+             p.patient_code
       FROM scan_requests sr
       LEFT JOIN appointments a ON sr.appointment_id = a.id
+      LEFT JOIN patients p ON sr.patient_id = p.id
       LEFT JOIN users u ON sr.doctor_id = u.id
       LEFT JOIN partner_orgs o ON sr.partner_id = o.id
     `;
@@ -1398,6 +1428,13 @@ app.post('/api/scans', authenticate, async (req: any, res) => {
       INSERT INTO scan_requests (consultation_id, appointment_id, patient_id, doctor_id, scan_type, body_part, clinical_indication, urgency, requested_by, partner_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *
     `, [consultation_id || null, appointment_id, resolvedPatientId, req.user.id, scan_type, body_part, clinical_indication, urgency || 'routine', doctorName, nearest?.id || null]);
+    if (result.rows[0]) {
+      await notifyDiagnosticOrdered(
+        { sendSMS, sendPushNotification },
+        result.rows[0],
+        'scan'
+      );
+    }
     res.status(201).json({ ...result.rows[0], partner_name: nearest?.name || null });
   } catch (err) {
     console.error(err);
@@ -1413,7 +1450,9 @@ app.put('/api/scans/:id', authenticate, async (req: any, res) => {
   try {
     const userResult = await query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const completedBy = userResult.rows[0]?.name || 'Unknown';
-    
+    const prev = await query('SELECT status FROM scan_requests WHERE id = $1', [req.params.id]);
+    const prevStatus = prev.rows[0]?.status;
+
     const result = await query(`
       UPDATE scan_requests SET status=$1, results=$2, result_notes=$3,
         completed_by=$4,
@@ -1421,12 +1460,21 @@ app.put('/api/scans/:id', authenticate, async (req: any, res) => {
         result_returned_at=${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'result_returned_at'}
       WHERE id=$5 RETURNING *
     `, [status, results, result_notes, completedBy, req.params.id]);
-    if (status === 'completed' && result.rows[0]) {
-      await notifyDiagnosticClosedLoop(
-        { sendSMS, sendPushNotification },
-        result.rows[0],
-        'scan'
-      );
+    if (result.rows[0] && status !== prevStatus) {
+      if (status === 'completed') {
+        await notifyDiagnosticClosedLoop(
+          { sendSMS, sendPushNotification },
+          result.rows[0],
+          'scan'
+        );
+      } else {
+        await notifyDiagnosticProgress(
+          { sendSMS, sendPushNotification },
+          result.rows[0],
+          'scan',
+          status
+        );
+      }
     }
     res.json(result.rows[0]);
   } catch (err) {

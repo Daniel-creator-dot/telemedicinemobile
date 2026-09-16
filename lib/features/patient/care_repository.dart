@@ -198,8 +198,11 @@ class CareRepository {
     return res.data ?? {};
   }
 
-  Future<List<Map<String, dynamic>>> pharmacyQueue() async {
-    final res = await _api.dio.get<List<dynamic>>('/api/pharmacy/queue');
+  Future<List<Map<String, dynamic>>> pharmacyQueue({String scope = 'active'}) async {
+    final res = await _api.dio.get<List<dynamic>>(
+      '/api/pharmacy/queue',
+      queryParameters: {'scope': scope},
+    );
     return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 

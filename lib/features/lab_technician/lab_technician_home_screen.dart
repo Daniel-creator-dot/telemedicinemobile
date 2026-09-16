@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
+import '../patient/care_repository.dart';
 
 class LabTechnicianHomeScreen extends StatefulWidget {
   const LabTechnicianHomeScreen({super.key});
@@ -21,6 +22,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
 
   List<dynamic> _labs = [];
   List<dynamic> _scans = [];
+  Map<String, dynamic>? _org;
   bool _loading = true;
   String? _error;
 
@@ -37,11 +39,12 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
     });
     try {
       final api = context.read<ApiClient>();
-      
+      final org = await context.read<CareRepository>().myPartnerOrg();
       final labRes = await api.dio.get<List<dynamic>>('/api/labs');
       final scanRes = await api.dio.get<List<dynamic>>('/api/scans');
-      
+
       setState(() {
+        _org = org;
         _labs = labRes.data ?? [];
         _scans = scanRes.data ?? [];
         _loading = false;
@@ -54,29 +57,44 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
     }
   }
 
-  Future<void> _submitResults(int id, String status, String results, String notes) async {
+  Future<void> _updateStatus(
+    int id, {
+    required String status,
+    String? results,
+    String? notes,
+  }) async {
     try {
       final api = context.read<ApiClient>();
       final path = _currentTab == 0 ? '/api/labs/$id' : '/api/scans/$id';
-      
+      final existing = (_currentTab == 0 ? _labs : _scans).cast<dynamic>().firstWhere(
+            (e) => e['id'] == id,
+            orElse: () => <String, dynamic>{},
+          );
+
       await api.dio.put<Map<String, dynamic>>(
         path,
         data: {
           'status': status,
-          'results': results,
-          'result_notes': notes,
+          'results': results ?? existing['results']?.toString() ?? '',
+          'result_notes': notes ?? existing['result_notes']?.toString() ?? '',
         },
       );
-      
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Results submitted successfully.')),
+        SnackBar(content: Text(status == 'completed' ? 'Results submitted.' : 'Status updated to $status.')),
       );
       _fetchData();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit results: ${e.toString()}')),
+        SnackBar(content: Text('Failed to update: ${e.toString()}')),
       );
     }
+  }
+
+  Future<void> _submitResults(int id, String status, String results, String notes) async {
+    await _updateStatus(id, status: status, results: results, notes: notes);
   }
 
   @override
@@ -139,14 +157,17 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _currentTab == 0 ? 'Laboratory Portal' : 'Imaging & Scans',
+                              _org?['name']?.toString() ??
+                                  (_currentTab == 0 ? 'Laboratory Portal' : 'Imaging & Scans'),
                               style: theme.textTheme.headlineMedium?.copyWith(
                                 fontSize: 24,
                                 letterSpacing: -0.5,
                               ),
                             ),
                             Text(
-                              _currentTab == 0 ? 'Review and record blood, urine, or stool samples' : 'Upload scan, MRI, CT, or ECG details',
+                              _currentTab == 0
+                                  ? 'Receive orders · collect samples · return results'
+                                  : 'Schedule imaging · process · return reports',
                               style: GoogleFonts.roboto(color: Color(0xFF64748B), fontSize: 13),
                             ),
                           ],
@@ -298,13 +319,14 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
                         ),
                       ),
                       Text(
-                        'LAB PORTAL',
+                        (_org?['name']?.toString() ?? 'LAB PORTAL').toUpperCase(),
                         style: GoogleFonts.roboto(
                           color: Colors.white38,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.5,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -426,7 +448,7 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               const Icon(Icons.biotech, color: Color(0xFF00D2C4), size: 24),
               const SizedBox(width: 8),
               Text(
-                'DIGI HEALTH LAB',
+                _org?['name']?.toString() ?? '${AppBrand.name} Lab',
                 style: GoogleFonts.roboto(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -646,50 +668,99 @@ class _LabTechnicianHomeScreenState extends State<LabTechnicianHomeScreen> {
               ),
             ),
           ],
+          if ((item['patient_phone'] ?? '').toString().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.phone_outlined, size: 14, color: Colors.white38),
+                const SizedBox(width: 4),
+                Text(
+                  item['patient_phone'].toString(),
+                  style: GoogleFonts.roboto(color: Colors.white38, fontSize: 11),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Divider(color: Colors.white.withOpacity(0.05)),
           const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: urgencyColor.withOpacity(0.3)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      urgency.toUpperCase(),
-                      style: GoogleFonts.roboto(color: urgencyColor, fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Icon(Icons.person_pin, size: 14, color: Colors.white38),
-                  const SizedBox(width: 4),
-                  Text(
-                    item['requested_by']?.toString() ?? item['doctor_name']?.toString() ?? 'Requested by MD',
-                    style: GoogleFonts.roboto(color: Colors.white38, fontSize: 11),
-                  ),
-                ],
-              ),
-              ElevatedButton(
-                onPressed: () => _openEnterResultsDialog(item),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isCompleted ? Colors.white.withOpacity(0.04) : const Color(0xFF00D2C4),
-                  foregroundColor: isCompleted ? Colors.white70 : Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  border: Border.all(color: urgencyColor.withOpacity(0.3)),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  isCompleted ? 'View Results' : 'Enter Results',
-                  style: GoogleFonts.roboto(fontSize: 12, fontWeight: FontWeight.bold),
+                  urgency.toUpperCase(),
+                  style: GoogleFonts.roboto(color: urgencyColor, fontSize: 9, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.person_pin, size: 14, color: Colors.white38),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  item['requested_by']?.toString() ?? item['doctor_name']?.toString() ?? 'Requested by MD',
+                  style: GoogleFonts.roboto(color: Colors.white38, fontSize: 11),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          if (!isCompleted) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (_currentTab == 0 && status == 'pending')
+                  FilledButton(
+                    onPressed: () => _updateStatus(item['id'] as int, status: 'sample_collected'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D2C4),
+                      foregroundColor: Colors.black,
+                    ),
+                    child: const Text('Collect sample'),
+                  ),
+                if (_currentTab == 0 && (status == 'pending' || status == 'sample_collected'))
+                  OutlinedButton(
+                    onPressed: () => _updateStatus(item['id'] as int, status: 'processing'),
+                    child: const Text('Start processing'),
+                  ),
+                if (_currentTab == 1 && status == 'pending')
+                  FilledButton(
+                    onPressed: () => _updateStatus(item['id'] as int, status: 'scheduled'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D2C4),
+                      foregroundColor: Colors.black,
+                    ),
+                    child: const Text('Schedule'),
+                  ),
+                if (_currentTab == 1 && (status == 'pending' || status == 'scheduled'))
+                  OutlinedButton(
+                    onPressed: () => _updateStatus(item['id'] as int, status: 'processing'),
+                    child: const Text('Start scan'),
+                  ),
+                FilledButton.tonal(
+                  onPressed: () => _openEnterResultsDialog(item),
+                  child: Text(
+                    status == 'processing' || status == 'sample_collected' || status == 'scheduled'
+                        ? 'Enter results'
+                        : 'Update / results',
+                  ),
+                ),
+              ],
+            ),
+          ] else
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _openEnterResultsDialog(item),
+                child: const Text('View results'),
+              ),
+            ),
         ],
       ).animate().fadeIn(duration: 250.ms),
     );
@@ -760,8 +831,6 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Dialog(
       backgroundColor: const Color(0xFF0F172A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -908,7 +977,10 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                     maxLines: 3,
                     style: GoogleFonts.roboto(color: Colors.white),
                     decoration: _inputDeco('Enter test details or results (e.g. Hemoglobin 14.2 g/dL)...'),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Please enter results findings' : null,
+                    validator: (v) {
+                      if (_status != 'completed') return null;
+                      return v == null || v.trim().isEmpty ? 'Results required when completing' : null;
+                    },
                   ),
                   const SizedBox(height: 15),
 
@@ -938,7 +1010,10 @@ class _EnterResultsDialogState extends State<EnterResultsDialog> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text('SUBMIT DIAGNOSTICS', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
+                    child: Text(
+                      _status == 'completed' ? 'SUBMIT RESULTS' : 'UPDATE STATUS',
+                      style: GoogleFonts.roboto(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ],

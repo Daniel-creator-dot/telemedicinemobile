@@ -236,6 +236,79 @@ export async function notifyDiagnosticClosedLoop(
   if (row.doctor_id) await notifyUser(deps, row.doctor_id, title, `Result returned for your patient. ${body}`, 'result');
 }
 
+/** Notify patient + partner staff when a lab/scan is ordered (parity with Rx send). */
+export async function notifyDiagnosticOrdered(
+  deps: Pick<Deps, 'sendSMS' | 'sendPushNotification'>,
+  row: {
+    patient_id?: number;
+    partner_id?: number | null;
+    test_name?: string;
+    scan_type?: string;
+    body_part?: string;
+  },
+  kind: 'lab' | 'scan'
+) {
+  const label =
+    kind === 'lab'
+      ? row.test_name || 'Lab test'
+      : `${row.scan_type || 'Scan'}${row.body_part ? ` (${row.body_part})` : ''}`;
+  let partnerName = kind === 'lab' ? 'a network laboratory' : 'a network imaging centre';
+  if (row.partner_id) {
+    const org = await query('SELECT name FROM partner_orgs WHERE id = $1', [row.partner_id]);
+    if (org.rows[0]?.name) partnerName = org.rows[0].name;
+  }
+  const patientTitle = kind === 'lab' ? 'Lab test ordered' : 'Imaging ordered';
+  const patientBody = `${label} was sent to ${partnerName}.`;
+  const patient = await patientUserId(row.patient_id);
+  if (patient?.user_id) await notifyUser(deps, patient.user_id, patientTitle, patientBody, 'result');
+  if (patient?.phone_number) {
+    await deps.sendSMS(patient.phone_number, `Medilynks: ${patientBody}`);
+  }
+  if (row.partner_id) {
+    const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [row.partner_id]);
+    const staffTitle = kind === 'lab' ? 'New lab order' : 'New imaging order';
+    for (const s of staff.rows) {
+      await notifyUser(deps, s.user_id, staffTitle, `${label} awaiting processing.`, 'result');
+    }
+  }
+}
+
+/** Mid-status patient alerts while lab/scan is in progress (before result return). */
+export async function notifyDiagnosticProgress(
+  deps: Pick<Deps, 'sendSMS' | 'sendPushNotification'>,
+  row: {
+    patient_id?: number;
+    doctor_id?: number;
+    test_name?: string;
+    scan_type?: string;
+    partner_id?: number | null;
+  },
+  kind: 'lab' | 'scan',
+  status: string
+) {
+  const label = kind === 'lab' ? row.test_name || 'Lab test' : row.scan_type || 'Scan';
+  const labels: Record<string, string> = {
+    sample_collected: `${label}: sample collected`,
+    processing: `${label}: processing at the lab`,
+    scheduled: `${label}: imaging scheduled`,
+  };
+  const title = labels[status];
+  if (!title) return;
+
+  let partnerName = '';
+  if (row.partner_id) {
+    const org = await query('SELECT name FROM partner_orgs WHERE id = $1', [row.partner_id]);
+    partnerName = org.rows[0]?.name || '';
+  }
+  const detail = partnerName ? `${title} · ${partnerName}` : title;
+  const patient = await patientUserId(row.patient_id);
+  if (patient?.user_id) await notifyUser(deps, patient.user_id, title, detail, 'result');
+  // SMS only on scheduled (patient action) — mirror pharmacy ready/dispensed pattern
+  if (patient?.phone_number && status === 'scheduled') {
+    await deps.sendSMS(patient.phone_number, `Medilynks: ${detail}`);
+  }
+}
+
 async function orgForUser(userId: number) {
   const r = await query(
     `SELECT o.* FROM partner_orgs o
@@ -370,21 +443,38 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
     }
     try {
       const org = await orgForUser(req.user!.id);
+      const scope = String(req.query.scope || 'active');
       const params: any[] = [];
-      let where = `pr.dispense_status IN ('sent','received','preparing','ready','dispensed')`;
+      let where =
+        scope === 'all'
+          ? `pr.dispense_status IN ('sent','received','preparing','ready','dispensed','unavailable')`
+          : scope === 'done'
+            ? `pr.dispense_status IN ('dispensed','unavailable')`
+            : scope === 'ready'
+              ? `pr.dispense_status = 'ready'`
+              : `pr.dispense_status IN ('sent','received','preparing','ready')`;
       if (org && req.user!.role === 'pharmacy') {
         params.push(org.id);
         where += ` AND pr.pharmacy_id = $${params.length}`;
       }
       const result = await query(
-        `SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name, p.phone_number as patient_phone,
+        `SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name,
+                COALESCE(NULLIF(p.phone_number, ''), a.phone_number) as patient_phone,
                 p.patient_code, o.name as pharmacy_name
          FROM prescriptions pr
          JOIN patients p ON pr.patient_id = p.id
          JOIN appointments a ON pr.appointment_id = a.id
          LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
          WHERE ${where}
-         ORDER BY pr.created_at DESC`,
+         ORDER BY
+           CASE pr.dispense_status
+             WHEN 'ready' THEN 0
+             WHEN 'preparing' THEN 1
+             WHEN 'received' THEN 2
+             WHEN 'sent' THEN 3
+             ELSE 4
+           END,
+           pr.created_at DESC`,
         params
       );
       res.json(result.rows);
