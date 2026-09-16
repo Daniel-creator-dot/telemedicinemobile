@@ -139,6 +139,76 @@ export async function initPhase4Schema() {
       END IF;
     END $$;
   `);
+
+  await seedCareProgramsDemo();
+}
+
+/** Sparse demo enrollments so the care-programs roster is demonstrable. */
+async function seedCareProgramsDemo() {
+  try {
+    const count = await query(`SELECT COUNT(*)::int AS n FROM chronic_programs`);
+    if (Number(count.rows[0]?.n || 0) >= 3) return;
+
+    const patients = await query(
+      `SELECT id, user_id, full_name FROM patients ORDER BY id ASC LIMIT 5`
+    );
+    if (!patients.rows.length) return;
+
+    const staff = await query(
+      `SELECT id FROM users WHERE role IN ('doctor', 'nurse', 'admin', 'medical_ops') ORDER BY id ASC LIMIT 1`
+    );
+    const enrolledBy = staff.rows[0]?.id || null;
+
+    const demos: { key: string; status: string; reviewDays: number }[] = [
+      { key: 'hypertension', status: 'active', reviewDays: 14 },
+      { key: 'diabetes', status: 'active', reviewDays: 21 },
+      { key: 'antenatal', status: 'active', reviewDays: 7 },
+      { key: 'asthma', status: 'suspended', reviewDays: 28 },
+      { key: 'sickle_cell', status: 'completed', reviewDays: -7 },
+    ];
+
+    for (let i = 0; i < demos.length && i < patients.rows.length; i++) {
+      const patient = patients.rows[i];
+      const demo = demos[i];
+      const catalog = PROGRAM_CATALOG.find((p) => p.key === demo.key);
+      if (!catalog) continue;
+
+      const existing = await query(
+        `SELECT id FROM chronic_programs
+         WHERE patient_id = $1 AND (program_key = $2 OR condition = $3)
+         LIMIT 1`,
+        [patient.id, demo.key, catalog.name]
+      );
+      if (existing.rows[0]) continue;
+
+      const inserted = await query(
+        `INSERT INTO chronic_programs (patient_id, condition, status, next_review, notes, program_key, enrolled_by)
+         VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), $5, $6, $7) RETURNING id`,
+        [
+          patient.id,
+          catalog.name,
+          demo.status,
+          demo.reviewDays,
+          `${catalog.summary} (demo enrollment for care-programs roster)`,
+          demo.key,
+          enrolledBy,
+        ]
+      );
+      const programId = inserted.rows[0]?.id;
+      if (!programId) continue;
+      for (const task of catalog.tasks) {
+        await query(
+          `INSERT INTO chronic_program_tasks (program_id, title, cadence, due_on, status)
+           VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), 'pending')`,
+          [programId, task.title, task.cadence, task.daysFromStart]
+        );
+      }
+    }
+
+    console.log('Care programs roster demo ready (doctor/nurse/ops/admin → Care programs)');
+  } catch (err) {
+    console.warn('Care programs demo seed skipped', err);
+  }
 }
 
 async function notifyUser(userId: number | null, title: string, message: string, type = 'care') {
@@ -348,6 +418,156 @@ export function registerPhase4Routes(app: Express) {
     res.json(PROGRAM_CATALOG.map(({ key, name, summary }) => ({ key, name, summary })));
   });
 
+  /** Clinician/ops roster of NCD + antenatal (and other) program enrollments. */
+  app.get(
+    '/api/chronic/roster',
+    authenticate,
+    requireRoles(...CLINICAL_STAFF),
+    async (req: AuthedRequest, res: Response) => {
+      try {
+        const programKey = req.query.program_key ? String(req.query.program_key).trim() : '';
+        const status = req.query.status ? String(req.query.status).trim().toLowerCase() : '';
+        const q = req.query.q ? String(req.query.q).trim() : '';
+
+        const params: unknown[] = [];
+        const where: string[] = [];
+        if (programKey) {
+          params.push(programKey);
+          where.push(`cp.program_key = $${params.length}`);
+        }
+        if (status && ['active', 'completed', 'suspended'].includes(status)) {
+          params.push(status);
+          where.push(`LOWER(cp.status) = $${params.length}`);
+        }
+        if (q) {
+          params.push(`%${q}%`);
+          const i = params.length;
+          where.push(
+            `(p.full_name ILIKE $${i} OR p.patient_code ILIKE $${i} OR COALESCE(p.phone_number,'') ILIKE $${i} OR cp.condition ILIKE $${i})`
+          );
+        }
+        const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+        const rows = await query(
+          `SELECT cp.*,
+                  p.full_name AS patient_name,
+                  p.patient_code,
+                  p.phone_number,
+                  u.name AS enrolled_by_name,
+                  (SELECT COUNT(*)::int FROM chronic_program_tasks t WHERE t.program_id = cp.id) AS task_total,
+                  (SELECT COUNT(*)::int FROM chronic_program_tasks t WHERE t.program_id = cp.id AND t.status = 'done') AS task_done,
+                  (SELECT COUNT(*)::int FROM chronic_program_tasks t WHERE t.program_id = cp.id AND t.status = 'pending') AS pending_tasks,
+                  (SELECT MAX(a.preferred_date)::text FROM appointments a
+                     WHERE a.patient_id = cp.patient_id
+                       AND LOWER(COALESCE(a.status,'')) IN ('completed','consulting','queued')) AS last_visit
+           FROM chronic_programs cp
+           JOIN patients p ON p.id = cp.patient_id
+           LEFT JOIN users u ON u.id = cp.enrolled_by
+           ${whereSql}
+           ORDER BY
+             CASE LOWER(cp.status) WHEN 'active' THEN 0 WHEN 'suspended' THEN 1 ELSE 2 END,
+             cp.next_review ASC NULLS LAST,
+             cp.created_at DESC
+           LIMIT 200`,
+          params
+        );
+
+        const summaryRows = await query(
+          `SELECT COALESCE(program_key, 'other') AS program_key,
+                  condition,
+                  status,
+                  COUNT(*)::int AS n
+           FROM chronic_programs
+           GROUP BY COALESCE(program_key, 'other'), condition, status`
+        );
+
+        const byProgramMap = new Map<
+          string,
+          { program_key: string; name: string; active: number; suspended: number; completed: number; total: number }
+        >();
+        for (const cat of PROGRAM_CATALOG) {
+          byProgramMap.set(cat.key, {
+            program_key: cat.key,
+            name: cat.name,
+            active: 0,
+            suspended: 0,
+            completed: 0,
+            total: 0,
+          });
+        }
+        let active = 0;
+        let suspended = 0;
+        let completed = 0;
+        let total = 0;
+        for (const row of summaryRows.rows) {
+          const key = String(row.program_key || 'other');
+          const st = String(row.status || '').toLowerCase();
+          const n = Number(row.n || 0);
+          total += n;
+          if (st === 'active') active += n;
+          else if (st === 'suspended') suspended += n;
+          else if (st === 'completed') completed += n;
+          const mutable = byProgramMap.get(key) || {
+            program_key: key,
+            name: String(row.condition || key),
+            active: 0,
+            suspended: 0,
+            completed: 0,
+            total: 0,
+          };
+          if (st === 'active') mutable.active += n;
+          else if (st === 'suspended') mutable.suspended += n;
+          else if (st === 'completed') mutable.completed += n;
+          mutable.total += n;
+          byProgramMap.set(key, mutable);
+        }
+
+        const enrollments = rows.rows.map((row: Record<string, unknown>) => {
+          const taskTotal = Number(row.task_total || 0);
+          const taskDone = Number(row.task_done || 0);
+          return {
+            id: row.id,
+            patient_id: row.patient_id,
+            patient_name: row.patient_name,
+            patient_code: row.patient_code,
+            phone_number: row.phone_number,
+            program_key: row.program_key,
+            condition: row.condition,
+            status: row.status,
+            next_review: row.next_review,
+            notes: row.notes,
+            created_at: row.created_at,
+            enrolled_by: row.enrolled_by,
+            enrolled_by_name: row.enrolled_by_name,
+            last_visit: row.last_visit,
+            pending_tasks: Number(row.pending_tasks || 0),
+            adherence: {
+              total: taskTotal,
+              done: taskDone,
+              percent: taskTotal ? Math.round((taskDone / taskTotal) * 100) : 0,
+            },
+          };
+        });
+
+        res.json({
+          summary: {
+            total,
+            active,
+            suspended,
+            completed,
+            by_program: Array.from(byProgramMap.values()),
+          },
+          enrollments,
+          catalog: PROGRAM_CATALOG.map(({ key, name, summary }) => ({ key, name, summary })),
+          note: 'Assistive chronic and antenatal pathways. Not a diagnosis.',
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not load care programs roster' });
+      }
+    }
+  );
+
   app.get('/api/chronic/me', authenticate, async (req: AuthedRequest, res: Response) => {
     try {
       const ids = req.user!.role === 'patient'
@@ -390,9 +610,22 @@ export function registerPhase4Routes(app: Express) {
 
   app.post('/api/chronic', authenticate, async (req: AuthedRequest, res: Response) => {
     try {
-      const { program_key, condition, next_review, notes, patient_id } = req.body || {};
+      const { program_key, condition, next_review, notes, patient_id, patient_code } = req.body || {};
       const catalog = PROGRAM_CATALOG.find((p) => p.key === program_key);
-      const resolved = await resolveManagedPatient(req, patient_id ? Number(patient_id) : null);
+
+      let resolvedPatientId = patient_id ? Number(patient_id) : null;
+      if (!resolvedPatientId && patient_code && req.user!.role !== 'patient') {
+        const byCode = await query(
+          `SELECT id FROM patients WHERE UPPER(patient_code) = UPPER($1) LIMIT 1`,
+          [String(patient_code).trim()]
+        );
+        if (!byCode.rows[0]) {
+          return res.status(404).json({ message: 'Patient not found for that code' });
+        }
+        resolvedPatientId = Number(byCode.rows[0].id);
+      }
+
+      const resolved = await resolveManagedPatient(req, resolvedPatientId);
       if (resolved.error || !resolved.patient) {
         return res.status(resolved.status).json({ message: resolved.error });
       }
@@ -446,6 +679,65 @@ export function registerPhase4Routes(app: Express) {
       res.status(500).json({ message: 'Could not enroll in program' });
     }
   });
+
+  app.patch(
+    '/api/chronic/:id',
+    authenticate,
+    requireRoles(...CLINICAL_STAFF),
+    async (req: AuthedRequest, res: Response) => {
+      try {
+        const program = await query(`SELECT * FROM chronic_programs WHERE id = $1`, [req.params.id]);
+        const row = program.rows[0];
+        if (!row) return res.status(404).json({ message: 'Enrollment not found' });
+        if (!(await canAccessPatient(req.user!, row.patient_id))) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const allowed = ['active', 'completed', 'suspended'];
+        const nextStatus = req.body?.status != null ? String(req.body.status).toLowerCase() : null;
+        if (nextStatus && !allowed.includes(nextStatus)) {
+          return res.status(400).json({ message: 'status must be active, completed, or suspended' });
+        }
+
+        const updated = await query(
+          `UPDATE chronic_programs
+           SET status = COALESCE($1, status),
+               next_review = COALESCE($2, next_review),
+               notes = COALESCE($3, notes)
+           WHERE id = $4
+           RETURNING *`,
+          [
+            nextStatus,
+            req.body?.next_review || null,
+            req.body?.notes != null ? String(req.body.notes) : null,
+            row.id,
+          ]
+        );
+
+        const patient = await query(
+          `SELECT full_name, patient_code, user_id FROM patients WHERE id = $1`,
+          [row.patient_id]
+        );
+        if (nextStatus && nextStatus !== row.status && patient.rows[0]?.user_id) {
+          await notifyUser(
+            patient.rows[0].user_id,
+            'Care program updated',
+            `${row.condition} is now ${nextStatus}. Assistive pathway — not a diagnosis.`,
+            'chronic'
+          );
+        }
+
+        res.json({
+          ...updated.rows[0],
+          patient_name: patient.rows[0]?.full_name,
+          patient_code: patient.rows[0]?.patient_code,
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not update enrollment' });
+      }
+    }
+  );
 
   app.patch('/api/chronic/:id/tasks/:taskId', authenticate, async (req: AuthedRequest, res: Response) => {
     try {

@@ -59,9 +59,9 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Role | Username (typical seed) | Home |
 | --- | --- | --- |
 | Patient | OTP register, or demo `0241555000` / `patient123` | Consult Now, book, video, chat, Rx, records, tracker |
-| Doctor | `dr_appiah` / `staff123` (also `dr_mensah`, `dr_doe`) | Queue, video consult, SOAP, e-prescribe, referrals |
-| Nurse / triage | `nurse` | Pre-consult triage and urgency |
-| Medical operations | `medops` / `ops123` | Command centre: queue assign, partner re-route (lab/imaging/pharmacy/referral) |
+| Doctor | `dr_appiah` / `staff123` (also `dr_mensah`, `dr_doe`) | Queue, video consult, SOAP, e-prescribe, referrals, **care programs roster** |
+| Nurse / triage | `nurse` / `nurse123` | Pre-consult triage, urgency, **care programs roster** |
+| Medical operations | `medops` / `ops123` | Command centre: queue assign, partner re-route, **care programs roster** |
 | Lab technician | `labtech` / `labtech123` | Lab request lifecycle + result return |
 | Pharmacy | `pharmacy` / `pharm123` | E-prescription fulfilment |
 | Imaging | `imaging` / `image123` | Imaging referrals + reports |
@@ -69,7 +69,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Insurance | `insurance` / `insure123` | Claims desk: approve / query / deny / pay |
 | Finance | `finance` / `fin123` | Receipts, reconcile, settlements |
 | Hospital | `hospital` / `hosp123` | Network desk: inbound/outbound referrals, capacity, partners |
-| Admin | `admin` / `admin` | Staff, doctors, clinic Pulse, **Nation Pulse** (visits/claims/partners/queue), support, national net |
+| Admin | `admin` / `admin` | Staff, doctors, clinic Pulse, **Nation Pulse**, **care programs roster**, support, national net |
 | Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
 
 Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `pharmacy`/`pharm123`, `imaging`/`image123`, `hospital`/`hosp123`, `support`/`support123`, `corporate`/`corp123`, `insurance`/`insure123`, `finance`/`fin123`.
@@ -81,7 +81,7 @@ Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse1
 | 1 Consult | Book, Consult Now, video, chat, SOAP | Patient home, doctor queue |
 | 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient journey · Medical Ops board · partner desks |
 | 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership, corporate utilisation, insurer claims desk | Payments, Membership, Corporate, Insurance |
-| 4 Household | Family, programs, vault, assistive helper | Family, Care programs |
+| 4 Household | Family, programs, vault, assistive helper | Family, Care programs (patient + clinician roster) |
 | 5 Nation | 16 regions, follow-up, risk alerts, audit, **admin Nation Pulse** | Ghana network, Care phases, Admin → Nation Pulse |
 
 Open **Patient → Care phases** for live counts on all five.
@@ -89,10 +89,10 @@ Open **Patient → Care phases** for live counts on all five.
 ## Product surface
 
 - **Patient:** OTP onboarding, medical profile, doctor directory, book + Consult Now, Jitsi video, in-visit chat, prescriptions, labs/imaging, health journey, document vault, health tracker, notifications, family/dependents, chronic care programs, assistive symptom helper, Ghana partner network
-- **Clinician:** queue cockpit (next patient, SOAP, Rx, chat, video, end visit), assistive SOAP draft, referrals
-- **Network:** nurse triage, lab, pharmacy, imaging, hospital desk, medical operations (queue assign + partner re-route)
+- **Clinician:** queue cockpit (next patient, SOAP, Rx, chat, video, end visit), assistive SOAP draft, referrals, care programs roster
+- **Network:** nurse triage, lab, pharmacy, imaging, hospital desk, medical operations (queue assign + partner re-route + care programs roster)
 - **Business:** corporate, insurance, finance/billing (phase 3 APIs)
-- **Admin:** staff registry, clinic/SMS settings (API key masked), clinic Pulse, **Nation Pulse** national analytics, ops snapshot from authenticated APIs
+- **Admin:** staff registry, clinic/SMS settings (API key masked), clinic Pulse, **Nation Pulse** national analytics, **care programs roster**, ops snapshot from authenticated APIs
 
 ### Phase 2 — closed-loop Medical Ops
 
@@ -149,6 +149,7 @@ Open **Patient → Care phases** for live counts on all five.
 
 - **Family / dependents:** Patient → Family. Add a child/spouse/parent (creates a patient record, no login). Book or Consult Now on their behalf. Appointments stay scoped to the guardian account.
 - **Care programs:** Patient → Care programs. Enroll in hypertension, diabetes, asthma, sickle cell, or antenatal. Mark daily/weekly tasks; reminders go to the existing notifications inbox. Not a diagnosis.
+- **Care programs roster (clinician/ops):** Doctor → Care programs, Nurse FAB, Ops → Care programs roster, or Admin → Care programs. Filter by program/status, search, enrol by patient ID, activate/suspend/complete. Demo seed fills sparse enrollments.
 - **Clinical AI assist:** Doctor SOAP dialog → “Draft SOAP (assistive)”. Patient → Symptom helper. Works without an LLM key (templated from notes/vitals). If `OPENAI_API_KEY` is set, a richer draft is attempted. Always labeled assistive; never a diagnosis; no HIPAA claim.
 - **Vault:** Rx, labs, imaging, letters from visits, plus photos/PDFs you attach (up to 2 MB). Files are stored in Postgres so they survive Render’s ephemeral disk.
 - **Hospital network desk:** see Phase 4 section above (`hospital` / `hosp123`).
@@ -170,9 +171,18 @@ This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRE
 - **Matching:** Lab/imaging/pharmacy assignment uses region plus GPS distance when coordinates exist.
 - **Tenant isolation:** Corporate and insurance desks only see their linked organisation (`org_accounts`).
 - **Family charts:** Open a dependent’s visits, programs, vault, and alerts (guardian-scoped).
-- **Doctor enroll:** SOAP dialog → Enroll in care program.
+- **Doctor enroll:** SOAP dialog → Enroll in care program; full roster at Doctor → Care programs.
 - **Risk alerts:** Rule-based from tracker (high BP/glucose) and overdue program tasks. Labeled assistive, not a diagnosis.
 - **Consents:** `POST /api/consents/me` for telemedicine, data, communication, sharing, AI assist.
+
+### Phase 4 — Care programs roster
+
+- **Who:** `dr_appiah` / `staff123`, `nurse` / `nurse123`, `medops` / `ops123`, `admin` / `admin`
+- **Open:** Doctor quick action **Care programs**, Nurse FAB, Ops overview button, or Admin launch pad
+- **Roster:** enrollments by program (hypertension, diabetes, asthma, sickle cell, antenatal) with status, last visit, next review, task adherence
+- **Actions:** enrol by patient ID (`DH-…`), activate / suspend / complete
+- Demo seed adds a few enrollments when the table is sparse
+- APIs: `GET /api/chronic/roster`, `POST /api/chronic` (staff + `patient_code`), `PATCH /api/chronic/:id`
 
 ### Phase 5 — Nation Pulse (admin analytics)
 
@@ -198,6 +208,7 @@ This is still not a production national deployment: Jitsi is public-hosted with 
 - **Directory:** Filter clinicians by language (English, Twi, Ga, Ewe, Hausa).
 - **Hospital network desk:** `hospital` / `hosp123` — inbound/outbound referrals, bed/ICU capacity stub, partner status.
 - **Nation Pulse:** `admin` / `admin` — national visits/claims/partners/queue analytics (`GET /api/admin/analytics`).
+- **Care programs roster:** doctor / nurse / medops / admin — NCD + antenatal enrollments (`GET /api/chronic/roster`).
 - **Follow-up:** Book the review visit from the follow-up list.
 
 Default local extra: `support` / `support123`.

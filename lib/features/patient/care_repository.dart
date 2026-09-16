@@ -401,6 +401,27 @@ class CareRepository {
     return res.data ?? {};
   }
 
+  Future<Map<String, dynamic>> chronicRoster({
+    String? programKey,
+    String? status,
+    String? q,
+  }) async {
+    final res = await _api.dio.get<Map<String, dynamic>>(
+      '/api/chronic/roster',
+      queryParameters: {
+        if (programKey != null && programKey.isNotEmpty) 'program_key': programKey,
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (q != null && q.isNotEmpty) 'q': q,
+      },
+    );
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> updateChronicProgram(int id, Map<String, dynamic> payload) async {
+    final res = await _api.dio.patch<Map<String, dynamic>>('/api/chronic/$id', data: payload);
+    return res.data ?? {};
+  }
+
   Future<void> updateChronicTask(int programId, int taskId, Map<String, dynamic> payload) async {
     await _api.dio.patch('/api/chronic/$programId/tasks/$taskId', data: payload);
   }

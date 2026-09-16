@@ -268,6 +268,7 @@ class _OpsHomeScreenState extends State<OpsHomeScreen> with SingleTickerProvider
                         },
                         onOpenNetwork: () => context.push('/ops/network'),
                         onOpenSupport: () => context.push('/ops/support'),
+                        onOpenPrograms: () => context.push('/ops/programs'),
                       ),
                       _QueueTab(
                         queue: _list('queue'),
@@ -300,6 +301,7 @@ class _OverviewTab extends StatelessWidget {
     required this.onOpenTriage,
     required this.onOpenNetwork,
     required this.onOpenSupport,
+    required this.onOpenPrograms,
     this.note,
   });
 
@@ -308,6 +310,7 @@ class _OverviewTab extends StatelessWidget {
   final VoidCallback onOpenTriage;
   final VoidCallback onOpenNetwork;
   final VoidCallback onOpenSupport;
+  final VoidCallback onOpenPrograms;
 
   @override
   Widget build(BuildContext context) {
@@ -358,6 +361,12 @@ class _OverviewTab extends StatelessWidget {
           onPressed: onOpenSupport,
           icon: const Icon(Icons.support_agent_outlined),
           label: const Text('Support desk'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: onOpenPrograms,
+          icon: const Icon(Icons.favorite_outline),
+          label: const Text('Care programs roster'),
         ),
       ],
     );

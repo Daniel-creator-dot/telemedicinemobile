@@ -1200,6 +1200,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 backgroundImage: 'assets/records.png',
                 overlayColor: const Color(0xFF92400E), // deep amber
               ),
+              _quickActionCard(
+                'Care programs',
+                'NCD · antenatal roster',
+                Icons.favorite_outline_rounded,
+                const Color(0xFF0D9488),
+                () => context.push('/doctor/programs'),
+                overlayColor: const Color(0xFF115E59),
+              ),
             ],
           ).animate().fadeIn(duration: 300.ms, delay: 100.ms),
           const SizedBox(height: 20),

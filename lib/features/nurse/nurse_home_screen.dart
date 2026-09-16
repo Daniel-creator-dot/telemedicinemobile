@@ -116,6 +116,13 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
           if (context.mounted) context.go('/login');
         },
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/nurse/programs'),
+        backgroundColor: digiForest,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.favorite_outline),
+        label: const Text('Care programs'),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _triage.isEmpty

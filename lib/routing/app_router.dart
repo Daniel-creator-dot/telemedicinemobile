@@ -7,6 +7,7 @@ import '../features/admin/admin_analytics_screen.dart';
 import '../features/admin/admin_home_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
+import '../features/clinical/care_programs_roster_screen.dart';
 import '../features/doctor/doctor_home_screen.dart';
 import '../features/lab_technician/lab_technician_home_screen.dart';
 import '../features/nurse/nurse_home_screen.dart';
@@ -168,6 +169,7 @@ GoRouter createAppRouter(Session session) {
         path: '/doctor',
         builder: (context, state) => const DoctorHomeScreen(),
         routes: [
+          GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
           GoRoute(
             path: 'video',
             builder: (context, state) {
@@ -187,16 +189,27 @@ GoRouter createAppRouter(Session session) {
           GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
           GoRoute(path: 'network', builder: (context, state) => const NationalCoverageScreen()),
           GoRoute(path: 'analytics', builder: (context, state) => const AdminAnalyticsScreen()),
+          GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
         ],
       ),
-      GoRoute(path: '/lab-technician', builder: (context, state) => const LabTechnicianHomeScreen()),
-      GoRoute(path: '/nurse', builder: (context, state) => const NurseHomeScreen()),
+      GoRoute(
+        path: '/lab-technician',
+        builder: (context, state) => const LabTechnicianHomeScreen(),
+      ),
+      GoRoute(
+        path: '/nurse',
+        builder: (context, state) => const NurseHomeScreen(),
+        routes: [
+          GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
+        ],
+      ),
       GoRoute(
         path: '/ops',
         builder: (context, state) => const OpsHomeScreen(),
         routes: [
           GoRoute(path: 'network', builder: (context, state) => const NationalCoverageScreen()),
           GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
+          GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
         ],
       ),
       GoRoute(path: '/pharmacy', builder: (context, state) => const PharmacyHomeScreen()),
