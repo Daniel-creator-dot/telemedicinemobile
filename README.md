@@ -149,7 +149,7 @@ Open **Patient → Care phases** for live counts on all five.
 
 - **Family / dependents:** Patient → Family. Add a child/spouse/parent (creates a patient record, no login). Book or Consult Now on their behalf. Appointments stay scoped to the guardian account.
 - **Care programs:** Patient → Care programs. Enroll in hypertension, diabetes, asthma, sickle cell, or antenatal. Mark daily/weekly tasks; reminders go to the existing notifications inbox. Not a diagnosis.
-- **Care programs roster (clinician/ops):** Doctor → Care programs, Nurse FAB, Ops → Care programs roster, or Admin → Care programs. Filter by program/status, search, enrol by patient ID, activate/suspend/complete. Demo seed fills sparse enrollments.
+- **Care programs roster (clinician/ops):** Doctor → Care programs, Nurse FAB, Ops → Care programs roster, or Admin → Care programs. Filter by program/status, search, enrol by patient ID, activate/suspend/complete. **Tap an enrollment** for adherence tasks, toggle completion, and edit next review / notes. Demo seed fills sparse enrollments.
 - **Clinical AI assist:** Doctor SOAP dialog → “Draft SOAP (assistive)”. Patient → Symptom helper. Works without an LLM key (templated from notes/vitals). If `OPENAI_API_KEY` is set, a richer draft is attempted. Always labeled assistive; never a diagnosis; no HIPAA claim.
 - **Vault:** Rx, labs, imaging, letters from visits, plus photos/PDFs you attach (up to 2 MB). Files are stored in Postgres so they survive Render’s ephemeral disk.
 - **Hospital network desk:** see Phase 4 section above (`hospital` / `hosp123`).
@@ -179,10 +179,11 @@ This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRE
 
 - **Who:** `dr_appiah` / `staff123`, `nurse` / `nurse123`, `medops` / `ops123`, `admin` / `admin`
 - **Open:** Doctor quick action **Care programs**, Nurse FAB, Ops overview button, or Admin launch pad
-- **Roster:** enrollments by program (hypertension, diabetes, asthma, sickle cell, antenatal) with status, last visit, next review, task adherence
+- **Roster:** enrollments by program (hypertension, diabetes, asthma, sickle cell, antenatal) with status, last visit, next review, task adherence %
+- **Enrollment detail:** tap a card → task checklist (mark done/pending), next-review date, clinician notes
 - **Actions:** enrol by patient ID (`DH-…`), activate / suspend / complete
-- Demo seed adds a few enrollments when the table is sparse
-- APIs: `GET /api/chronic/roster`, `POST /api/chronic` (staff + `patient_code`), `PATCH /api/chronic/:id`
+- Demo seed adds a few enrollments when the table is sparse (first task marked done on active programs)
+- APIs: `GET /api/chronic/roster`, `GET /api/chronic/:id`, `POST /api/chronic` (staff + `patient_code`), `PATCH /api/chronic/:id`, `PATCH /api/chronic/:id/tasks/:taskId`
 
 ### Phase 5 — Nation Pulse (admin analytics)
 

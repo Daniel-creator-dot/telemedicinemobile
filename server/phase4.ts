@@ -147,61 +147,71 @@ export async function initPhase4Schema() {
 async function seedCareProgramsDemo() {
   try {
     const count = await query(`SELECT COUNT(*)::int AS n FROM chronic_programs`);
-    if (Number(count.rows[0]?.n || 0) >= 3) return;
-
-    const patients = await query(
-      `SELECT id, user_id, full_name FROM patients ORDER BY id ASC LIMIT 5`
-    );
-    if (!patients.rows.length) return;
-
-    const staff = await query(
-      `SELECT id FROM users WHERE role IN ('doctor', 'nurse', 'admin', 'medical_ops') ORDER BY id ASC LIMIT 1`
-    );
-    const enrolledBy = staff.rows[0]?.id || null;
-
-    const demos: { key: string; status: string; reviewDays: number }[] = [
-      { key: 'hypertension', status: 'active', reviewDays: 14 },
-      { key: 'diabetes', status: 'active', reviewDays: 21 },
-      { key: 'antenatal', status: 'active', reviewDays: 7 },
-      { key: 'asthma', status: 'suspended', reviewDays: 28 },
-      { key: 'sickle_cell', status: 'completed', reviewDays: -7 },
-    ];
-
-    for (let i = 0; i < demos.length && i < patients.rows.length; i++) {
-      const patient = patients.rows[i];
-      const demo = demos[i];
-      const catalog = PROGRAM_CATALOG.find((p) => p.key === demo.key);
-      if (!catalog) continue;
-
-      const existing = await query(
-        `SELECT id FROM chronic_programs
-         WHERE patient_id = $1 AND (program_key = $2 OR condition = $3)
-         LIMIT 1`,
-        [patient.id, demo.key, catalog.name]
+    if (Number(count.rows[0]?.n || 0) < 3) {
+      const patients = await query(
+        `SELECT id, user_id, full_name FROM patients ORDER BY id ASC LIMIT 5`
       );
-      if (existing.rows[0]) continue;
-
-      const inserted = await query(
-        `INSERT INTO chronic_programs (patient_id, condition, status, next_review, notes, program_key, enrolled_by)
-         VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), $5, $6, $7) RETURNING id`,
-        [
-          patient.id,
-          catalog.name,
-          demo.status,
-          demo.reviewDays,
-          `${catalog.summary} (demo enrollment for care-programs roster)`,
-          demo.key,
-          enrolledBy,
-        ]
-      );
-      const programId = inserted.rows[0]?.id;
-      if (!programId) continue;
-      for (const task of catalog.tasks) {
-        await query(
-          `INSERT INTO chronic_program_tasks (program_id, title, cadence, due_on, status)
-           VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), 'pending')`,
-          [programId, task.title, task.cadence, task.daysFromStart]
+      if (patients.rows.length) {
+        const staff = await query(
+          `SELECT id FROM users WHERE role IN ('doctor', 'nurse', 'admin', 'medical_ops') ORDER BY id ASC LIMIT 1`
         );
+        const enrolledBy = staff.rows[0]?.id || null;
+
+        const demos: { key: string; status: string; reviewDays: number }[] = [
+          { key: 'hypertension', status: 'active', reviewDays: 14 },
+          { key: 'diabetes', status: 'active', reviewDays: 21 },
+          { key: 'antenatal', status: 'active', reviewDays: 7 },
+          { key: 'asthma', status: 'suspended', reviewDays: 28 },
+          { key: 'sickle_cell', status: 'completed', reviewDays: -7 },
+        ];
+
+        for (let i = 0; i < demos.length && i < patients.rows.length; i++) {
+          const patient = patients.rows[i];
+          const demo = demos[i];
+          const catalog = PROGRAM_CATALOG.find((p) => p.key === demo.key);
+          if (!catalog) continue;
+
+          const existing = await query(
+            `SELECT id FROM chronic_programs
+             WHERE patient_id = $1 AND (program_key = $2 OR condition = $3)
+             LIMIT 1`,
+            [patient.id, demo.key, catalog.name]
+          );
+          if (existing.rows[0]) continue;
+
+          const inserted = await query(
+            `INSERT INTO chronic_programs (patient_id, condition, status, next_review, notes, program_key, enrolled_by)
+             VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), $5, $6, $7) RETURNING id`,
+            [
+              patient.id,
+              catalog.name,
+              demo.status,
+              demo.reviewDays,
+              `${catalog.summary} (demo enrollment for care-programs roster)`,
+              demo.key,
+              enrolledBy,
+            ]
+          );
+          const programId = inserted.rows[0]?.id;
+          if (!programId) continue;
+          let taskIndex = 0;
+          for (const task of catalog.tasks) {
+            const markDone = demo.status === 'active' && taskIndex === 0;
+            await query(
+              `INSERT INTO chronic_program_tasks (program_id, title, cadence, due_on, status, completed_at)
+               VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), $5, $6)`,
+              [
+                programId,
+                task.title,
+                task.cadence,
+                task.daysFromStart,
+                markDone ? 'done' : 'pending',
+                markDone ? new Date() : null,
+              ]
+            );
+            taskIndex += 1;
+          }
+        }
       }
     }
 
@@ -679,6 +689,62 @@ export function registerPhase4Routes(app: Express) {
       res.status(500).json({ message: 'Could not enroll in program' });
     }
   });
+
+  /** Single enrollment with tasks — clinician adherence detail beyond roster %. */
+  app.get(
+    '/api/chronic/:id',
+    authenticate,
+    requireRoles(...CLINICAL_STAFF, 'patient'),
+    async (req: AuthedRequest, res: Response) => {
+      try {
+        const program = await query(
+          `SELECT cp.*,
+                  p.full_name AS patient_name,
+                  p.patient_code,
+                  p.phone_number,
+                  u.name AS enrolled_by_name
+           FROM chronic_programs cp
+           JOIN patients p ON p.id = cp.patient_id
+           LEFT JOIN users u ON u.id = cp.enrolled_by
+           WHERE cp.id = $1`,
+          [req.params.id]
+        );
+        const row = program.rows[0];
+        if (!row) return res.status(404).json({ message: 'Enrollment not found' });
+        if (!(await canAccessPatient(req.user!, row.patient_id))) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const tasks = await query(
+          `SELECT * FROM chronic_program_tasks WHERE program_id = $1 ORDER BY id`,
+          [row.id]
+        );
+        const done = tasks.rows.filter((t: { status: string }) => t.status === 'done').length;
+        const lastVisit = await query(
+          `SELECT MAX(preferred_date)::text AS last_visit FROM appointments
+           WHERE patient_id = $1
+             AND LOWER(COALESCE(status,'')) IN ('completed','consulting','queued')`,
+          [row.patient_id]
+        );
+
+        res.json({
+          ...row,
+          last_visit: lastVisit.rows[0]?.last_visit || null,
+          tasks: tasks.rows,
+          pending_tasks: tasks.rows.length - done,
+          adherence: {
+            total: tasks.rows.length,
+            done,
+            percent: tasks.rows.length ? Math.round((done / tasks.rows.length) * 100) : 0,
+          },
+          note: 'Assistive chronic and antenatal pathway. Not a diagnosis.',
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Could not load enrollment' });
+      }
+    }
+  );
 
   app.patch(
     '/api/chronic/:id',

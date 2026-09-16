@@ -417,6 +417,11 @@ class CareRepository {
     return res.data ?? {};
   }
 
+  Future<Map<String, dynamic>> chronicEnrollment(int id) async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/chronic/$id');
+    return res.data ?? {};
+  }
+
   Future<Map<String, dynamic>> updateChronicProgram(int id, Map<String, dynamic> payload) async {
     final res = await _api.dio.patch<Map<String, dynamic>>('/api/chronic/$id', data: payload);
     return res.data ?? {};
