@@ -176,7 +176,19 @@ export async function initPhase3Schema() {
     );
   `);
 
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='adjudicated_by') THEN
+        ALTER TABLE claims ADD COLUMN adjudicated_by INTEGER REFERENCES users(id);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='claims' AND column_name='adjudicated_at') THEN
+        ALTER TABLE claims ADD COLUMN adjudicated_at TIMESTAMP;
+      END IF;
+    END $$;
+  `);
+
   await seedCommercial();
+  await seedInsuranceClaimsDesk();
   console.log('Phase 3 schema ready');
 }
 
@@ -229,6 +241,92 @@ async function seedCommercial() {
   }
 
   await seedCoverageDirectory();
+}
+
+/** Demo open claims so the insurance desk can adjudicate without waiting for a live visit. */
+async function seedInsuranceClaimsDesk() {
+  const open = await query(
+    `SELECT COUNT(*)::int AS n FROM claims
+     WHERE source = 'insurance' AND status IN ('submitted', 'queried')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(open.rows[0]?.n || 0) > 0) return;
+
+  const ins = await query("SELECT id, name FROM insurers WHERE name = 'Star Health Ghana' LIMIT 1");
+  if (!ins.rows[0]) return;
+
+  let policies = await query(
+    `SELECT p.id AS policy_id, p.patient_id, p.policy_number, pt.full_name
+     FROM policies p JOIN patients pt ON pt.id = p.patient_id
+     WHERE p.insurer_id = $1 AND p.status = 'active'
+     ORDER BY p.id ASC LIMIT 5`,
+    [ins.rows[0].id]
+  );
+
+  if (!policies.rows[0]) {
+    const patient = await query('SELECT id, full_name FROM patients ORDER BY id ASC LIMIT 1');
+    if (!patient.rows[0]) return;
+    const policyNumber = `SHG-DEMO-${patient.rows[0].id}`;
+    await query(
+      `INSERT INTO policies (insurer_id, patient_id, policy_number, status, ends_on)
+       VALUES ($1, $2, $3, 'active', CURRENT_DATE + INTERVAL '1 year')
+       ON CONFLICT (policy_number) DO UPDATE SET status = 'active', patient_id = EXCLUDED.patient_id`,
+      [ins.rows[0].id, patient.rows[0].id, policyNumber]
+    );
+    policies = await query(
+      `SELECT p.id AS policy_id, p.patient_id, p.policy_number, pt.full_name
+       FROM policies p JOIN patients pt ON pt.id = p.patient_id
+       WHERE p.insurer_id = $1 AND p.status = 'active'
+       ORDER BY p.id ASC LIMIT 5`,
+      [ins.rows[0].id]
+    );
+  }
+  if (!policies.rows[0]) return;
+
+  const apt = await query(
+    `SELECT id FROM appointments WHERE patient_id = $1 ORDER BY id DESC LIMIT 1`,
+    [policies.rows[0].patient_id]
+  ).catch(() => ({ rows: [] as any[] }));
+  const appointmentId = apt.rows[0]?.id || null;
+
+  const demos: Array<{ amount: number; status: string; notes: string | null; patientIdx: number }> = [
+    { amount: 40, status: 'submitted', notes: null, patientIdx: 0 },
+    { amount: 40, status: 'submitted', notes: null, patientIdx: Math.min(1, policies.rows.length - 1) },
+    {
+      amount: 35,
+      status: 'queried',
+      notes: 'Please upload the consultation receipt from the clinic.',
+      patientIdx: 0,
+    },
+  ];
+
+  for (const demo of demos) {
+    const pol = policies.rows[demo.patientIdx] || policies.rows[0];
+    const seq = await query(`SELECT nextval('claim_code_seq') AS n`);
+    const claimCode = `CLM-${String(seq.rows[0].n).padStart(6, '0')}`;
+    await query(
+      `INSERT INTO claims (claim_code, appointment_id, patient_id, policy_id, source, amount, status, notes)
+       VALUES ($1, $2, $3, $4, 'insurance', $5, $6, $7)`,
+      [claimCode, appointmentId, pol.patient_id, pol.policy_id, demo.amount, demo.status, demo.notes]
+    ).catch(() => null);
+  }
+
+  const pendingPa = await query(
+    `SELECT COUNT(*)::int AS n FROM preauths pa
+     LEFT JOIN policies p ON p.id = pa.policy_id
+     WHERE pa.status = 'pending' AND (p.insurer_id = $1 OR pa.policy_id IS NULL)`,
+    [ins.rows[0].id]
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(pendingPa.rows[0]?.n || 0) === 0) {
+    const pol = policies.rows[0];
+    const pseq = await query(`SELECT nextval('preauth_code_seq') AS n`);
+    await query(
+      `INSERT INTO preauths (preauth_code, appointment_id, patient_id, policy_id, service, requested_amount, status, notes)
+       VALUES ($1, $2, $3, $4, 'general consultation (demo)', 50, 'pending', 'Ops demo — awaiting insurer decision')`,
+      [`PA-${String(pseq.rows[0].n).padStart(6, '0')}`, appointmentId, pol.patient_id, pol.policy_id]
+    ).catch(() => null);
+  }
+
+  console.log('Seeded insurance claims desk demo queue');
 }
 
 async function seedCoverageDirectory() {
@@ -928,13 +1026,28 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       const scopedId =
         req.user!.role === 'insurance' ? await commercialOrgId('insurer', req.user!.id) : null;
       if (req.user!.role === 'insurance' && !scopedId) {
-        return res.json({ insurer: null, policies: [], preauths: [], claims: [] });
+        return res.json({
+          insurer: null,
+          policies: [],
+          preauths: [],
+          claims: [],
+          stats: {
+            open_claims: 0,
+            queried_claims: 0,
+            approved_claims: 0,
+            paid_claims: 0,
+            rejected_claims: 0,
+            pending_preauths: 0,
+            policies_active: 0,
+          },
+          note: 'No insurer linked to this account. Ask admin to map org_accounts.',
+        });
       }
       const insurer = scopedId
         ? await query('SELECT * FROM insurers WHERE id = $1', [scopedId])
         : await query('SELECT * FROM insurers ORDER BY id');
       const insIds = insurer.rows.map((i: { id: number }) => i.id);
-      const [policies, preauths, claims] = await Promise.all([
+      const [policies, preauths, claims, stats] = await Promise.all([
         insIds.length
           ? query(
               `SELECT p.*, i.name as insurer_name, pt.full_name, pt.patient_code
@@ -945,16 +1058,89 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
               [insIds]
             )
           : Promise.resolve({ rows: [] as any[] }),
-        query(
-          `SELECT pa.*, pt.full_name, pt.patient_code
-           FROM preauths pa JOIN patients pt ON pa.patient_id = pt.id
-           ORDER BY pa.created_at DESC`
-        ),
-        query(
-          `SELECT c.*, pt.full_name, pt.patient_code
-           FROM claims c JOIN patients pt ON c.patient_id = pt.id
-           ORDER BY c.submitted_at DESC`
-        ),
+        insIds.length
+          ? query(
+              `SELECT pa.*, pt.full_name, pt.patient_code, pt.phone_number,
+                      pol.policy_number, a.appointment_id as apt_code
+               FROM preauths pa
+               JOIN patients pt ON pa.patient_id = pt.id
+               LEFT JOIN policies pol ON pa.policy_id = pol.id
+               LEFT JOIN appointments a ON pa.appointment_id = a.id
+               WHERE pa.policy_id IS NOT NULL AND pol.insurer_id = ANY($1)
+               ORDER BY
+                 CASE pa.status WHEN 'pending' THEN 0 ELSE 1 END,
+                 pa.created_at DESC
+               LIMIT 80`,
+              [insIds]
+            )
+          : Promise.resolve({ rows: [] as any[] }),
+        insIds.length
+          ? query(
+              `SELECT c.*, pt.full_name, pt.patient_code, pt.phone_number,
+                      pol.policy_number, i.name as insurer_name, a.appointment_id as apt_code,
+                      adj.name as adjudicator_name
+               FROM claims c
+               JOIN patients pt ON c.patient_id = pt.id
+               LEFT JOIN policies pol ON c.policy_id = pol.id
+               LEFT JOIN insurers i ON pol.insurer_id = i.id
+               LEFT JOIN appointments a ON c.appointment_id = a.id
+               LEFT JOIN users adj ON c.adjudicated_by = adj.id
+               WHERE c.source = 'insurance'
+                 AND (pol.insurer_id = ANY($1) OR (c.policy_id IS NULL AND $2::boolean))
+               ORDER BY
+                 CASE c.status
+                   WHEN 'submitted' THEN 0
+                   WHEN 'queried' THEN 1
+                   WHEN 'approved' THEN 2
+                   ELSE 3
+                 END,
+                 c.submitted_at DESC
+               LIMIT 100`,
+              [insIds, req.user!.role === 'admin']
+            )
+          : Promise.resolve({ rows: [] as any[] }),
+        insIds.length
+          ? query(
+              `SELECT
+                 (SELECT COUNT(*)::int FROM claims c
+                    LEFT JOIN policies pol ON c.policy_id = pol.id
+                  WHERE c.source = 'insurance' AND c.status = 'submitted'
+                    AND pol.insurer_id = ANY($1)) AS open_claims,
+                 (SELECT COUNT(*)::int FROM claims c
+                    LEFT JOIN policies pol ON c.policy_id = pol.id
+                  WHERE c.source = 'insurance' AND c.status = 'queried'
+                    AND pol.insurer_id = ANY($1)) AS queried_claims,
+                 (SELECT COUNT(*)::int FROM claims c
+                    LEFT JOIN policies pol ON c.policy_id = pol.id
+                  WHERE c.source = 'insurance' AND c.status = 'approved'
+                    AND pol.insurer_id = ANY($1)) AS approved_claims,
+                 (SELECT COUNT(*)::int FROM claims c
+                    LEFT JOIN policies pol ON c.policy_id = pol.id
+                  WHERE c.source = 'insurance' AND c.status = 'paid'
+                    AND pol.insurer_id = ANY($1)) AS paid_claims,
+                 (SELECT COUNT(*)::int FROM claims c
+                    LEFT JOIN policies pol ON c.policy_id = pol.id
+                  WHERE c.source = 'insurance' AND c.status = 'rejected'
+                    AND pol.insurer_id = ANY($1)) AS rejected_claims,
+                 (SELECT COUNT(*)::int FROM preauths pa
+                    LEFT JOIN policies pol ON pa.policy_id = pol.id
+                  WHERE pa.status = 'pending' AND pol.insurer_id = ANY($1)) AS pending_preauths,
+                 (SELECT COUNT(*)::int FROM policies WHERE insurer_id = ANY($1) AND status = 'active') AS policies_active`,
+              [insIds]
+            )
+          : Promise.resolve({
+              rows: [
+                {
+                  open_claims: 0,
+                  queried_claims: 0,
+                  approved_claims: 0,
+                  paid_claims: 0,
+                  rejected_claims: 0,
+                  pending_preauths: 0,
+                  policies_active: 0,
+                },
+              ],
+            }),
       ]);
       res.json({
         insurer: insurer.rows[0] || null,
@@ -962,6 +1148,8 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
         policies: policies.rows,
         preauths: preauths.rows,
         claims: claims.rows,
+        stats: stats.rows[0] || {},
+        note: 'Adjudicate claims: approve, query the patient for documents, deny, or mark paid. Patients are notified on each decision.',
       });
     } catch (err) {
       console.error(err);
@@ -975,6 +1163,19 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       const { status, approved_amount, notes } = req.body;
       const allowed = ['pending', 'approved', 'denied'];
       if (status && !allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
+
+      const scopedId =
+        req.user!.role === 'insurance' ? await commercialOrgId('insurer', req.user!.id) : null;
+      if (req.user!.role === 'insurance' && scopedId) {
+        const owned = await query(
+          `SELECT pa.id FROM preauths pa
+           JOIN policies pol ON pa.policy_id = pol.id
+           WHERE pa.id = $1 AND pol.insurer_id = $2`,
+          [req.params.id, scopedId]
+        );
+        if (!owned.rows[0]) return res.status(404).json({ message: 'Preauth not found for your insurer' });
+      }
+
       const result = await query(
         `UPDATE preauths SET
            status = COALESCE($1, status),
@@ -985,7 +1186,20 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
          WHERE id = $5 RETURNING *`,
         [status || null, approved_amount ?? null, notes || null, req.user!.id, req.params.id]
       );
-      res.json(result.rows[0]);
+      const row = result.rows[0];
+      if (row?.patient_id && status && status !== 'pending') {
+        const p = await query('SELECT user_id FROM patients WHERE id = $1', [row.patient_id]);
+        const title =
+          status === 'approved' ? 'Preauth approved' : status === 'denied' ? 'Preauth denied' : 'Preauth updated';
+        const body =
+          status === 'approved'
+            ? `${row.preauth_code} approved for GHS ${row.approved_amount ?? row.requested_amount}.`
+            : status === 'denied'
+              ? `${row.preauth_code} was denied.${notes ? ` ${notes}` : ''}`
+              : `${row.preauth_code} updated.`;
+        await notifyUser(deps, p.rows[0]?.user_id, title, body, 'billing');
+      }
+      res.json(row);
     } catch (err) {
       res.status(500).json({ message: 'Server error' });
     }
@@ -997,20 +1211,61 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
     }
     try {
       const { status, notes } = req.body;
-      const allowed = ['submitted', 'approved', 'paid', 'rejected'];
+      const allowed = ['submitted', 'queried', 'approved', 'paid', 'rejected'];
       if (status && !allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
+
+      const scopedId =
+        req.user!.role === 'insurance' ? await commercialOrgId('insurer', req.user!.id) : null;
+      if (req.user!.role === 'insurance' && scopedId) {
+        const owned = await query(
+          `SELECT c.id FROM claims c
+           LEFT JOIN policies pol ON c.policy_id = pol.id
+           WHERE c.id = $1 AND c.source = 'insurance' AND pol.insurer_id = $2`,
+          [req.params.id, scopedId]
+        );
+        if (!owned.rows[0]) return res.status(404).json({ message: 'Claim not found for your insurer' });
+      }
+
       const result = await query(
         `UPDATE claims SET
            status = COALESCE($1, status),
            notes = COALESCE($2, notes),
-           paid_at = CASE WHEN $1 = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END
-         WHERE id = $3 RETURNING *`,
-        [status || null, notes || null, req.params.id]
+           paid_at = CASE WHEN $1 = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END,
+           adjudicated_by = CASE
+             WHEN $1 IN ('queried', 'approved', 'rejected', 'paid') THEN $3
+             ELSE adjudicated_by
+           END,
+           adjudicated_at = CASE
+             WHEN $1 IN ('queried', 'approved', 'rejected', 'paid') THEN CURRENT_TIMESTAMP
+             ELSE adjudicated_at
+           END
+         WHERE id = $4 RETURNING *`,
+        [status || null, notes || null, req.user!.id, req.params.id]
       );
       const row = result.rows[0];
-      if (row?.patient_id && status === 'paid') {
+      if (row?.patient_id && status) {
         const p = await query('SELECT user_id FROM patients WHERE id = $1', [row.patient_id]);
-        await notifyUser(deps, p.rows[0]?.user_id, 'Claim paid', `${row.claim_code} of GHS ${row.amount} was settled.`, 'billing');
+        let title: string | null = null;
+        let body: string | null = null;
+        if (status === 'approved') {
+          title = 'Claim approved';
+          body = `${row.claim_code} for GHS ${row.amount} was approved and awaits settlement.`;
+        } else if (status === 'rejected') {
+          title = 'Claim denied';
+          body = `${row.claim_code} was denied.${notes ? ` ${notes}` : ''}`;
+        } else if (status === 'queried') {
+          title = 'Claim needs information';
+          body = `${row.claim_code}: insurer requested more details.${notes ? ` ${notes}` : ' Reply via the clinic with supporting documents.'}`;
+        } else if (status === 'paid') {
+          title = 'Claim paid';
+          body = `${row.claim_code} of GHS ${row.amount} was settled.`;
+        } else if (status === 'submitted') {
+          title = 'Claim updated';
+          body = `${row.claim_code} is back in the open queue.`;
+        }
+        if (title && body) {
+          await notifyUser(deps, p.rows[0]?.user_id, title, body, 'billing');
+        }
       }
       res.json(row);
     } catch (err) {

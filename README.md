@@ -65,14 +65,14 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Lab technician | `labtech` / `labtech123` | Lab request lifecycle + result return |
 | Pharmacy | `pharmacy` / `pharm123` | E-prescription fulfilment |
 | Imaging | `imaging` / `image123` | Imaging referrals + reports |
-| Corporate | scheme admin | Eligibility and utilization (no clinical notes) |
-| Insurance | insurer desk | Preauth and claims |
-| Finance | finance | Collections and settlements |
+| Corporate | `corporate` / `corp123` | Staff roster and utilisation (no clinical notes) |
+| Insurance | `insurance` / `insure123` | Claims desk: approve / query / deny / pay |
+| Finance | `finance` / `fin123` | Collections and settlements |
 | Hospital | `hospital` / `hosp123` | Inbound specialist referrals |
 | Admin | `admin` | Staff, doctors, settings, analytics, support, national net |
 | Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
 
-Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `pharmacy`/`pharm123`, `imaging`/`image123`, `hospital`/`hosp123`, `support`/`support123`.
+Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse123`, `medops`/`ops123`, `labtech`/`labtech123`, `pharmacy`/`pharm123`, `imaging`/`image123`, `hospital`/`hosp123`, `support`/`support123`, `corporate`/`corp123`, `insurance`/`insure123`, `finance`/`fin123`.
 
 ## Five phases (one record)
 
@@ -80,7 +80,7 @@ Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse1
 | --- | --- | --- |
 | 1 Consult | Book, Consult Now, video, chat, SOAP | Patient home, doctor queue |
 | 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient journey · Medical Ops board · partner desks |
-| 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership | Payments, Membership |
+| 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership, insurer claims desk | Payments, Membership, Insurance |
 | 4 Household | Family, programs, vault, assistive helper | Family, Care programs |
 | 5 Nation | 16 regions, follow-up, risk alerts, audit | Ghana network, Care phases |
 
@@ -102,6 +102,17 @@ Open **Patient → Care phases** for live counts on all five.
 - **Network tab:** route or re-route lab, imaging, pharmacy, and hospital partners (`GET /api/ops/board`, `PATCH /api/ops/partner-assign`)
 - Partner desks (`labtech`, `pharmacy`, `imaging`, `hospital`) still process fulfilment; Medical Ops owns routing when a facility is missing or wrong
 - Demo seed creates a few unassigned open loops when the network queues are empty so assign can be demonstrated immediately
+
+### Phase 3 — insurance claims desk
+
+- **Login:** `insurance` / `insure123` (Star Health Ghana; tenant-scoped via `org_accounts`)
+- **Also:** `corporate` / `corp123` (GPA staff roster), `finance` / `fin123` (collections + settlements)
+- **Overview:** open / queried / approved / paid / denied claim counts plus pending preauths and active policies
+- **Claims tab:** filter Open → Queried → Approved → Closed; **Approve**, **Query** (notes to patient), **Deny**, **Mark paid**
+- **Preauths tab:** approve or deny pending pre-authorisations
+- Each decision writes an in-app notification (and push when registered) for the patient
+- Demo seed creates open + queried claims (and a pending preauth) when the insurer queue is empty
+- Patient eligibility check / attach cover remains on Patient → Payments (`DEMO-SHG-1001`, `GPA-STAFF-9001`, …)
 
 ### Phase 4 flows
 
