@@ -2,7 +2,13 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from './db';
-import { checkOtpRateLimit, recordOtpFailure, assertAppointmentAccess } from './authz';
+import {
+  checkOtpRateLimit,
+  recordOtpFailure,
+  assertAppointmentAccess,
+  getDoctorForUser,
+  serializeAppointment,
+} from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import { getActiveMembership } from './membership';
@@ -258,6 +264,15 @@ export async function initPhase1Schema() {
       sender_name VARCHAR(100),
       body TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_thread_reads (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      appointment_id INTEGER NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+      last_read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, appointment_id)
     );
   `);
 
@@ -1223,6 +1238,127 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     }
   });
 
+  async function accessibleChatAppointmentsSql(user: { id: number; role: string }) {
+    if (['admin', 'medical_ops', 'nurse'].includes(user.role)) {
+      return { where: `a.status <> 'cancelled'`, params: [] as unknown[] };
+    }
+    if (user.role === 'doctor') {
+      const doc = await getDoctorForUser(user.id);
+      return {
+        where: `a.status <> 'cancelled' AND a.doctor_id = $1`,
+        params: [doc?.id ?? -1] as unknown[],
+      };
+    }
+    const ids = await getAccessiblePatientIds(user.id);
+    const userRow = await query('SELECT phone_number FROM users WHERE id = $1', [user.id]);
+    const phone = userRow.rows[0]?.phone_number || '';
+    return {
+      where: `a.status <> 'cancelled' AND (a.patient_id = ANY($1::int[]) OR a.phone_number = $2)`,
+      params: [ids, phone] as unknown[],
+    };
+  }
+
+  app.get('/api/chat/me/threads', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const access = await accessibleChatAppointmentsSql(req.user!);
+      const userParamIndex = access.params.length + 1;
+      const result = await query(
+        `SELECT
+           a.*,
+           d.name AS doctor_name,
+           lm.body AS last_body,
+           lm.sender_name AS last_sender_name,
+           lm.created_at AS last_created_at,
+           COALESCE((
+             SELECT COUNT(*)::int
+             FROM chat_messages cm
+             WHERE cm.appointment_id = a.id
+               AND cm.sender_id IS DISTINCT FROM $${userParamIndex}
+               AND cm.created_at > COALESCE(ctr.last_read_at, TIMESTAMP '1970-01-01')
+           ), 0) AS unread_count
+         FROM appointments a
+         LEFT JOIN doctors d ON a.doctor_id = d.id
+         LEFT JOIN chat_thread_reads ctr
+           ON ctr.appointment_id = a.id AND ctr.user_id = $${userParamIndex}
+         LEFT JOIN LATERAL (
+           SELECT body, sender_name, created_at
+           FROM chat_messages
+           WHERE appointment_id = a.id
+           ORDER BY created_at DESC
+           LIMIT 1
+         ) lm ON TRUE
+         WHERE ${access.where}
+         ORDER BY COALESCE(lm.created_at, a.created_at, a.preferred_date::timestamp) DESC NULLS LAST
+         LIMIT 80`,
+        [...access.params, userId]
+      );
+      res.json(
+        result.rows.map((row) => {
+          const apt = serializeAppointment(row);
+          return {
+            appointment: apt,
+            last_message: row.last_body
+              ? `${row.last_sender_name || 'Care team'}: ${row.last_body}`
+              : 'Tap to start a clinical message',
+            last_created_at: row.last_created_at || null,
+            unread_count: Number(row.unread_count) || 0,
+          };
+        })
+      );
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/chat/me/unread-count', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const access = await accessibleChatAppointmentsSql(req.user!);
+      const userParamIndex = access.params.length + 1;
+      const result = await query(
+        `SELECT COALESCE(SUM(thread_unread), 0)::int AS count
+         FROM (
+           SELECT (
+             SELECT COUNT(*)::int
+             FROM chat_messages cm
+             WHERE cm.appointment_id = a.id
+               AND cm.sender_id IS DISTINCT FROM $${userParamIndex}
+               AND cm.created_at > COALESCE(ctr.last_read_at, TIMESTAMP '1970-01-01')
+           ) AS thread_unread
+           FROM appointments a
+           LEFT JOIN chat_thread_reads ctr
+             ON ctr.appointment_id = a.id AND ctr.user_id = $${userParamIndex}
+           WHERE ${access.where}
+         ) t`,
+        [...access.params, userId]
+      );
+      res.json({ count: result.rows[0]?.count ?? 0 });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.patch('/api/chat/:appointmentId/read', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const apt = await assertAppointmentAccess(req, res, String(req.params.appointmentId));
+      if (!apt) return;
+      await query(
+        `INSERT INTO chat_thread_reads (user_id, appointment_id, last_read_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id, appointment_id)
+         DO UPDATE SET last_read_at = EXCLUDED.last_read_at`,
+        [req.user!.id, apt.id]
+      );
+      res.json({ message: 'Chat marked as read' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
   app.get('/api/chat/:appointmentId', authenticate, async (req: AuthedRequest, res) => {
     try {
       const apt = await assertAppointmentAccess(req, res, String(req.params.appointmentId));
@@ -1248,6 +1384,14 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         `INSERT INTO chat_messages (appointment_id, sender_id, sender_role, sender_name, body)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [req.params.appointmentId, req.user!.id, req.user!.role, user.rows[0]?.name || req.user!.username, body]
+      );
+      // Sender has seen their own thread through the latest message.
+      await query(
+        `INSERT INTO chat_thread_reads (user_id, appointment_id, last_read_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id, appointment_id)
+         DO UPDATE SET last_read_at = EXCLUDED.last_read_at`,
+        [req.user!.id, apt.id]
       );
       res.status(201).json(result.rows[0]);
     } catch (err) {

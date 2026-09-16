@@ -31,6 +31,8 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  int _unreadChats = 0;
+  Timer? _chatBadgeTimer;
 
   final List<Widget> _screens = [
     const DashboardView(),
@@ -38,6 +40,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const MessagesView(),
     const ProfileView(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshChatBadge();
+    _chatBadgeTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted) return;
+      _refreshChatBadge();
+    });
+  }
+
+  @override
+  void dispose() {
+    _chatBadgeTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshChatBadge() async {
+    try {
+      final count = await context.read<CareRepository>().unreadChatCount();
+      if (mounted) setState(() => _unreadChats = count);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +115,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     const labels = ['Home', 'Visits', 'Messages', 'You'];
                     final isActive = _currentIndex == index;
                     return GestureDetector(
-                      onTap: () => setState(() => _currentIndex = index),
+                      onTap: () {
+                        setState(() => _currentIndex = index);
+                        if (index == 2) _refreshChatBadge();
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 240),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -101,10 +129,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              isActive ? activeIcons[index] : icons[index],
-                              color: isActive ? Colors.black : AdminPalette.mute,
-                              size: 22,
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Icon(
+                                  isActive ? activeIcons[index] : icons[index],
+                                  color: isActive ? Colors.black : AdminPalette.mute,
+                                  size: 22,
+                                ),
+                                if (index == 2 && _unreadChats > 0)
+                                  Positioned(
+                                    right: -8,
+                                    top: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: AdminPalette.cyan,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        _unreadChats > 99 ? '99+' : '$_unreadChats',
+                                        style: adminSans(size: 9, weight: FontWeight.w800, color: Colors.black),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -1722,11 +1771,13 @@ class _MessageThread {
     required this.appointment,
     required this.lastMessage,
     required this.timeLabel,
+    this.unreadCount = 0,
   });
 
   final Appointment appointment;
   final String lastMessage;
   final String timeLabel;
+  final int unreadCount;
 }
 
 class MessagesView extends StatefulWidget {
@@ -1746,47 +1797,76 @@ class _MessagesViewState extends State<MessagesView> {
     _load();
   }
 
+  String _timeLabelFor(String? stamp, Appointment apt) {
+    if (stamp != null && stamp.length >= 16) {
+      return stamp.substring(11, 16);
+    }
+    return apt.preferredDate.split('T').first;
+  }
+
   Future<void> _load() async {
     try {
-      final apts = await context.read<AppointmentsRepository>().getMyAppointments();
       final care = context.read<CareRepository>();
-      final open = apts.where((a) => a.status != 'cancelled').toList();
-      final previews = await Future.wait(open.map((apt) async {
-        try {
-          final msgs = await care.getChat(apt.id);
-          if (msgs.isEmpty) {
-            return _MessageThread(
-              appointment: apt,
-              lastMessage: 'Tap to start a clinical message',
-              timeLabel: apt.preferredDate.split('T').first,
-            );
-          }
-          final last = msgs.last;
-          final stamp = last.createdAt;
-          final timeLabel = stamp.length >= 16
-              ? stamp.substring(11, 16)
-              : apt.preferredDate.split('T').first;
-          return _MessageThread(
+      final rows = await care.getChatThreads();
+      final previews = <_MessageThread>[];
+      for (final row in rows) {
+        final rawApt = row['appointment'];
+        if (rawApt is! Map) continue;
+        final apt = Appointment.fromJson(Map<String, dynamic>.from(rawApt));
+        final unread = row['unread_count'];
+        previews.add(
+          _MessageThread(
             appointment: apt,
-            lastMessage: '${last.senderName}: ${last.body}',
-            timeLabel: timeLabel,
-          );
-        } catch (_) {
-          return _MessageThread(
-            appointment: apt,
-            lastMessage: apt.consultType ?? apt.service ?? 'Consultation thread',
-            timeLabel: apt.preferredDate.split('T').first,
-          );
-        }
-      }));
+            lastMessage: row['last_message']?.toString() ?? 'Tap to start a clinical message',
+            timeLabel: _timeLabelFor(row['last_created_at']?.toString(), apt),
+            unreadCount: unread is int ? unread : int.tryParse(unread?.toString() ?? '') ?? 0,
+          ),
+        );
+      }
       if (!mounted) return;
       setState(() {
         _threads = previews;
         _loading = false;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      // Fallback to appointment list if threads endpoint is not live yet.
+      try {
+        final apts = await context.read<AppointmentsRepository>().getMyAppointments();
+        final care = context.read<CareRepository>();
+        final open = apts.where((a) => a.status != 'cancelled').toList();
+        final previews = await Future.wait(open.map((apt) async {
+          try {
+            final msgs = await care.getChat(apt.id);
+            if (msgs.isEmpty) {
+              return _MessageThread(
+                appointment: apt,
+                lastMessage: 'Tap to start a clinical message',
+                timeLabel: apt.preferredDate.split('T').first,
+              );
+            }
+            final last = msgs.last;
+            return _MessageThread(
+              appointment: apt,
+              lastMessage: '${last.senderName}: ${last.body}',
+              timeLabel: _timeLabelFor(last.createdAt, apt),
+            );
+          } catch (_) {
+            return _MessageThread(
+              appointment: apt,
+              lastMessage: apt.consultType ?? apt.service ?? 'Consultation thread',
+              timeLabel: apt.preferredDate.split('T').first,
+            );
+          }
+        }));
+        if (!mounted) return;
+        setState(() {
+          _threads = previews;
+          _loading = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -1826,7 +1906,7 @@ class _MessagesViewState extends State<MessagesView> {
                               name: name,
                               lastMessage: thread.lastMessage,
                               time: thread.timeLabel,
-                              unreadCount: 0,
+                              unreadCount: thread.unreadCount,
                               onTap: () async {
                                 await Navigator.of(context).push(MaterialPageRoute(
                                   builder: (_) => ClinicalChatScreen(appointment: apt),

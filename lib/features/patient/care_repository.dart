@@ -102,6 +102,22 @@ class CareRepository {
     return ChatMessage.fromJson(res.data ?? {});
   }
 
+  Future<List<Map<String, dynamic>>> getChatThreads() async {
+    final res = await _api.dio.get<List<dynamic>>('/api/chat/me/threads');
+    return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<int> unreadChatCount() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/chat/me/unread-count');
+    final count = res.data?['count'];
+    if (count is int) return count;
+    return int.tryParse(count?.toString() ?? '') ?? 0;
+  }
+
+  Future<void> markChatRead(int appointmentId) async {
+    await _api.dio.patch('/api/chat/$appointmentId/read');
+  }
+
   Future<List<Map<String, dynamic>>> myNotifications() async {
     final res = await _api.dio.get<List<dynamic>>('/api/notifications/me');
     return (res.data ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();

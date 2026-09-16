@@ -38,8 +38,11 @@ class _ClinicalChatScreenState extends State<ClinicalChatScreen> {
 
   Future<void> _refresh() async {
     try {
-      final list = await context.read<CareRepository>().getChat(widget.appointment.id);
+      final care = context.read<CareRepository>();
+      final list = await care.getChat(widget.appointment.id);
       if (mounted) setState(() => _messages = list);
+      // Mark thread read after a successful fetch so badges clear when opened.
+      unawaited(care.markChatRead(widget.appointment.id));
     } catch (_) {}
   }
 
