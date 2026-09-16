@@ -104,6 +104,16 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           if (_eligibility['payer_name'] != null)
                             Text(_eligibility['payer_name'].toString(), style: GoogleFonts.dmSans(color: digiSlate)),
                           const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: () => context.push('/patient/coverage'),
+                            icon: const Icon(Icons.health_and_safety_outlined, size: 18),
+                            label: const Text('Check insurance / corporate cover'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: digiForest,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: () => context.push('/patient/membership'),
                             child: const Text('Classic · Premium · Gold · Diamond'),

@@ -128,14 +128,14 @@ export function registerPhaseOverviewRoutes(app: Express) {
         {
           id: 3,
           name: 'Cover',
-          title: 'Pay and membership',
+          title: 'Insurance, corporate & membership',
           summary: eligibility.source === 'self_pay'
-            ? `Self pay · copay GHS ${eligibility.copay}. Classic to Diamond lowers this.`
+            ? `Self pay · GHS ${eligibility.copay}. Check insurance/corporate or join Classic–Diamond.`
             : `${eligibility.plan_name || eligibility.payer_name} · copay GHS ${eligibility.copay}`,
-          route: '/patient/membership',
+          route: '/patient/coverage',
           open: 0,
-          total: membership ? 1 : 0,
-          status: membership ? 'active' : 'ready',
+          total: membership || eligibility.eligible ? 1 : 0,
+          status: eligibility.eligible || membership ? 'active' : 'ready',
         },
         {
           id: 4,

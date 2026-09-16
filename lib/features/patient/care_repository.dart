@@ -234,6 +234,43 @@ class CareRepository {
     return res.data ?? {};
   }
 
+  Future<Map<String, dynamic>> billingPayers() async {
+    final res = await _api.dio.get<Map<String, dynamic>>('/api/billing/payers');
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> checkEligibility({
+    required String source,
+    required String memberKey,
+    int? payerId,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/billing/eligibility/check',
+      data: {
+        'source': source,
+        'member_key': memberKey,
+        if (payerId != null) 'payer_id': payerId,
+      },
+    );
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> attachCoverage({
+    required String source,
+    required String memberKey,
+    int? payerId,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/billing/coverage/attach',
+      data: {
+        'source': source,
+        'member_key': memberKey,
+        if (payerId != null) 'payer_id': payerId,
+      },
+    );
+    return res.data ?? {};
+  }
+
   Future<Map<String, dynamic>> corporateDashboard() async {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/corporate/dashboard');
     return res.data ?? {};

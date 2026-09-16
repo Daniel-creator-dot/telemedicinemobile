@@ -169,9 +169,22 @@ class _PhasesScreenState extends State<PhasesScreen> {
                         ),
                       if (elig.isNotEmpty) ...[
                         const SizedBox(height: 16),
-                        Text(
-                          'Cover now: ${elig['source'] ?? 'self_pay'} · copay GHS ${elig['copay'] ?? 50}',
-                          style: GoogleFonts.dmSans(color: digiSlate, fontWeight: FontWeight.w600),
+                        DigiCard(
+                          onTap: () => context.push('/patient/coverage'),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Cover now: ${elig['source'] ?? 'self_pay'} · copay GHS ${elig['copay'] ?? 50}',
+                                style: GoogleFonts.dmSans(color: digiSlate, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tap to check insurance or corporate eligibility',
+                                style: GoogleFonts.dmSans(color: digiForest, fontSize: 13),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ],

@@ -576,6 +576,7 @@ class _DashboardViewState extends State<DashboardView> {
                 _CareChip(label: 'Find a doctor', icon: Icons.medical_services_outlined, onTap: () => context.push('/patient/doctors')),
                 _CareChip(label: 'Ghana network', icon: Icons.map_outlined, onTap: () => context.push('/patient/network')),
                 _CareChip(label: 'Payments', icon: Icons.receipt_long_outlined, onTap: () => context.push('/patient/payments')),
+                _CareChip(label: 'Insurance cover', icon: Icons.health_and_safety_outlined, onTap: () => context.push('/patient/coverage')),
                 _CareChip(label: 'Membership', icon: Icons.workspace_premium_outlined, onTap: () => context.push('/patient/membership')),
                 _CareChip(label: 'Follow-up', icon: Icons.event_available_outlined, onTap: () => context.push('/patient/followups')),
                 _CareChip(label: 'Help', icon: Icons.support_agent_outlined, onTap: () => context.push('/patient/support')),

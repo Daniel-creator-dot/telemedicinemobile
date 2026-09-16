@@ -279,7 +279,7 @@ class NotificationService {
       case 'referral':
         return '/patient/phases';
       case 'billing':
-        return '/patient/payments';
+        return '/patient/coverage';
       case 'account':
         return '/patient/profile';
       case 'appointment':

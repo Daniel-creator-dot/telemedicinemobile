@@ -33,6 +33,7 @@ import '../features/patient/symptom_helper_screen.dart';
 import '../features/patient/national_network_screen.dart';
 import '../features/patient/family_chart_screen.dart';
 import '../features/patient/payments_screen.dart';
+import '../features/patient/coverage_screen.dart';
 import '../features/patient/membership_screen.dart';
 import '../features/patient/phases_screen.dart';
 import '../features/patient/support_screen.dart';
@@ -128,6 +129,7 @@ GoRouter createAppRouter(Session session) {
           GoRoute(path: 'symptom-helper', builder: (context, state) => const SymptomHelperScreen()),
           GoRoute(path: 'network', builder: (context, state) => const NationalNetworkScreen()),
           GoRoute(path: 'payments', builder: (context, state) => const PaymentsScreen()),
+          GoRoute(path: 'coverage', builder: (context, state) => const CoverageScreen()),
           GoRoute(path: 'membership', builder: (context, state) => const MembershipScreen()),
           GoRoute(path: 'phases', builder: (context, state) => const PhasesScreen()),
           GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),

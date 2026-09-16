@@ -161,6 +161,21 @@ export async function initPhase3Schema() {
     END $$;
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS coverage_directory (
+      id SERIAL PRIMARY KEY,
+      source VARCHAR(20) NOT NULL,
+      insurer_id INTEGER REFERENCES insurers(id) ON DELETE CASCADE,
+      corporate_id INTEGER REFERENCES corporates(id) ON DELETE CASCADE,
+      member_key VARCHAR(80) NOT NULL,
+      member_name VARCHAR(160),
+      status VARCHAR(20) DEFAULT 'eligible',
+      claimed_patient_id INTEGER REFERENCES patients(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(source, member_key)
+    );
+  `);
+
   await seedCommercial();
   console.log('Phase 3 schema ready');
 }
@@ -212,6 +227,43 @@ async function seedCommercial() {
       );
     }
   }
+
+  await seedCoverageDirectory();
+}
+
+async function seedCoverageDirectory() {
+  const count = await query('SELECT COUNT(*) FROM coverage_directory');
+  if (parseInt(count.rows[0].count, 10) > 0) return;
+
+  const star = await query("SELECT id FROM insurers WHERE name = 'Star Health Ghana' LIMIT 1");
+  const nhis = await query("SELECT id FROM insurers WHERE name = 'NHIS Partner Desk' LIMIT 1");
+  const gpa = await query("SELECT id FROM corporates WHERE name = 'Ghana Ports Authority' LIMIT 1");
+  const cocoa = await query("SELECT id FROM corporates WHERE name = 'Cocoa Board Staff Scheme' LIMIT 1");
+
+  const rows: Array<[string, number | null, number | null, string, string]> = [];
+  if (star.rows[0]) {
+    rows.push(['insurance', star.rows[0].id, null, 'DEMO-SHG-1001', 'Ama Mensah']);
+    rows.push(['insurance', star.rows[0].id, null, 'DEMO-SHG-1002', 'Kofi Asante']);
+  }
+  if (nhis.rows[0]) {
+    rows.push(['insurance', nhis.rows[0].id, null, 'DEMO-NHIS-2001', 'Efua Boateng']);
+  }
+  if (gpa.rows[0]) {
+    rows.push(['corporate', null, gpa.rows[0].id, 'GPA-STAFF-9001', 'Yaw Oppong']);
+    rows.push(['corporate', null, gpa.rows[0].id, 'GPA-STAFF-9002', 'Abena Darko']);
+  }
+  if (cocoa.rows[0]) {
+    rows.push(['corporate', null, cocoa.rows[0].id, 'COCOA-STAFF-5001', 'Kwaku Frimpong']);
+  }
+
+  for (const [source, insurerId, corporateId, memberKey, memberName] of rows) {
+    await query(
+      `INSERT INTO coverage_directory (source, insurer_id, corporate_id, member_key, member_name, status)
+       VALUES ($1,$2,$3,$4,$5,'eligible') ON CONFLICT DO NOTHING`,
+      [source, insurerId, corporateId, memberKey, memberName]
+    );
+  }
+  if (rows.length) console.log('Seeded claimable coverage directory for eligibility demos');
 }
 
 async function ensureUser(username: string, password: string, role: string, name: string, phone: string) {
@@ -314,6 +366,281 @@ export async function getEligibility(patientId: number) {
   };
 }
 
+function coveragePreviewFromInsurer(insurer: any, memberKey: string, memberName?: string | null) {
+  const fee = CONSULT_FEE;
+  const copay = money(insurer.copay_amount, 10);
+  return {
+    source: 'insurance',
+    eligible: true,
+    consult_fee: fee,
+    copay,
+    covered_amount: Math.max(0, fee - copay),
+    coverage_percent: money(insurer.coverage_percent, 80),
+    payer_name: insurer.name,
+    plan_name: insurer.plan_name,
+    policy_number: memberKey,
+    member_name: memberName || null,
+    insurer_id: insurer.id,
+    corporate_id: null,
+  };
+}
+
+function coveragePreviewFromCorporate(corp: any, memberKey: string, memberName?: string | null) {
+  const fee = CONSULT_FEE;
+  const copay = money(corp.copay_amount, 20);
+  return {
+    source: 'corporate',
+    eligible: true,
+    consult_fee: fee,
+    copay,
+    covered_amount: Math.max(0, fee - copay),
+    coverage_percent: money(corp.coverage_percent, 60),
+    payer_name: corp.name,
+    plan_name: 'Staff medical scheme',
+    policy_number: memberKey,
+    member_name: memberName || null,
+    insurer_id: null,
+    corporate_id: corp.id,
+  };
+}
+
+async function lookupCoverageCheck(opts: {
+  source: 'insurance' | 'corporate';
+  memberKey: string;
+  payerId?: number | null;
+  patientId: number;
+}) {
+  const key = opts.memberKey.trim().toUpperCase();
+  if (!key) {
+    return { matched: false, eligible: false, can_attach: false, message: 'Enter a policy or staff ID.', preview: null };
+  }
+
+  if (opts.source === 'insurance') {
+    const mine = await query(
+      `SELECT p.*, i.name as insurer_name, i.plan_name, i.coverage_percent, i.copay_amount
+       FROM policies p JOIN insurers i ON p.insurer_id = i.id
+       WHERE p.patient_id = $1 AND UPPER(p.policy_number) = $2 AND p.status = 'active'
+       LIMIT 1`,
+      [opts.patientId, key]
+    );
+    if (mine.rows[0]) {
+      const row = mine.rows[0];
+      return {
+        matched: true,
+        eligible: true,
+        can_attach: false,
+        already_linked: true,
+        message: 'This policy is already on your account.',
+        preview: coveragePreviewFromInsurer(
+          {
+            id: row.insurer_id,
+            name: row.insurer_name,
+            plan_name: row.plan_name,
+            coverage_percent: row.coverage_percent,
+            copay_amount: row.copay_amount,
+          },
+          row.policy_number
+        ),
+      };
+    }
+
+    const taken = await query(
+      `SELECT id, patient_id FROM policies WHERE UPPER(policy_number) = $1 AND status = 'active' LIMIT 1`,
+      [key]
+    );
+    if (taken.rows[0] && taken.rows[0].patient_id !== opts.patientId) {
+      return {
+        matched: true,
+        eligible: false,
+        can_attach: false,
+        message: 'This policy number is already linked to another patient.',
+        preview: null,
+      };
+    }
+
+    const dir = await query(
+      `SELECT d.*, i.name, i.plan_name, i.coverage_percent, i.copay_amount, i.id as insurer_pk
+       FROM coverage_directory d
+       JOIN insurers i ON d.insurer_id = i.id
+       WHERE d.source = 'insurance' AND UPPER(d.member_key) = $1
+         AND i.is_active = TRUE
+         AND ($2::int IS NULL OR d.insurer_id = $2)
+       LIMIT 1`,
+      [key, opts.payerId || null]
+    );
+    if (dir.rows[0]) {
+      const d = dir.rows[0];
+      if (d.status === 'claimed' && d.claimed_patient_id && d.claimed_patient_id !== opts.patientId) {
+        return {
+          matched: true,
+          eligible: false,
+          can_attach: false,
+          message: 'This policy was already claimed by another member.',
+          preview: null,
+        };
+      }
+      const alreadyMine = d.claimed_patient_id === opts.patientId;
+      return {
+        matched: true,
+        eligible: true,
+        can_attach: !alreadyMine,
+        already_linked: alreadyMine,
+        message: alreadyMine
+          ? 'Covered — this policy is on your chart.'
+          : 'Eligible — attach this insurance to use the copay on booking and Consult Now.',
+        preview: coveragePreviewFromInsurer(
+          {
+            id: d.insurer_pk,
+            name: d.name,
+            plan_name: d.plan_name,
+            coverage_percent: d.coverage_percent,
+            copay_amount: d.copay_amount,
+          },
+          d.member_key,
+          d.member_name
+        ),
+        directory_id: d.id,
+      };
+    }
+
+    return {
+      matched: false,
+      eligible: false,
+      can_attach: false,
+      message: 'No active insurance match for that policy number.',
+      preview: null,
+    };
+  }
+
+  const mineCorp = await query(
+    `SELECT m.*, c.name as corporate_name, c.coverage_percent, c.copay_amount
+     FROM corporate_members m JOIN corporates c ON m.corporate_id = c.id
+     WHERE m.patient_id = $1 AND UPPER(COALESCE(m.staff_id,'')) = $2 AND m.status = 'active'
+     LIMIT 1`,
+    [opts.patientId, key]
+  );
+  if (mineCorp.rows[0]) {
+    const row = mineCorp.rows[0];
+    return {
+      matched: true,
+      eligible: true,
+      can_attach: false,
+      already_linked: true,
+      message: 'This staff ID is already on your corporate scheme.',
+      preview: coveragePreviewFromCorporate(
+        {
+          id: row.corporate_id,
+          name: row.corporate_name,
+          coverage_percent: row.coverage_percent,
+          copay_amount: row.copay_amount,
+        },
+        row.staff_id
+      ),
+    };
+  }
+
+  const dir = await query(
+    `SELECT d.*, c.name, c.coverage_percent, c.copay_amount, c.id as corporate_pk
+     FROM coverage_directory d
+     JOIN corporates c ON d.corporate_id = c.id
+     WHERE d.source = 'corporate' AND UPPER(d.member_key) = $1
+       AND c.is_active = TRUE
+       AND ($2::int IS NULL OR d.corporate_id = $2)
+     LIMIT 1`,
+    [key, opts.payerId || null]
+  );
+  if (dir.rows[0]) {
+    const d = dir.rows[0];
+    if (d.status === 'claimed' && d.claimed_patient_id && d.claimed_patient_id !== opts.patientId) {
+      return {
+        matched: true,
+        eligible: false,
+        can_attach: false,
+        message: 'This staff ID was already claimed by another employee.',
+        preview: null,
+      };
+    }
+    const alreadyMine = d.claimed_patient_id === opts.patientId;
+    return {
+      matched: true,
+      eligible: true,
+      can_attach: !alreadyMine,
+      already_linked: alreadyMine,
+      message: alreadyMine
+        ? 'Covered — corporate scheme is on your chart.'
+        : 'Eligible — attach this corporate scheme to lower your consult copay.',
+      preview: coveragePreviewFromCorporate(
+        {
+          id: d.corporate_pk,
+          name: d.name,
+          coverage_percent: d.coverage_percent,
+          copay_amount: d.copay_amount,
+        },
+        d.member_key,
+        d.member_name
+      ),
+      directory_id: d.id,
+    };
+  }
+
+  return {
+    matched: false,
+    eligible: false,
+    can_attach: false,
+    message: 'No active corporate match for that staff ID.',
+    preview: null,
+  };
+}
+
+async function attachCoverageFromDirectory(patientId: number, check: Awaited<ReturnType<typeof lookupCoverageCheck>>) {
+  if (!check.can_attach || !check.preview) {
+    throw Object.assign(new Error(check.message || 'Cannot attach'), { status: 400 });
+  }
+  const preview = check.preview;
+  const key = String(preview.policy_number || '').trim();
+
+  if (preview.source === 'insurance') {
+    await query(
+      `UPDATE policies SET status = 'inactive' WHERE patient_id = $1 AND status = 'active'`,
+      [patientId]
+    );
+    const existing = await query('SELECT id FROM policies WHERE UPPER(policy_number) = $1 LIMIT 1', [key.toUpperCase()]);
+    if (existing.rows[0]) {
+      await query(
+        `UPDATE policies SET patient_id = $1, insurer_id = $2, status = 'active',
+           ends_on = CURRENT_DATE + INTERVAL '1 year'
+         WHERE id = $3`,
+        [patientId, preview.insurer_id, existing.rows[0].id]
+      );
+    } else {
+      await query(
+        `INSERT INTO policies (insurer_id, patient_id, policy_number, status, ends_on)
+         VALUES ($1,$2,$3,'active', CURRENT_DATE + INTERVAL '1 year')`,
+        [preview.insurer_id, patientId, key]
+      );
+    }
+  } else {
+    await query(
+      `INSERT INTO corporate_members (corporate_id, patient_id, staff_id, department, status)
+       VALUES ($1,$2,$3,'Self-enrolled','active')
+       ON CONFLICT (corporate_id, patient_id) DO UPDATE
+         SET status = 'active', staff_id = EXCLUDED.staff_id`,
+      [preview.corporate_id, patientId, key]
+    );
+  }
+
+  if ((check as any).directory_id) {
+    await query(
+      `UPDATE coverage_directory
+       SET status = 'claimed', claimed_patient_id = $1
+       WHERE id = $2`,
+      [patientId, (check as any).directory_id]
+    );
+  }
+
+  return getEligibility(patientId);
+}
+
 export async function recordVisitPayment(
   appointmentId: number,
   patientId: number | null,
@@ -398,6 +725,104 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/billing/payers', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const [insurers, corporates] = await Promise.all([
+        query(
+          `SELECT id, name, plan_name, coverage_percent, copay_amount, region
+           FROM insurers WHERE is_active = TRUE ORDER BY name`
+        ),
+        query(
+          `SELECT id, name, industry, coverage_percent, copay_amount, region, town
+           FROM corporates WHERE is_active = TRUE ORDER BY name`
+        ),
+      ]);
+      res.json({
+        insurers: insurers.rows,
+        corporates: corporates.rows,
+        demo_hints: [
+          { source: 'insurance', member_key: 'DEMO-SHG-1001', label: 'Star Health demo policy' },
+          { source: 'insurance', member_key: 'DEMO-NHIS-2001', label: 'NHIS demo policy' },
+          { source: 'corporate', member_key: 'GPA-STAFF-9001', label: 'GPA staff ID' },
+          { source: 'corporate', member_key: 'COCOA-STAFF-5001', label: 'Cocoa Board staff ID' },
+        ],
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.post('/api/billing/eligibility/check', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const patient = await getPatientForUser(req.user!.id);
+      if (!patient?.id) return res.status(400).json({ message: 'Patient profile required' });
+
+      const source = String(req.body.source || 'insurance').toLowerCase();
+      if (source !== 'insurance' && source !== 'corporate') {
+        return res.status(400).json({ message: 'source must be insurance or corporate' });
+      }
+      const memberKey = String(req.body.member_key || req.body.policy_number || req.body.staff_id || '').trim();
+      const payerId = req.body.payer_id ? Number(req.body.payer_id) : null;
+
+      const check = await lookupCoverageCheck({
+        source: source as 'insurance' | 'corporate',
+        memberKey,
+        payerId,
+        patientId: patient.id,
+      });
+      const current = await getEligibility(patient.id);
+      res.json({ ...check, current });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.post('/api/billing/coverage/attach', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const patient = await getPatientForUser(req.user!.id);
+      if (!patient?.id) return res.status(400).json({ message: 'Patient profile required' });
+
+      const source = String(req.body.source || 'insurance').toLowerCase();
+      if (source !== 'insurance' && source !== 'corporate') {
+        return res.status(400).json({ message: 'source must be insurance or corporate' });
+      }
+      const memberKey = String(req.body.member_key || req.body.policy_number || req.body.staff_id || '').trim();
+      const payerId = req.body.payer_id ? Number(req.body.payer_id) : null;
+
+      const check = await lookupCoverageCheck({
+        source: source as 'insurance' | 'corporate',
+        memberKey,
+        payerId,
+        patientId: patient.id,
+      });
+
+      if (!check.can_attach) {
+        return res.status(400).json({ message: check.message || 'Cannot attach this cover', check });
+      }
+
+      const eligibility = await attachCoverageFromDirectory(patient.id, check);
+      await notifyUser(
+        deps,
+        req.user!.id,
+        'Cover attached',
+        eligibility.eligible
+          ? `${eligibility.payer_name} · copay GHS ${eligibility.copay} applies to your next visit`
+          : 'Coverage updated',
+        'billing'
+      );
+      res.json({
+        message: 'Coverage attached',
+        eligibility,
+        preview: check.preview,
+      });
+    } catch (err: any) {
+      console.error(err);
+      res.status(err.status || 500).json({ message: err.message || 'Server error' });
     }
   });
 
