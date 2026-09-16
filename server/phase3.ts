@@ -203,6 +203,7 @@ export async function initPhase3Schema() {
   await seedCommercial();
   await seedInsuranceClaimsDesk();
   await seedFinancePaymentsDesk();
+  await seedCorporateUtilisationDesk();
   console.log('Phase 3 schema ready');
 }
 
@@ -487,6 +488,138 @@ async function seedFinancePaymentsDesk() {
   console.log('Seeded finance payments / receipts demo queue');
 }
 
+/** Demo corporate claims so the benefits desk shows utilisation without a live visit. */
+async function seedCorporateUtilisationDesk() {
+  const existing = await query(
+    `SELECT COUNT(*)::int AS n FROM claims WHERE source = 'corporate'`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(existing.rows[0]?.n || 0) >= 2) return;
+
+  const corp = await query("SELECT id, name FROM corporates WHERE name = 'Ghana Ports Authority' LIMIT 1");
+  if (!corp.rows[0]) return;
+
+  let members = await query(
+    `SELECT m.id AS member_id, m.patient_id, m.staff_id, m.department, pt.full_name
+     FROM corporate_members m
+     JOIN patients pt ON pt.id = m.patient_id
+     WHERE m.corporate_id = $1
+     ORDER BY m.id ASC LIMIT 5`,
+    [corp.rows[0].id]
+  );
+
+  if (!members.rows[0]) {
+    const patient = await query('SELECT id, full_name, staff_id FROM patients ORDER BY id ASC LIMIT 2');
+    if (!patient.rows[0]) return;
+    for (let i = 0; i < patient.rows.length; i++) {
+      const p = patient.rows[i];
+      await query(
+        `INSERT INTO corporate_members (corporate_id, patient_id, staff_id, department, status)
+         VALUES ($1, $2, $3, $4, 'active') ON CONFLICT (corporate_id, patient_id) DO NOTHING`,
+        [
+          corp.rows[0].id,
+          p.id,
+          p.staff_id || `GPA-DEMO-${p.id}`,
+          i === 0 ? 'Operations' : 'Finance',
+        ]
+      ).catch(() => null);
+    }
+    members = await query(
+      `SELECT m.id AS member_id, m.patient_id, m.staff_id, m.department, pt.full_name
+       FROM corporate_members m
+       JOIN patients pt ON pt.id = m.patient_id
+       WHERE m.corporate_id = $1
+       ORDER BY m.id ASC LIMIT 5`,
+      [corp.rows[0].id]
+    );
+  }
+  if (!members.rows[0]) return;
+
+  const demos: Array<{
+    amount: number;
+    status: string;
+    notes: string | null;
+    memberIdx: number;
+    copay: number;
+    daysAgo: number;
+  }> = [
+    { amount: 30, status: 'submitted', notes: null, memberIdx: 0, copay: 20, daysAgo: 1 },
+    {
+      amount: 30,
+      status: 'approved',
+      notes: 'Scheme cover for outpatient consult',
+      memberIdx: Math.min(1, members.rows.length - 1),
+      copay: 20,
+      daysAgo: 5,
+    },
+    {
+      amount: 30,
+      status: 'paid',
+      notes: 'Settled against GPA staff medical',
+      memberIdx: 0,
+      copay: 20,
+      daysAgo: 12,
+    },
+  ];
+
+  for (const demo of demos) {
+    const mem = members.rows[demo.memberIdx] || members.rows[0];
+    let appointmentId: number | null = null;
+    const apt = await query(
+      `SELECT id FROM appointments WHERE patient_id = $1 ORDER BY id DESC LIMIT 1`,
+      [mem.patient_id]
+    ).catch(() => ({ rows: [] as any[] }));
+    appointmentId = apt.rows[0]?.id || null;
+
+    if (!appointmentId) {
+      const aptCode = `APT-CORP-${mem.patient_id}-${Date.now().toString(36).slice(-4)}`.toUpperCase();
+      const created = await query(
+        `INSERT INTO appointments (
+           appointment_id, patient_id, full_name, phone_number, email, doctor_id,
+           preferred_date, preferred_time, service, status, payment_status
+         ) VALUES ($1, $2, $3, '0240000000', null, null,
+           CURRENT_DATE - ($4::int), '10:00', 'general consultation', 'completed', 'paid')
+         RETURNING id`,
+        [aptCode, mem.patient_id, mem.full_name || 'Staff Member', demo.daysAgo]
+      ).catch(() => ({ rows: [] as any[] }));
+      appointmentId = created.rows[0]?.id || null;
+    }
+
+    const seq = await query(`SELECT nextval('claim_code_seq') AS n`);
+    const claimCode = `CLM-${String(seq.rows[0].n).padStart(6, '0')}`;
+    const submittedAt = new Date(Date.now() - demo.daysAgo * 24 * 60 * 60 * 1000);
+    await query(
+      `INSERT INTO claims (
+         claim_code, appointment_id, patient_id, corporate_id, source, amount, status, notes, submitted_at, paid_at
+       ) VALUES ($1,$2,$3,$4,'corporate',$5,$6,$7,$8,$9)`,
+      [
+        claimCode,
+        appointmentId,
+        mem.patient_id,
+        corp.rows[0].id,
+        demo.amount,
+        demo.status,
+        demo.notes,
+        submittedAt,
+        demo.status === 'paid' ? submittedAt : null,
+      ]
+    ).catch(() => null);
+
+    if (appointmentId) {
+      const reference = `digihealth_corp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      await query(
+        `INSERT INTO payments (
+           appointment_id, amount, currency, status, reference, gateway,
+           coverage_source, covered_amount, copay_amount
+         ) VALUES ($1, $2, 'GHS', 'paid', $3, 'demo', 'corporate', $4, $5)
+         ON CONFLICT (reference) DO NOTHING`,
+        [appointmentId, demo.copay, reference, demo.amount, demo.copay]
+      ).catch(() => null);
+    }
+  }
+
+  console.log('Seeded corporate utilisation demo claims');
+}
+
 async function seedCoverageDirectory() {
   const count = await query('SELECT COUNT(*) FROM coverage_directory');
   if (parseInt(count.rows[0].count, 10) > 0) return;
@@ -586,12 +719,28 @@ export async function getEligibility(patientId: number) {
     const copay = money(member.rows[0].copay_amount, 20);
     const best = mem && mem.copay < copay ? mem.copay : copay;
     const usedMembership = Boolean(mem && mem.copay < copay);
+    const annualLimit = money(member.rows[0].annual_limit, 3000);
+    const ytd = await query(
+      `SELECT COALESCE(SUM(amount),0) AS spent
+       FROM claims
+       WHERE corporate_id = $1 AND patient_id = $2 AND source = 'corporate'
+         AND status != 'rejected'
+         AND submitted_at >= date_trunc('year', CURRENT_DATE)`,
+      [member.rows[0].corporate_id, patientId]
+    );
+    const spentYtd = money(ytd.rows[0]?.spent, 0);
+    const remaining = Math.max(0, annualLimit - spentYtd);
+    const desiredCovered = usedMembership
+      ? Math.max(0, fee - best)
+      : Math.max(0, fee - best);
+    const coveredAmount = usedMembership ? desiredCovered : Math.min(desiredCovered, remaining);
+    const effectiveCopay = fee - coveredAmount;
     return {
       source: usedMembership ? 'membership' : 'corporate',
       eligible: true,
       consult_fee: fee,
-      copay: best,
-      covered_amount: Math.max(0, fee - best),
+      copay: effectiveCopay,
+      covered_amount: coveredAmount,
       coverage_percent: usedMembership
         ? mem!.coverage_percent
         : money(member.rows[0].coverage_percent, 60),
@@ -602,6 +751,10 @@ export async function getEligibility(patientId: number) {
       corporate_id: usedMembership ? null : member.rows[0].corporate_id,
       member: member.rows[0],
       membership_tier: mem?.membership_tier || null,
+      annual_limit: annualLimit,
+      spent_ytd: spentYtd,
+      limit_remaining: remaining,
+      limit_exhausted: !usedMembership && remaining <= 0,
     };
   }
   if (mem) return mem;
@@ -1104,7 +1257,26 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
         : await query('SELECT * FROM corporates ORDER BY id');
       const corpIds = corp.rows.map((c: { id: number }) => c.id);
       if (req.user!.role === 'corporate' && !scopedId) {
-        return res.json({ corporate: null, members: [], billed: { billed: 0, claims: 0 } });
+        return res.json({
+          corporate: null,
+          members: [],
+          utilisation: [],
+          by_department: [],
+          billed: { billed: 0, claims: 0 },
+          stats: {
+            members_active: 0,
+            members_suspended: 0,
+            members_total: 0,
+            billed_ytd: 0,
+            claims_open: 0,
+            claims_approved: 0,
+            claims_paid: 0,
+            claims_rejected: 0,
+            annual_limit: 0,
+            limit_remaining: 0,
+            copay_collected: 0,
+          },
+        });
       }
       const members = corpIds.length
         ? await query(
@@ -1123,11 +1295,106 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
             [corpIds]
           )
         : { rows: [{ billed: 0, claims: 0 }] };
+
+      const utilisation = corpIds.length
+        ? await query(
+            `SELECT c.id, c.claim_code, c.amount, c.status, c.notes,
+                    c.submitted_at, c.paid_at, c.appointment_id,
+                    a.appointment_id AS apt_code,
+                    pt.full_name, pt.patient_code,
+                    m.staff_id, m.department,
+                    pay.copay_amount, pay.covered_amount, pay.reference AS payment_ref, pay.gateway
+             FROM claims c
+             JOIN patients pt ON pt.id = c.patient_id
+             LEFT JOIN corporate_members m
+               ON m.patient_id = c.patient_id AND m.corporate_id = c.corporate_id
+             LEFT JOIN appointments a ON a.id = c.appointment_id
+             LEFT JOIN LATERAL (
+               SELECT copay_amount, covered_amount, reference, gateway
+               FROM payments
+               WHERE appointment_id = c.appointment_id
+                 AND (coverage_source = 'corporate' OR coverage_source IS NULL)
+               ORDER BY id DESC LIMIT 1
+             ) pay ON true
+             WHERE c.source = 'corporate' AND c.corporate_id = ANY($1)
+             ORDER BY c.submitted_at DESC NULLS LAST, c.id DESC
+             LIMIT 100`,
+            [corpIds]
+          )
+        : { rows: [] as any[] };
+
+      const byDept = corpIds.length
+        ? await query(
+            `SELECT COALESCE(NULLIF(TRIM(m.department), ''), 'Unassigned') AS department,
+                    COUNT(*)::int AS visits,
+                    COALESCE(SUM(c.amount),0) AS billed
+             FROM claims c
+             LEFT JOIN corporate_members m
+               ON m.patient_id = c.patient_id AND m.corporate_id = c.corporate_id
+             WHERE c.source = 'corporate' AND c.status != 'rejected'
+               AND c.corporate_id = ANY($1)
+               AND c.submitted_at >= date_trunc('year', CURRENT_DATE)
+             GROUP BY 1
+             ORDER BY billed DESC`,
+            [corpIds]
+          )
+        : { rows: [] as any[] };
+
+      const primary = corp.rows[0] || null;
+      const annualLimit = money(primary?.annual_limit, 3000);
+      const statsRow = corpIds.length
+        ? await query(
+            `SELECT
+               (SELECT COUNT(*)::int FROM corporate_members WHERE corporate_id = ANY($1) AND status = 'active') AS members_active,
+               (SELECT COUNT(*)::int FROM corporate_members WHERE corporate_id = ANY($1) AND status = 'suspended') AS members_suspended,
+               (SELECT COUNT(*)::int FROM corporate_members WHERE corporate_id = ANY($1)) AS members_total,
+               (SELECT COALESCE(SUM(amount),0) FROM claims
+                 WHERE source = 'corporate' AND status != 'rejected' AND corporate_id = ANY($1)
+                   AND submitted_at >= date_trunc('year', CURRENT_DATE)) AS billed_ytd,
+               (SELECT COUNT(*)::int FROM claims
+                 WHERE source = 'corporate' AND corporate_id = ANY($1) AND status IN ('submitted','queried')) AS claims_open,
+               (SELECT COUNT(*)::int FROM claims
+                 WHERE source = 'corporate' AND corporate_id = ANY($1) AND status = 'approved') AS claims_approved,
+               (SELECT COUNT(*)::int FROM claims
+                 WHERE source = 'corporate' AND corporate_id = ANY($1) AND status = 'paid') AS claims_paid,
+               (SELECT COUNT(*)::int FROM claims
+                 WHERE source = 'corporate' AND corporate_id = ANY($1) AND status = 'rejected') AS claims_rejected,
+               (SELECT COALESCE(SUM(copay_amount),0) FROM payments pay
+                 JOIN appointments a ON a.id = pay.appointment_id
+                 JOIN corporate_members m ON m.patient_id = a.patient_id AND m.corporate_id = ANY($1)
+                 WHERE pay.coverage_source = 'corporate' AND pay.status = 'paid') AS copay_collected`,
+            [corpIds]
+          )
+        : {
+            rows: [
+              {
+                members_active: 0,
+                members_suspended: 0,
+                members_total: 0,
+                billed_ytd: 0,
+                claims_open: 0,
+                claims_approved: 0,
+                claims_paid: 0,
+                claims_rejected: 0,
+                copay_collected: 0,
+              },
+            ],
+          };
+
+      const billedYtd = money(statsRow.rows[0]?.billed_ytd, 0);
       res.json({
-        corporate: corp.rows[0] || null,
+        corporate: primary,
         corporates: corp.rows,
         members: members.rows,
+        utilisation: utilisation.rows,
+        by_department: byDept.rows,
         billed: spend.rows[0],
+        stats: {
+          ...statsRow.rows[0],
+          annual_limit: annualLimit,
+          limit_remaining: Math.max(0, annualLimit - billedYtd),
+        },
+        note: 'Staff roster and visit utilisation — claim amounts only, no clinical notes.',
       });
     } catch (err) {
       console.error(err);
@@ -1166,10 +1433,23 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
   app.patch('/api/corporate/members/:id', authenticate, async (req: AuthedRequest, res) => {
     if (!['corporate', 'admin'].includes(req.user!.role)) return res.status(403).json({ message: 'Forbidden' });
     try {
-      const result = await query(
-        `UPDATE corporate_members SET status = COALESCE($1, status) WHERE id = $2 RETURNING *`,
-        [req.body.status || null, req.params.id]
-      );
+      const status = typeof req.body.status === 'string' ? req.body.status.trim().toLowerCase() : null;
+      if (status && !['active', 'suspended'].includes(status)) {
+        return res.status(400).json({ message: 'status must be active or suspended' });
+      }
+      const scopedId =
+        req.user!.role === 'corporate' ? await commercialOrgId('corporate', req.user!.id) : null;
+      const result = scopedId
+        ? await query(
+            `UPDATE corporate_members SET status = COALESCE($1, status)
+             WHERE id = $2 AND corporate_id = $3 RETURNING *`,
+            [status, req.params.id, scopedId]
+          )
+        : await query(
+            `UPDATE corporate_members SET status = COALESCE($1, status) WHERE id = $2 RETURNING *`,
+            [status, req.params.id]
+          );
+      if (!result.rows[0]) return res.status(404).json({ message: 'Member not found' });
       res.json(result.rows[0]);
     } catch (err) {
       res.status(500).json({ message: 'Server error' });

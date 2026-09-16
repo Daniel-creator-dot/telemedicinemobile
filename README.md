@@ -65,7 +65,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Lab technician | `labtech` / `labtech123` | Lab request lifecycle + result return |
 | Pharmacy | `pharmacy` / `pharm123` | E-prescription fulfilment |
 | Imaging | `imaging` / `image123` | Imaging referrals + reports |
-| Corporate | `corporate` / `corp123` | Staff roster and utilisation (no clinical notes) |
+| Corporate | `corporate` / `corp123` | Staff roster, utilisation ledger, activate/suspend cover |
 | Insurance | `insurance` / `insure123` | Claims desk: approve / query / deny / pay |
 | Finance | `finance` / `fin123` | Receipts, reconcile, settlements |
 | Hospital | `hospital` / `hosp123` | Inbound specialist referrals |
@@ -80,7 +80,7 @@ Default local passwords (change in production): `admin`/`admin`, `nurse`/`nurse1
 | --- | --- | --- |
 | 1 Consult | Book, Consult Now, video, chat, SOAP | Patient home, doctor queue |
 | 2 Network | Labs, imaging, pharmacy, referrals — closed loop | Patient journey · Medical Ops board · partner desks |
-| 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership, insurer claims desk | Payments, Membership, Insurance |
+| 3 Cover | Eligibility, Paystack copay, Classic–Diamond membership, corporate utilisation, insurer claims desk | Payments, Membership, Corporate, Insurance |
 | 4 Household | Family, programs, vault, assistive helper | Family, Care programs |
 | 5 Nation | 16 regions, follow-up, risk alerts, audit | Ghana network, Care phases |
 
@@ -103,10 +103,21 @@ Open **Patient → Care phases** for live counts on all five.
 - Partner desks (`labtech`, `pharmacy`, `imaging`, `hospital`) still process fulfilment; Medical Ops owns routing when a facility is missing or wrong
 - Demo seed creates a few unassigned open loops when the network queues are empty so assign can be demonstrated immediately
 
+### Phase 3 — corporate utilisation desk
+
+- **Login:** `corporate` / `corp123` (Ghana Ports Authority Benefits Desk; tenant-scoped via `org_accounts`)
+- **Overview:** active/suspended headcount, billed YTD vs annual limit remaining, open/approved/paid claims, staff copay collected, spend by department
+- **Roster tab:** enrol by patient ID + optional staff ID/department; **Suspend** / **Activate** cover (org-scoped)
+- **Utilisation tab:** visit-level claim ledger (member, staff ID, covered vs copay, claim status) — **no clinical notes**
+- Annual staff limits reduce covered amount once YTD corporate claims exhaust the scheme limit
+- Demo seed creates open / approved / paid corporate claims when the utilisation queue is empty
+- Patient attach remains on Patient → Payments / Coverage (`GPA-STAFF-9001`, `COCOA-STAFF-5001`, …)
+- APIs: `GET /api/corporate/dashboard` (members + utilisation + stats), `POST /api/corporate/members`, `PATCH /api/corporate/members/:id`
+
 ### Phase 3 — insurance claims desk
 
 - **Login:** `insurance` / `insure123` (Star Health Ghana; tenant-scoped via `org_accounts`)
-- **Also:** `corporate` / `corp123` (GPA staff roster), `finance` / `fin123` (receipts + settlements)
+- **Also:** `corporate` / `corp123` (GPA utilisation desk), `finance` / `fin123` (receipts + settlements)
 - **Overview:** open / queried / approved / paid / denied claim counts plus pending preauths and active policies
 - **Claims tab:** filter Open → Queried → Approved → Closed; **Approve**, **Query** (notes to patient), **Deny**, **Mark paid**
 - **Preauths tab:** approve or deny pending pre-authorisations
