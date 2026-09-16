@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDb, query } from './db';
-import { registerPhase1Routes, getPatientForUser } from './phase1';
+import { registerPhase1Routes, getPatientForUser, buildSlotsForDoctor } from './phase1';
 import {
   registerPhase2Routes,
   assignNearestPartner,
@@ -428,8 +428,14 @@ app.get('/api/appointments', authenticate, async (req: any, res) => {
     } else if (req.user.role === 'patient') {
       const ids = await getAccessiblePatientIds(req.user.id);
       const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
-      queryText += ' WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2';
-      queryParams.push(ids, userResult.rows[0]?.phone_number || '');
+      const phone = String(userResult.rows[0]?.phone_number || '').trim();
+      if (phone) {
+        queryText += ' WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2';
+        queryParams.push(ids, phone);
+      } else {
+        queryText += ' WHERE a.patient_id = ANY($1::int[])';
+        queryParams.push(ids);
+      }
     } else if (!['admin', 'medical_ops', 'nurse'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -447,15 +453,25 @@ app.get('/api/appointments/my', authenticate, async (req: any, res) => {
   try {
     const ids = await getAccessiblePatientIds(req.user.id);
     const userResult = await query('SELECT phone_number FROM users WHERE id = $1', [req.user.id]);
-    const phone = userResult.rows[0]?.phone_number;
+    const phone = String(userResult.rows[0]?.phone_number || '').trim();
 
-    const result = await query(`
-      SELECT a.*, d.name as doctor_name 
-      FROM appointments a 
-      LEFT JOIN doctors d ON a.doctor_id = d.id 
-      WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2
-      ORDER BY a.preferred_date DESC, a.preferred_time DESC
-    `, [ids, phone || '']);
+    const result = phone
+      ? await query(
+          `SELECT a.*, d.name as doctor_name 
+           FROM appointments a 
+           LEFT JOIN doctors d ON a.doctor_id = d.id 
+           WHERE (a.patient_id = ANY($1::int[])) OR a.phone_number = $2
+           ORDER BY a.preferred_date DESC, a.preferred_time DESC`,
+          [ids, phone]
+        )
+      : await query(
+          `SELECT a.*, d.name as doctor_name 
+           FROM appointments a 
+           LEFT JOIN doctors d ON a.doctor_id = d.id 
+           WHERE a.patient_id = ANY($1::int[])
+           ORDER BY a.preferred_date DESC, a.preferred_time DESC`,
+          [ids]
+        );
     res.json(result.rows.map(serializeAppointment));
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -532,6 +548,32 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
       return res.status(400).json({ message: 'Unknown doctor. Pick a clinician from the directory.' });
     }
 
+    const bookingType = booking_type || 'scheduled';
+    if (resolvedDoctorId && preferredDate && preferredTime && bookingType !== 'consult_now') {
+      const slotLabel = String(preferredTime).slice(0, 5);
+      const clash = await query(
+        `SELECT id FROM appointments
+         WHERE doctor_id = $1
+           AND preferred_date = $2
+           AND LEFT(preferred_time::text, 5) = $3
+           AND status NOT IN ('cancelled', 'missed')
+         LIMIT 1`,
+        [resolvedDoctorId, preferredDate, slotLabel]
+      );
+      if (clash.rows[0]) {
+        return res.status(409).json({ message: 'That time slot is already booked. Pick another slot.' });
+      }
+      const doctorRow = await query('SELECT * FROM doctors WHERE id = $1', [resolvedDoctorId]);
+      if (doctorRow.rows[0]) {
+        const open = await buildSlotsForDoctor(doctorRow.rows[0], preferredDate);
+        if (!open.includes(slotLabel)) {
+          return res.status(400).json({
+            message: 'That time is outside the doctor\'s available hours. Refresh slots and try again.',
+          });
+        }
+      }
+    }
+
     const appointmentId = 'APT-' + Math.random().toString(36).substring(2, 9).toUpperCase();
     const visitName = dependent_patient_id ? patient.full_name : fullName;
 
@@ -545,7 +587,7 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
     `, [
       appointmentId, patient.id, visitName, whoIsComing, phoneNumber, email, staffId, nationwideId,
       department, reason + (notes ? ' | ' + notes : ''), preferredDate, preferredTime, priority || 'Medium', resolvedDoctorId, service, !!isTelemedicine,
-      consult_type || service || 'general consultation', booking_type || 'scheduled'
+      consult_type || service || 'general consultation', bookingType
     ]);
 
     // Never block the booking response on SMS latency.
@@ -560,9 +602,10 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
 
     console.log(`Admin Alert: New appointment ${appointmentId} booked by ${fullName}.`);
 
-    // Notify assigned doctor (users.id via doctors.user_id) + admins
+    // Notify assigned doctor (users.id via doctors.user_id) + admins — always with user_id so badges can clear.
     try {
       const notifyIds: number[] = [];
+      const msg = `${visitName} booked for ${preferredDate} at ${preferredTime}.`;
       if (resolvedDoctorId) {
         const docUser = await query('SELECT user_id, name FROM doctors WHERE id = $1', [resolvedDoctorId]);
         const doctorUserId = docUser.rows[0]?.user_id;
@@ -570,21 +613,18 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
           notifyIds.push(Number(doctorUserId));
           await query(
             `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-            [
-              doctorUserId,
-              'New appointment booked',
-              `${visitName} booked for ${preferredDate} at ${preferredTime}.`,
-              'appointment',
-            ]
-          ).catch(() =>
-            query('INSERT INTO notifications (message) VALUES ($1)', [
-              `New appointment ${appointmentId} for Dr. ${docUser.rows[0]?.name || resolvedDoctorId}`,
-            ])
+            [doctorUserId, 'New appointment booked', msg, 'appointment']
           );
         }
       }
-      const adminUsers = await query("SELECT id FROM users WHERE role = 'admin'");
-      for (const r of adminUsers.rows) notifyIds.push(Number(r.id));
+      const adminUsers = await query("SELECT id FROM users WHERE role IN ('admin', 'medical_ops', 'nurse')");
+      for (const r of adminUsers.rows) {
+        notifyIds.push(Number(r.id));
+        await query(
+          `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+          [r.id, 'New appointment booked', `New appointment ${appointmentId} by ${fullName}.`, 'appointment']
+        );
+      }
       const uniqueIds = [...new Set(notifyIds)];
       if (uniqueIds.length > 0) {
         sendPushNotification(
@@ -597,10 +637,6 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
     } catch (notifyErr) {
       console.error('Booking notify error:', notifyErr);
     }
-
-    await query('INSERT INTO notifications (message) VALUES ($1)', [
-      `New appointment booked: ${appointmentId} by ${fullName}`
-    ]);
 
     const created = serializeAppointment(result.rows[0]);
     res.status(201).json(created);
@@ -619,22 +655,46 @@ app.patch('/api/appointments/:id', authenticate, async (req: any, res) => {
     if (req.user.role === 'patient' && status && !['cancelled'].includes(status)) {
       return res.status(403).json({ message: 'Patients can only cancel their own visits.' });
     }
-    const finalDoctorId = doctor_id === '' ? null : doctor_id;
+
+    const doctorProvided = Object.prototype.hasOwnProperty.call(req.body, 'doctor_id');
+    let nextDoctorId: number | null | undefined = undefined;
+    if (doctorProvided) {
+      if (doctor_id === '' || doctor_id == null) {
+        nextDoctorId = null;
+      } else {
+        nextDoctorId = await resolveDoctorId(doctor_id);
+        if (nextDoctorId == null) {
+          return res.status(400).json({ message: 'Unknown doctor.' });
+        }
+      }
+    }
 
     const result = await query(
       `UPDATE appointments 
        SET preferred_date = COALESCE($1, preferred_date),
            preferred_time = COALESCE($2, preferred_time),
            notes = COALESCE($3, notes),
-           doctor_id = $4,
-           priority = COALESCE($5, priority),
-           status = COALESCE($6::varchar, status),
-           who_is_coming = COALESCE($7, who_is_coming),
-           service = COALESCE($8, service),
-           is_telemedicine = COALESCE($9, is_telemedicine),
-           completed_at = CASE WHEN $6::varchar = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
-       WHERE id = $10 RETURNING *`,
-      [preferred_date, preferred_time, notes, finalDoctorId, priority, status, who_is_coming, service, is_telemedicine, id]
+           doctor_id = CASE WHEN $4::boolean THEN $5 ELSE doctor_id END,
+           priority = COALESCE($6, priority),
+           status = COALESCE($7::varchar, status),
+           who_is_coming = COALESCE($8, who_is_coming),
+           service = COALESCE($9, service),
+           is_telemedicine = COALESCE($10, is_telemedicine),
+           completed_at = CASE WHEN $7::varchar = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
+       WHERE id = $11 RETURNING *`,
+      [
+        preferred_date,
+        preferred_time,
+        notes,
+        doctorProvided,
+        nextDoctorId ?? null,
+        priority,
+        status,
+        who_is_coming,
+        service,
+        is_telemedicine,
+        id,
+      ]
     );
     const apt = result.rows[0];
     // Trigger SMS Alerts
@@ -712,8 +772,8 @@ app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CL
     const meetingLink = createSecureJitsiLink();
     
     await query(
-      'UPDATE appointments SET meeting_link = $1, payment_status = $2, is_telemedicine = TRUE WHERE id = $3',
-      [meetingLink, 'paid', id]
+      'UPDATE appointments SET meeting_link = $1, is_telemedicine = TRUE WHERE id = $2',
+      [meetingLink, id]
     );
 
     const result = await query(

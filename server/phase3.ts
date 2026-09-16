@@ -604,8 +604,18 @@ async function attachCoverageFromDirectory(patientId: number, check: Awaited<Ret
       `UPDATE policies SET status = 'inactive' WHERE patient_id = $1 AND status = 'active'`,
       [patientId]
     );
-    const existing = await query('SELECT id FROM policies WHERE UPPER(policy_number) = $1 LIMIT 1', [key.toUpperCase()]);
+    const existing = await query(
+      'SELECT id, patient_id, status FROM policies WHERE UPPER(policy_number) = $1 LIMIT 1',
+      [key.toUpperCase()]
+    );
     if (existing.rows[0]) {
+      const ownerId = existing.rows[0].patient_id == null ? null : Number(existing.rows[0].patient_id);
+      if (ownerId != null && ownerId !== patientId) {
+        throw Object.assign(
+          new Error('This policy number belongs to another patient and cannot be attached.'),
+          { status: 409 }
+        );
+      }
       await query(
         `UPDATE policies SET patient_id = $1, insurer_id = $2, status = 'active',
            ends_on = CURRENT_DATE + INTERVAL '1 year'

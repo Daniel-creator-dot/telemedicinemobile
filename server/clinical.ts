@@ -50,7 +50,9 @@ function journeyIsOpen(kind: string, status: string) {
   if (kind === 'prescription') return !['dispensed', 'cancelled', 'unsent'].includes(s);
   if (kind === 'lab' || kind === 'imaging') return !['completed', 'cancelled'].includes(s);
   if (kind === 'referral') return !['completed', 'cancelled'].includes(s);
-  if (kind === 'consultation') return ['queued', 'pending', 'approved', 'consulting'].includes(s);
+  if (kind === 'consultation') {
+    return ['queued', 'pending', 'approved', 'consulting', 'arrived', 'waiting', 'triage'].includes(s);
+  }
   return false;
 }
 
@@ -73,6 +75,9 @@ function journeyStatusLabel(kind: string, status: string) {
     queued: 'In queue',
     approved: 'Approved',
     consulting: 'In consult',
+    arrived: 'Checked in',
+    waiting: 'Waiting',
+    triage: 'In triage',
     accepted: 'Accepted',
   };
   if (labels[s]) return labels[s];

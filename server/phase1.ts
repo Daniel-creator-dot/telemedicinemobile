@@ -183,6 +183,9 @@ export async function initPhase1Schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='doctors' AND column_name='is_online') THEN
         ALTER TABLE doctors ADD COLUMN is_online BOOLEAN DEFAULT FALSE;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='doctors' AND column_name='last_seen_at') THEN
+        ALTER TABLE doctors ADD COLUMN last_seen_at TIMESTAMPTZ;
+      END IF;
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='prescription_ref') THEN
         ALTER TABLE prescriptions ADD COLUMN prescription_ref VARCHAR(30);
       END IF;
@@ -497,11 +500,10 @@ function doctorSchedule(doctor: any): { start: string; end: string; duration: nu
   };
 }
 
-async function buildSlotsForDoctor(doctor: any, date: string): Promise<string[]> {
+export async function buildSlotsForDoctor(doctor: any, date: string): Promise<string[]> {
   const dayName = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
-  // Demo-friendly: always offer Mon–Sat. Only Sunday is closed unless doctor explicitly works Sundays.
   const working = doctorWorkingDays(doctor);
-  if (dayName === 'Sunday' && !working.includes('Sunday')) return [];
+  if (!working.includes(dayName)) return [];
 
   const { start, end, duration } = doctorSchedule(doctor);
   const booked = await query(
@@ -532,17 +534,6 @@ async function buildSlotsForDoctor(doctor: any, date: string): Promise<string[]>
     while (m >= 60) {
       m -= 60;
       h += 1;
-    }
-  }
-  // Last-resort fallback so patients are never stuck with an empty chip row on a clinic day.
-  if (slots.length === 0 && dayName !== 'Sunday') {
-    for (let hour = 9; hour < 17; hour++) {
-      for (const minute of [0, 30]) {
-        const label = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        const slotMins = hour * 60 + minute;
-        const isPastToday = date === todayStr && slotMins <= nowMins;
-        if (!taken.has(label) && !isPastToday) slots.push(label);
-      }
     }
   }
   return slots;
@@ -801,6 +792,17 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         [b.full_name || null, b.email || null, phone, patient.phone_number || null, req.user!.id]
       );
 
+      // Keep open-visit SMS targets on the current phone after profile edits.
+      if (phone) {
+        await query(
+          `UPDATE appointments
+           SET phone_number = $1
+           WHERE patient_id = $2
+             AND status NOT IN ('completed', 'cancelled', 'missed')`,
+          [phone, patient.id]
+        );
+      }
+
       res.json(result.rows[0]);
     } catch (err) {
       console.error(err);
@@ -836,7 +838,15 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       }
       sql += ' ORDER BY d.is_online DESC, d.name ASC';
       const result = await query(sql, params);
-      res.json(result.rows);
+      const cutoff = Date.now() - 90_000;
+      res.json(
+        result.rows.map((r: any) => ({
+          ...r,
+          is_online: Boolean(
+            r.is_online && r.last_seen_at && new Date(r.last_seen_at).getTime() > cutoff
+          ),
+        }))
+      );
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -885,6 +895,12 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       const result = await query(
         `UPDATE doctors SET
           is_online = CASE WHEN $1::boolean IS NULL THEN is_online ELSE $1::boolean END,
+          last_seen_at = CASE
+            WHEN $1::boolean IS TRUE THEN CURRENT_TIMESTAMP
+            WHEN $1::boolean IS FALSE THEN last_seen_at
+            WHEN COALESCE(is_online, FALSE) = TRUE THEN CURRENT_TIMESTAMP
+            ELSE last_seen_at
+          END,
           working_days = COALESCE($2, working_days),
           start_time = COALESCE($3, start_time),
           end_time = COALESCE($4, end_time),
@@ -895,6 +911,24 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       );
       if (!result.rows[0]) return res.status(404).json({ message: 'Doctor profile not found' });
       res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Heartbeat so presence expires if the doctor app dies while still marked online. */
+  app.post('/api/doctors/me/heartbeat', authenticate, async (req: AuthedRequest, res) => {
+    if (req.user!.role !== 'doctor') return res.status(403).json({ message: 'Forbidden' });
+    try {
+      const result = await query(
+        `UPDATE doctors
+         SET last_seen_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1 AND COALESCE(is_online, FALSE) = TRUE
+         RETURNING id, is_online, last_seen_at`,
+        [req.user!.id]
+      );
+      res.json(result.rows[0] || { is_online: false });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -920,11 +954,16 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     }
   });
 
-  /** Lightweight presence map for patient UIs to poll. */
+  /** Lightweight presence map for patient UIs to poll. Online requires a recent heartbeat. */
   app.get('/api/doctors/presence', authenticate, async (_req, res) => {
     try {
       const result = await query(
-        `SELECT id, COALESCE(is_online, FALSE) AS is_online, name
+        `SELECT id, name,
+                (
+                  COALESCE(is_online, FALSE) = TRUE
+                  AND last_seen_at IS NOT NULL
+                  AND last_seen_at > NOW() - INTERVAL '90 seconds'
+                ) AS is_online
          FROM doctors
          WHERE is_active = TRUE
          ORDER BY is_online DESC, name ASC`
@@ -1012,7 +1051,12 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       const eta = membership?.plan?.etaMinutes ?? queueNumber * 12;
 
       const online = await query(
-        `SELECT id FROM doctors WHERE is_active = TRUE AND is_online = TRUE ORDER BY id LIMIT 1`
+        `SELECT id FROM doctors
+         WHERE is_active = TRUE
+           AND COALESCE(is_online, FALSE) = TRUE
+           AND last_seen_at IS NOT NULL
+           AND last_seen_at > NOW() - INTERVAL '90 seconds'
+         ORDER BY id LIMIT 1`
       );
       const fallback = await query(`SELECT id FROM doctors WHERE is_active = TRUE ORDER BY id LIMIT 1`);
       const doctorId = online.rows[0]?.id || fallback.rows[0]?.id || null;
@@ -1251,10 +1295,16 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     }
     const ids = await getAccessiblePatientIds(user.id);
     const userRow = await query('SELECT phone_number FROM users WHERE id = $1', [user.id]);
-    const phone = userRow.rows[0]?.phone_number || '';
+    const phone = String(userRow.rows[0]?.phone_number || '').trim();
+    if (phone) {
+      return {
+        where: `a.status <> 'cancelled' AND (a.patient_id = ANY($1::int[]) OR a.phone_number = $2)`,
+        params: [ids, phone] as unknown[],
+      };
+    }
     return {
-      where: `a.status <> 'cancelled' AND (a.patient_id = ANY($1::int[]) OR a.phone_number = $2)`,
-      params: [ids, phone] as unknown[],
+      where: `a.status <> 'cancelled' AND a.patient_id = ANY($1::int[])`,
+      params: [ids] as unknown[],
     };
   }
 
@@ -1404,7 +1454,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     try {
       const result = await query(
         `SELECT * FROM notifications
-         WHERE user_id = $1 OR user_id IS NULL
+         WHERE user_id = $1
          ORDER BY created_at DESC LIMIT 40`,
         [req.user!.id]
       );
@@ -1418,7 +1468,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     try {
       const result = await query(
         `SELECT COUNT(*)::int AS count FROM notifications
-         WHERE (user_id = $1 OR user_id IS NULL) AND is_read = FALSE`,
+         WHERE user_id = $1 AND is_read = FALSE`,
         [req.user!.id]
       );
       res.json({ count: result.rows[0]?.count ?? 0 });
@@ -1442,7 +1492,11 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
     try {
       const live = await query(`
         SELECT
-          (SELECT COUNT(*) FROM doctors WHERE is_active = TRUE AND COALESCE(is_online, FALSE) = TRUE) AS doctors_online,
+          (SELECT COUNT(*) FROM doctors
+            WHERE is_active = TRUE
+              AND COALESCE(is_online, FALSE) = TRUE
+              AND last_seen_at IS NOT NULL
+              AND last_seen_at > NOW() - INTERVAL '90 seconds') AS doctors_online,
           (SELECT COUNT(*) FROM doctors WHERE is_active = TRUE) AS doctors_active,
           (SELECT COUNT(*) FROM appointments WHERE status = 'consulting') AS consulting_now,
           (SELECT COUNT(*) FROM appointments WHERE COALESCE(booking_type,'scheduled') = 'consult_now' AND status IN ('queued','pending','approved')) AS patients_waiting,

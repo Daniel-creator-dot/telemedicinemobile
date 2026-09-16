@@ -173,8 +173,9 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
     final hasLink = _apt.hasMeetingLink;
     if (!hasLink) return;
     if (_inCall) return;
+    // Patients wait until approved/arrived/consulting (or live consult_now after approval).
     final ready = _isClinician || _apt.isLiveConsult || !_apt.isWaitingInQueue;
-    if (!ready && _apt.isConsultNow) return;
+    if (!ready) return;
     setState(() {
       _inCall = true;
       _connection = 'Connecting';
@@ -225,7 +226,9 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
 
   Future<void> _loadChat() async {
     try {
-      final list = await context.read<CareRepository>().getChat(_apt.id);
+      final care = context.read<CareRepository>();
+      final list = await care.getChat(_apt.id);
+      await care.markChatRead(_apt.id);
       if (mounted) setState(() => _messages = list);
     } catch (_) {}
   }
@@ -235,7 +238,9 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
     if (text.isEmpty) return;
     _chatInput.clear();
     try {
-      await context.read<CareRepository>().sendChat(_apt.id, text);
+      final care = context.read<CareRepository>();
+      await care.sendChat(_apt.id, text);
+      await care.markChatRead(_apt.id);
       await _loadChat();
     } catch (e) {
       if (mounted) {

@@ -55,6 +55,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   int _unreadNotifications = 0;
   String? _error;
   Timer? _notificationPoll;
+  Timer? _presenceHeartbeat;
 
   @override
   void initState() {
@@ -64,12 +65,22 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     _notificationPoll = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) _refreshUnreadCount();
     });
+    _presenceHeartbeat = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (mounted && _online) _sendHeartbeat();
+    });
   }
 
   @override
   void dispose() {
     _notificationPoll?.cancel();
+    _presenceHeartbeat?.cancel();
     super.dispose();
+  }
+
+  Future<void> _sendHeartbeat() async {
+    try {
+      await context.read<CareRepository>().doctorHeartbeat();
+    } catch (_) {}
   }
 
   Future<void> _refreshUnreadCount() async {
@@ -1110,6 +1121,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                 setState(() => _online = v);
                 try {
                   await context.read<CareRepository>().setDoctorOnline(v);
+                  if (v) await context.read<CareRepository>().doctorHeartbeat();
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

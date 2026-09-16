@@ -214,7 +214,7 @@ export function appointmentScopeSql(role: string, alias = 'a') {
   }
   if (role === 'patient') {
     return {
-      clause: ` WHERE ($1::int IS NOT NULL AND ${alias}.patient_id = $1) OR ${alias}.phone_number = $2`,
+      clause: ` WHERE ($1::int IS NOT NULL AND ${alias}.patient_id = $1) OR (NULLIF($2, '') IS NOT NULL AND ${alias}.phone_number = $2)`,
       params: [] as unknown[],
       needsPatient: true,
     };

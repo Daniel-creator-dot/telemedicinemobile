@@ -144,6 +144,10 @@ class CareRepository {
     await _api.dio.patch('/api/doctors/me/availability', data: {'is_online': online});
   }
 
+  Future<void> doctorHeartbeat() async {
+    await _api.dio.post('/api/doctors/me/heartbeat');
+  }
+
   /// Cheap poll for live online/offline badges.
   Future<Map<int, bool>> getDoctorPresence() async {
     final res = await _api.dio.get<List<dynamic>>('/api/doctors/presence');

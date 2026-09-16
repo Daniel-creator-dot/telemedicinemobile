@@ -100,7 +100,17 @@ export async function initializePaystackCheckout(opts: {
   const callbackBase =
     process.env.PAYSTACK_CALLBACK_URL?.trim() ||
     process.env.APP_URL?.trim() ||
-    `http://localhost:${process.env.PORT || 5000}`;
+    '';
+  if (!callbackBase) {
+    throw new Error(
+      'Paystack callback URL is not configured. Set PAYSTACK_CALLBACK_URL or APP_URL to your public API origin.'
+    );
+  }
+  if (/localhost|127\.0\.0\.1/i.test(callbackBase) && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Paystack callback cannot use localhost in production. Set PAYSTACK_CALLBACK_URL or APP_URL.'
+    );
+  }
   const callbackUrl = `${callbackBase.replace(/\/$/, '')}/api/paystack/callback`;
 
   const response = await axios.post(

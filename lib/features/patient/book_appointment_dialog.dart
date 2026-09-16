@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/session.dart';
 import '../../core/notification_service.dart';
+import '../../core/env.dart';
 import '../../models/doctor_profile.dart';
 import 'appointments_repository.dart';
 import 'care_repository.dart';
@@ -162,20 +163,6 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
     return DateTime(y, m, d);
   }
 
-  List<String> _fallbackSlotsFor(DateTime date) {
-    if (date.weekday == DateTime.sunday) return const [];
-    final now = DateTime.now();
-    final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
-    final out = <String>[];
-    for (var h = 9; h < 17; h++) {
-      for (final m in const [0, 30]) {
-        if (isToday && (h < now.hour || (h == now.hour && m <= now.minute))) continue;
-        out.add('${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}');
-      }
-    }
-    return out;
-  }
-
   Future<void> _loadSlots({bool allowAutoAdvance = true}) async {
     if (_selectedDoctor == null || _selectedDate == null) {
       setState(() {
@@ -212,10 +199,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         }
       }
       if (slots.isEmpty) {
-        slots = _fallbackSlotsFor(_selectedDate!);
-        hint = slots.isEmpty
-            ? 'Clinic is closed on Sundays. Try Mon–Sat, or pick a time.'
-            : 'Showing standard clinic hours (API returned no slots).';
+        hint = 'No open slots this day. Try another date or doctor.';
       }
 
       setState(() {
@@ -230,13 +214,10 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
       });
     } catch (_) {
       if (!mounted) return;
-      final fallback = _fallbackSlotsFor(_selectedDate!);
       setState(() {
-        _slots = fallback;
+        _slots = [];
         _loadingSlots = false;
-        _slotsHint = fallback.isEmpty
-            ? 'Could not load slots. Try another day or pick a time.'
-            : 'Could not reach slot API — showing standard clinic hours.';
+        _slotsHint = 'Could not load slots. Check your connection and try again.';
       });
     }
   }
@@ -318,7 +299,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         return 'Server took too long. Check that the local API is running.';
       }
       if (e.type == DioExceptionType.connectionError) {
-        return 'Cannot reach the API. Is it running on localhost:5000?';
+        return 'Cannot reach the API at ${AppEnv.resolveApiBaseUrl()}.';
       }
       return e.message ?? e.toString();
     }
