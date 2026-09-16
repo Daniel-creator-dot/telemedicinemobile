@@ -559,4 +559,15 @@ class CareRepository {
     final res = await _api.dio.get<Map<String, dynamic>>('/api/hospital/desk');
     return res.data ?? {};
   }
+
+  Future<Map<String, dynamic>> updateHospitalCapacity(Map<String, dynamic> payload) async {
+    final res = await _api.dio.patch<Map<String, dynamic>>('/api/hospital/capacity', data: payload);
+    return res.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> createHospitalOutbound(Map<String, dynamic> payload) async {
+    final res =
+        await _api.dio.post<Map<String, dynamic>>('/api/hospital/referrals/outbound', data: payload);
+    return res.data ?? {};
+  }
 }

@@ -68,7 +68,7 @@ Sign in with a seeded or admin-created account. Patient self-registration is OTP
 | Corporate | `corporate` / `corp123` | Staff roster, utilisation ledger, activate/suspend cover |
 | Insurance | `insurance` / `insure123` | Claims desk: approve / query / deny / pay |
 | Finance | `finance` / `fin123` | Receipts, reconcile, settlements |
-| Hospital | `hospital` / `hosp123` | Inbound specialist referrals |
+| Hospital | `hospital` / `hosp123` | Network desk: inbound/outbound referrals, capacity, partners |
 | Admin | `admin` | Staff, doctors, settings, analytics, support, national net |
 | Support desk | `support` | Same as admin ticket queue (`support` / `support123`) |
 
@@ -135,12 +135,23 @@ Open **Patient → Care phases** for live counts on all five.
 - Demo seed creates a few paid visit receipts (demo + Paystack-labeled, one refunded) when the payments table is sparse
 - APIs: `GET /api/finance/dashboard` (includes `payments`), `PATCH /api/finance/payments/:id` (`reconcile` | `unreconcile` | `refund`)
 
+### Phase 4 — hospital network desk
+
+- **Login:** `hospital` / `hosp123` (linked to the first hospital partner org, typically Tamale Regional Hospital)
+- **Overview:** inbound/outbound open counts, bed/ICU free vs total, regional partner online/busy
+- **Inbound tab:** filter Open → Pending → Active → Closed; **Accept**, **In progress**, **Complete** (outcome notes), **Decline**
+- **Outbound tab:** post a transfer by patient code to another hospital/lab/imaging facility; ledger of outbound referrals
+- **Capacity tab:** publish bed/ICU stub board + facility status (`online` / `busy` / `offline`); partner board for the region
+- Demo seed creates an inbound open referral, an outbound accepted transfer (when a second hospital exists), and default ward numbers
+- APIs: `GET /api/hospital/desk`, `PATCH /api/hospital/capacity`, `POST /api/hospital/referrals/outbound`
+
 ### Phase 4 flows
 
 - **Family / dependents:** Patient → Family. Add a child/spouse/parent (creates a patient record, no login). Book or Consult Now on their behalf. Appointments stay scoped to the guardian account.
 - **Care programs:** Patient → Care programs. Enroll in hypertension, diabetes, asthma, sickle cell, or antenatal. Mark daily/weekly tasks; reminders go to the existing notifications inbox. Not a diagnosis.
 - **Clinical AI assist:** Doctor SOAP dialog → “Draft SOAP (assistive)”. Patient → Symptom helper. Works without an LLM key (templated from notes/vitals). If `OPENAI_API_KEY` is set, a richer draft is attempted. Always labeled assistive; never a diagnosis; no HIPAA claim.
 - **Vault:** Rx, labs, imaging, letters from visits, plus photos/PDFs you attach (up to 2 MB). Files are stored in Postgres so they survive Render’s ephemeral disk.
+- **Hospital network desk:** see Phase 4 section above (`hospital` / `hosp123`).
 
 Video rooms use unguessable Jitsi names (`digihealth-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, GHS, card / MoMo / bank). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
 
@@ -174,7 +185,7 @@ This is still not a production national deployment: Jitsi is public-hosted with 
 - **Consents:** Toggle telemedicine, data, messaging, sharing, and assistive AI — timestamped.
 - **Visual system:** Paper canvas, forest primary, gold secondary, Source Serif headlines + DM Sans UI. Quiet bottom navigation. Editorial login and launch copy. Nurse, pharmacy, imaging, and ops desks use the same chrome.
 - **Directory:** Filter clinicians by language (English, Twi, Ga, Ewe, Hausa).
-- **Hospital desk:** `hospital` / `hosp123` sees inbound network referrals.
+- **Hospital network desk:** `hospital` / `hosp123` — inbound/outbound referrals, bed/ICU capacity stub, partner status.
 - **Follow-up:** Book the review visit from the follow-up list.
 
 Default local extra: `support` / `support123`.
