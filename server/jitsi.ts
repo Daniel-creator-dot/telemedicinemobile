@@ -3,13 +3,16 @@ import crypto from 'crypto';
 /**
  * Medilynks video rooms.
  *
- * meet.jit.si / 8x8.vc require an authenticated moderator before a conference
- * can start. jitsi.debian.social now forces SSO (salsa.debian.org OAuth) via
- * tokenAuthUrl — anonymous embeds hang on "Asking to join meeting...".
- * Use a community instance where the first joiner is moderator with no login.
- * Override with JITSI_DOMAIN if you self-host.
+ * Locked public hosts (anonymous embeds cannot start a conference):
+ * - meet.jit.si / 8x8.vc — authenticated moderator required
+ * - jitsi.debian.social — tokenAuthUrl → salsa.debian.org SSO
+ * - jitsi.member.fsf.org — FSF associate-member login to start rooms
+ *
+ * Default host: meet.ffmuc.net (no tokenAuthUrl; first joiner is moderator).
+ * That host blocks iframes (CSP/XFO) — the Flutter client loads rooms as a
+ * top-level WebView document. Override with JITSI_DOMAIN if you self-host.
  */
-export const JITSI_DOMAIN = (process.env.JITSI_DOMAIN || 'jitsi.member.fsf.org').replace(
+export const JITSI_DOMAIN = (process.env.JITSI_DOMAIN || 'meet.ffmuc.net').replace(
   /^https?:\/\//,
   '',
 ).replace(/\/$/, '');
@@ -18,8 +21,8 @@ const LOCKED_HOSTS = new Set([
   'meet.jit.si',
   '8x8.vc',
   'jaas.8x8.vc',
-  // Debian community instance now requires SSO to become moderator.
   'jitsi.debian.social',
+  'jitsi.member.fsf.org',
 ]);
 
 /** Unguessable public Jitsi room. Never use sequential or short alphabetic names. */

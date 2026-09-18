@@ -4,6 +4,8 @@ import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'jitsi_embed_api.dart';
 import 'jitsi_html.dart';
@@ -35,6 +37,10 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
   late final html.IFrameElement _iframe;
   late final html.EventListener _messageListener;
   late final JitsiRoomController _room;
+  late final String _joinUrl;
+  late final String _domain;
+  late final bool _frameBlocked;
+  bool _openedExternal = false;
 
   @override
   void initState() {
@@ -42,15 +48,16 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
     _viewType = 'digi-jitsi-${identityHashCode(this)}-${DateTime.now().microsecondsSinceEpoch}';
 
     final normalized = normalizeJitsiMeetingUrl(widget.meetingUrl);
-    final htmlDoc = buildJitsiHostHtml(
-      roomName: jitsiRoomNameFromUrl(normalized),
+    _domain = digiJitsiDomainFromUrl(normalized);
+    _frameBlocked = jitsiHostBlocksIframeEmbed(_domain);
+    _joinUrl = jitsiDirectJoinUrl(
+      meetingUrl: widget.meetingUrl,
       displayName: widget.displayName,
-      domain: digiJitsiDomainFromUrl(normalized),
       startAudioMuted: widget.startAudioMuted,
       startVideoMuted: widget.startVideoMuted,
     );
+
     _iframe = html.IFrameElement()
-      ..srcdoc = htmlDoc
       ..style.border = 'none'
       ..style.width = '100%'
       ..style.height = '100%'
@@ -61,7 +68,24 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
       )
       ..allowFullscreen = true;
 
-    // Warm parent-page media permission so nested Jitsi iframes can use devices.
+    if (_frameBlocked) {
+      // meet.ffmuc.net (and similar) set CSP frame-ancestors / XFO — iframe is blank.
+      // Use External API only when framing is allowed; otherwise open the room URL.
+      _iframe.srcdoc = '''
+<!DOCTYPE html><html><body style="margin:0;background:#071018;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100%;">
+<p style="opacity:.7">Opening secure video room…</p>
+</body></html>''';
+    } else {
+      final htmlDoc = buildJitsiHostHtml(
+        roomName: jitsiRoomNameFromUrl(normalized),
+        displayName: widget.displayName,
+        domain: _domain,
+        startAudioMuted: widget.startAudioMuted,
+        startVideoMuted: widget.startVideoMuted,
+      );
+      _iframe.srcdoc = htmlDoc;
+    }
+
     try {
       html.window.navigator.mediaDevices?.getUserMedia({'audio': true, 'video': true}).then((stream) {
         for (final track in stream.getTracks()) {
@@ -97,11 +121,30 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onControllerReady?.call(_room);
+      if (_frameBlocked) {
+        widget.onEvent?.call('ready');
+        _openExternal(auto: true);
+      }
     });
   }
 
   void _call(String cmd) {
     _iframe.contentWindow?.postMessage({'source': 'digi-host', 'cmd': cmd}, '*');
+  }
+
+  Future<void> _openExternal({bool auto = false}) async {
+    if (auto && _openedExternal) return;
+    _openedExternal = true;
+    final uri = Uri.tryParse(_joinUrl);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, webOnlyWindowName: '_blank');
+    } catch (_) {
+      try {
+        html.window.open(_joinUrl, '_blank');
+      } catch (_) {}
+    }
+    if (mounted) setState(() {});
   }
 
   @override
@@ -112,6 +155,48 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_frameBlocked) {
+      return ColoredBox(
+        color: const Color(0xFF071018),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.videocam_rounded, color: Color(0xFF00D2C4), size: 42),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Video opens in a browser tab',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This Jitsi host blocks in-page embeds (frame policy). '
+                    'Use the browser tab for camera and mic, then return here for chat and SOAP.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.roboto(color: Colors.white70, height: 1.4),
+                  ),
+                  const SizedBox(height: 18),
+                  ElevatedButton.icon(
+                    onPressed: () => _openExternal(),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: const Text('Open video room'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00D2C4),
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return HtmlElementView(viewType: _viewType);
   }
 }

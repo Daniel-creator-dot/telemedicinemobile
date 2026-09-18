@@ -195,8 +195,26 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
     if (!mounted) return;
     // Digi chrome used to mark "In room" on iframe ready — that lied while
     // Jitsi was still stuck on the moderator/lobby gate.
-    if (event == 'ready' || event == 'loaded') {
+    if (event.startsWith('error:')) {
+      setState(() => _connection = 'Error');
+      final detail = event.substring(6).trim();
+      if (detail.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Video: $detail'),
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(label: 'Browser', onPressed: _openExternal),
+          ),
+        );
+      }
+      return;
+    }
+    if (event == 'ready' || event == 'loaded' || event == 'bridgeTimeout') {
       setState(() => _connection = 'Connecting');
+      return;
+    }
+    if (event == 'slowJoin') {
+      setState(() => _connection = 'Connecting…');
       return;
     }
     if (event == 'joined') {
@@ -448,7 +466,11 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
 
   Widget _statusChip() {
     final live = _connection == 'Connected' || _connection == 'In room';
-    final color = live ? _teal : const Color(0xFFFBBF24);
+    final color = _connection == 'Error'
+        ? const Color(0xFFF87171)
+        : live
+            ? _teal
+            : const Color(0xFFFBBF24);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
