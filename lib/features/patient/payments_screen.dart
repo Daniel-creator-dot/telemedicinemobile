@@ -96,7 +96,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           Text('Coverage', style: GoogleFonts.dmSans(fontWeight: FontWeight.w700)),
                           const SizedBox(height: 8),
                           Text(
-                            '${_eligibility['source'] ?? 'self_pay'} · copay GHS ${_eligibility['copay'] ?? _eligibility['copay_amount'] ?? 50}',
+                            '${_eligibility['source'] ?? 'self_pay'} · copay GHS ${_eligibility['copay'] ?? _eligibility['copay_amount'] ?? 120}',
                             style: GoogleFonts.dmSans(color: digiSlate),
                           ),
                           if (_eligibility['plan_name'] != null)
@@ -142,7 +142,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'GHS ${o['copay'] ?? _eligibility['copay'] ?? 50}',
+                                  'GHS ${o['copay'] ?? _eligibility['copay'] ?? 120}',
                                   style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(height: 12),
@@ -185,7 +185,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'GHS ${r['amount'] ?? 50} · ${r['gateway'] ?? 'paystack'}',
+                                  'GHS ${r['amount'] ?? 120} · ${r['gateway'] ?? 'paystack'}',
                                   style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(height: 6),

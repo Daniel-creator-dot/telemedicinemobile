@@ -9,6 +9,9 @@ import {
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
+/** Self-pay / base fee for general consultation (GHS). */
+export const GENERAL_CONSULT_FEE = 120;
+
 export type MembershipTier = 'classic' | 'premium' | 'gold' | 'diamond';
 export type MembershipPeriod = 'monthly' | 'yearly';
 
@@ -40,7 +43,7 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     queuePriority: 'Medium',
     etaMinutes: 12,
     benefits: [
-      'Visit copay GHS 35 (from GHS 50)',
+      'Visit copay GHS 35 (from GHS 120)',
       'One dependent on your household chart',
       'Book, Consult Now, and video visits',
       'Records vault and receipts',
@@ -153,9 +156,9 @@ export function membershipEligibilityOverlay(membership: Awaited<ReturnType<type
   return {
     source: 'membership' as const,
     eligible: true,
-    consult_fee: 50,
+    consult_fee: GENERAL_CONSULT_FEE,
     copay: plan.copay,
-    covered_amount: Math.max(0, 50 - plan.copay),
+    covered_amount: Math.max(0, GENERAL_CONSULT_FEE - plan.copay),
     coverage_percent: plan.coveragePercent,
     payer_name: 'Medilynks membership',
     plan_name: `${plan.name} ${membership.period === 'yearly' ? 'yearly' : 'monthly'}`,

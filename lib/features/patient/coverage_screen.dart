@@ -233,7 +233,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                                   ),
                                 ),
                                 Text(
-                                  'GHS ${_eligibility['copay'] ?? 50}',
+                                  'GHS ${_eligibility['copay'] ?? 120}',
                                   style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600),
                                 ),
                               ],
@@ -437,7 +437,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                             Text(
                               covered
                                   ? 'Your next consult will collect copay GHS ${_eligibility['copay']} via Paystack (MoMo or card).'
-                                  : 'Without attached cover, the full GHS ${_eligibility['consult_fee'] ?? 50} consult fee applies.',
+                                  : 'Without attached cover, the full GHS ${_eligibility['consult_fee'] ?? 120} consult fee applies.',
                               style: GoogleFonts.dmSans(color: digiSlate, height: 1.4),
                             ),
                             const SizedBox(height: 12),

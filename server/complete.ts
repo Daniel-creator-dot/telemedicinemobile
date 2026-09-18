@@ -230,7 +230,7 @@ export function registerCompleteRoutes(app: Express) {
             date: v.preferred_date,
             time: v.preferred_time,
             service: v.service || 'Consultation',
-            amount: pay?.copay_amount ?? pay?.amount ?? 50,
+            amount: pay?.copay_amount ?? pay?.amount ?? 120,
             currency: 'GHS',
             gateway,
             note:

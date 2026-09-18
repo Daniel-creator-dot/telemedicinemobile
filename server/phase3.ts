@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { query } from './db';
 import { getPatientForUser } from './phase1';
 import { commercialOrgId } from './phase5';
-import { getActiveMembership, membershipEligibilityOverlay } from './membership';
+import { GENERAL_CONSULT_FEE, getActiveMembership, membershipEligibilityOverlay } from './membership';
 import { isDemoPaymentReference, refundPaystackTransaction } from './paystack';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
@@ -19,7 +19,8 @@ type Deps = {
   ) => Promise<void>;
 };
 
-const CONSULT_FEE = 50;
+/** General consultation self-pay / billed fee (GHS). */
+export const CONSULT_FEE = GENERAL_CONSULT_FEE;
 const DOCTOR_SHARE = 40;
 
 export async function initPhase3Schema() {
@@ -336,7 +337,7 @@ async function seedInsuranceClaimsDesk() {
     const pseq = await query(`SELECT nextval('preauth_code_seq') AS n`);
     await query(
       `INSERT INTO preauths (preauth_code, appointment_id, patient_id, policy_id, service, requested_amount, status, notes)
-       VALUES ($1, $2, $3, $4, 'general consultation (demo)', 50, 'pending', 'Ops demo — awaiting insurer decision')`,
+       VALUES ($1, $2, $3, $4, 'general consultation (demo)', 120, 'pending', 'Ops demo — awaiting insurer decision')`,
       [`PA-${String(pseq.rows[0].n).padStart(6, '0')}`, appointmentId, pol.patient_id, pol.policy_id]
     ).catch(() => null);
   }
@@ -376,9 +377,9 @@ async function seedFinancePaymentsDesk() {
   }> = [
     {
       gateway: 'demo',
-      amount: 50,
+      amount: 120,
       covered: 0,
-      copay: 50,
+      copay: 120,
       coverage: null,
       reconcile: false,
       refund: false,
@@ -388,7 +389,7 @@ async function seedFinancePaymentsDesk() {
     {
       gateway: 'paystack',
       amount: 20,
-      covered: 30,
+      covered: 100,
       copay: 20,
       coverage: 'insurance',
       reconcile: true,
@@ -399,7 +400,7 @@ async function seedFinancePaymentsDesk() {
     {
       gateway: 'paystack',
       amount: 15,
-      covered: 35,
+      covered: 105,
       copay: 15,
       coverage: 'corporate',
       reconcile: false,
@@ -409,9 +410,9 @@ async function seedFinancePaymentsDesk() {
     },
     {
       gateway: 'demo',
-      amount: 50,
+      amount: 120,
       covered: 0,
-      copay: 50,
+      copay: 120,
       coverage: null,
       reconcile: false,
       refund: true,

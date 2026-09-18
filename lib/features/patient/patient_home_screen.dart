@@ -1717,8 +1717,8 @@ class _AppointmentsViewState extends State<AppointmentsView> {
               icon: const Icon(Icons.payment, size: 16),
               label: Text(
                 _eligibility['eligible'] == true
-                    ? 'Pay copay GHS ${_eligibility['copay'] ?? 50} (${_eligibility['payer_name'] ?? 'cover'})'
-                    : 'Pay GHS ${_eligibility['consult_fee'] ?? _eligibility['copay'] ?? 50} with MoMo or card',
+                    ? 'Pay copay GHS ${_eligibility['copay'] ?? 120} (${_eligibility['payer_name'] ?? 'cover'})'
+                    : 'Pay GHS ${_eligibility['consult_fee'] ?? _eligibility['copay'] ?? 120} with MoMo or card',
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00D2C4),
@@ -2116,7 +2116,7 @@ class _ProfileViewState extends State<ProfileView> {
             Text(
               _eligibility['eligible'] == true
                   ? '${_eligibility['payer_name']} · copay GHS ${_eligibility['copay']}'
-                  : 'Self pay · GHS ${_eligibility['consult_fee'] ?? 50}',
+                  : 'Self pay · GHS ${_eligibility['consult_fee'] ?? 120}',
               style: GoogleFonts.roboto(fontSize: 11, color: Colors.white70),
             ),
           ],

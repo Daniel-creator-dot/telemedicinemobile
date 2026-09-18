@@ -10,7 +10,7 @@ import {
   notifyDiagnosticOrdered,
   notifyDiagnosticProgress,
 } from './phase2';
-import { registerPhase3Routes, recordVisitPayment, getEligibility } from './phase3';
+import { registerPhase3Routes, recordVisitPayment, getEligibility, CONSULT_FEE } from './phase3';
 import {
   getPaystackPublicKey,
   initializePaystackCheckout,
@@ -334,6 +334,88 @@ async function sendSMS(recipient: string, message: string) {
     ]);
   } catch (err) {
     console.error('Error in sendSMS utility:', err);
+  }
+}
+
+/** SMS + in-app + push when the doctor starts / activates a video consult. */
+async function notifyPatientDoctorStartedVideo(apt: any) {
+  if (!apt) return;
+  try {
+    let phone = apt.phone_number as string | null | undefined;
+    if (!phone && apt.patient_id) {
+      const p = await query('SELECT phone_number FROM patients WHERE id = $1', [apt.patient_id]);
+      phone = p.rows[0]?.phone_number;
+    }
+
+    const docResult = apt.doctor_id
+      ? await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id])
+      : { rows: [] as any[] };
+    const doctorName = docResult.rows[0]?.name || 'Your doctor';
+    const dateStr = apt.preferred_date ? new Date(apt.preferred_date).toLocaleDateString() : '';
+    const timeStr = apt.preferred_time ? String(apt.preferred_time) : '';
+    const when = [dateStr, timeStr].filter(Boolean).join(' at ');
+
+    let payHint = '';
+    if (String(apt.payment_status || '').toLowerCase() !== 'paid') {
+      try {
+        const elig = await getEligibility(Number(apt.patient_id) || 0);
+        const due = Number(elig.copay);
+        if (Number.isFinite(due) && due >= 1) {
+          payHint = ` If unpaid, pay GHS ${due} in the app, then tap Join Room.`;
+        } else {
+          payHint = ' Open the app and tap Join Room.';
+        }
+      } catch {
+        payHint = ` If unpaid, pay GHS ${CONSULT_FEE} in the app, then tap Join Room.`;
+      }
+    } else {
+      payHint = ' Open the app and tap Join Room.';
+    }
+
+    const smsBody = `Medilynks: ${doctorName} has started your video consultation${when ? ` (${when})` : ''}.${payHint}`;
+    if (phone) {
+      await sendSMS(phone, smsBody).catch((e) => console.error('SMS Error (doctor started video):', e));
+    }
+
+    const userIds: number[] = [];
+    if (apt.patient_id) {
+      const pu = await query(
+        'SELECT user_id FROM patients WHERE id = $1 AND user_id IS NOT NULL',
+        [apt.patient_id]
+      );
+      if (pu.rows[0]?.user_id) userIds.push(Number(pu.rows[0].user_id));
+    }
+    const userRes = await query(
+      `SELECT id FROM users
+       WHERE ($1::text IS NOT NULL AND phone_number = $1)
+          OR ($2::text IS NOT NULL AND username = $2)`,
+      [phone || null, apt.email || null]
+    );
+    for (const r of userRes.rows) userIds.push(Number(r.id));
+    const unique = [...new Set(userIds.filter((id) => Number.isFinite(id) && id > 0))];
+
+    const title = 'Doctor started video';
+    const notifBody = `${doctorName} is ready for your visit${when ? ` (${when})` : ''}. Join Room in the app.${
+      String(apt.payment_status || '').toLowerCase() !== 'paid'
+        ? ` Pay GHS ${CONSULT_FEE} if still unpaid.`
+        : ''
+    }`;
+
+    for (const uid of unique) {
+      await query(
+        `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+        [uid, title, notifBody, 'appointment']
+      );
+    }
+    if (unique.length > 0) {
+      await sendPushNotification(unique, title, notifBody, {
+        type: 'video-started',
+        appointmentId: String(apt.id),
+        status: 'consulting',
+      }).catch((e) => console.error('Push error (doctor started video):', e));
+    }
+  } catch (err) {
+    console.error('notifyPatientDoctorStartedVideo failed:', err);
   }
 }
 
@@ -707,7 +789,9 @@ app.patch('/api/appointments/:id', authenticate, async (req: any, res) => {
     const apt = result.rows[0];
     // Trigger SMS Alerts
     if (apt) {
-      if (status === 'approved') {
+      if (status === 'consulting' && String(existing.status || '').toLowerCase() !== 'consulting') {
+        await notifyPatientDoctorStartedVideo(apt);
+      } else if (status === 'approved') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'a Physician';
         const dateStr = apt.preferred_date ? new Date(apt.preferred_date).toLocaleDateString() : 'the scheduled date';
@@ -793,10 +877,9 @@ app.post('/api/appointments/:id/generate-link', authenticate, requireRoles(...CL
     );
 
     const apt = result.rows[0];
-    if (apt) {
-      const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
-      const msg = `Medilynks: your video visit ${apt.appointment_id} is ready for ${scheduledInfo}. Open the app to join.`;
-      await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in manual link gen:', e));
+    // Only SMS here if already consulting (link refresh). Fresh Join Room also sets consulting → SMS there.
+    if (apt && String(apt.status || '').toLowerCase() === 'consulting') {
+      await notifyPatientDoctorStartedVideo(apt);
     }
 
     res.json(apt);
@@ -832,7 +915,7 @@ async function markAppointmentPaid(apt: any, paymentRef: string, gateway = 'pays
     gateway
   ).catch((e) => {
     console.error('Coverage payment row failed:', e);
-    return { paymentRef, eligibility: { copay: 50, source: 'self_pay' } };
+    return { paymentRef, eligibility: { copay: CONSULT_FEE, source: 'self_pay' } };
   });
 
   if (apt.is_telemedicine && meetingLink) {
@@ -960,6 +1043,7 @@ app.patch('/api/appointments/:id/status', authenticate, async (req: any, res) =>
       return res.status(403).json({ message: 'Forbidden' });
     }
 
+    const previousStatus = String(aptData.status || '').toLowerCase();
     let meetingLink = normalizeJitsiMeetingLink(aptData?.meeting_link);
 
     // 2. If starting/approving a video consult that doesn't have a link yet, generate one
@@ -981,7 +1065,9 @@ app.patch('/api/appointments/:id/status', authenticate, async (req: any, res) =>
 
     // Status SMS Alerts
     if (apt) {
-      if (status === 'approved') {
+      if (status === 'consulting' && previousStatus !== 'consulting') {
+        await notifyPatientDoctorStartedVideo(apt);
+      } else if (status === 'approved') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'a Physician';
         const dateStr = apt.preferred_date ? new Date(apt.preferred_date).toLocaleDateString() : 'the scheduled date';

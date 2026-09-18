@@ -175,7 +175,7 @@ class _PhasesScreenState extends State<PhasesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Cover now: ${elig['source'] ?? 'self_pay'} · copay GHS ${elig['copay'] ?? 50}',
+                                'Cover now: ${elig['source'] ?? 'self_pay'} · copay GHS ${elig['copay'] ?? 120}',
                                 style: GoogleFonts.dmSans(color: digiSlate, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 4),

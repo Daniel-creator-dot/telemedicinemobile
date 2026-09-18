@@ -175,7 +175,7 @@ export async function initPhase1Schema() {
         ALTER TABLE doctors ADD COLUMN biography TEXT;
       END IF;
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='doctors' AND column_name='consultation_fee') THEN
-        ALTER TABLE doctors ADD COLUMN consultation_fee DECIMAL(10,2) DEFAULT 50;
+        ALTER TABLE doctors ADD COLUMN consultation_fee DECIMAL(10,2) DEFAULT 120;
       END IF;
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='doctors' AND column_name='facility') THEN
         ALTER TABLE doctors ADD COLUMN facility VARCHAR(120);
@@ -312,7 +312,7 @@ export async function initPhase1Schema() {
       title = COALESCE(title, 'Dr'),
       facility = COALESCE(facility, 'Medilynks Virtual Clinic'),
       languages = COALESCE(languages, 'English, Twi'),
-      consultation_fee = COALESCE(consultation_fee, 50),
+      consultation_fee = COALESCE(consultation_fee, 120),
       years_experience = COALESCE(years_experience, 5),
       qualifications = COALESCE(qualifications, 'MBChB'),
       biography = COALESCE(biography, 'Licensed clinician on the Medilynks network.'),
@@ -334,7 +334,7 @@ async function ensureDemoClinicians() {
       name: 'Dr. Kwesi Appiah',
       spec: 'General Physician',
       langs: 'English, Twi',
-      fee: 50,
+      fee: 120,
       years: 12,
       bio: 'Family physician at Medilynks Virtual Clinic, Accra.',
     },
@@ -391,12 +391,22 @@ async function ensureDemoClinicians() {
            start_time = COALESCE(start_time, '09:00'),
            end_time = COALESCE(end_time, '17:00'),
            slot_duration = COALESCE(NULLIF(slot_duration, 0), 30),
+           consultation_fee = CASE
+             WHEN specialization ILIKE '%general%' AND (consultation_fee IS NULL OR consultation_fee = 50) THEN $3
+             ELSE COALESCE(consultation_fee, $3)
+           END,
            is_active = TRUE
          WHERE user_id = $2`,
-        [DEFAULT_WORKING_DAYS, userId]
+        [DEFAULT_WORKING_DAYS, userId, d.fee]
       );
     }
   }
+  // Migrate legacy general consult default (GHS 50 → 120)
+  await query(
+    `UPDATE doctors SET consultation_fee = 120
+     WHERE (consultation_fee IS NULL OR consultation_fee = 50)
+       AND (specialization ILIKE '%general%' OR specialization IS NULL OR specialization = '')`
+  ).catch(() => null);
   console.log('Demo clinicians ready (dr_appiah / dr_mensah / dr_doe, password staff123)');
 }
 
