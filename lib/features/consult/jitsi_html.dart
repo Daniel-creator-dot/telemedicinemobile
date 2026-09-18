@@ -3,11 +3,13 @@
 /// meet.jit.si (and 8x8.vc) hard-require an authenticated moderator to start a
 /// conference — anonymous External API embeds get stuck on
 /// "Asking to join meeting..." / "no moderators have yet arrived". That cannot
-/// be disabled via configOverwrite. We therefore host rooms on a public
-/// community instance where the first joiner becomes moderator with no login.
+/// be disabled via configOverwrite. jitsi.debian.social later added SSO
+/// (tokenAuthUrl → salsa.debian.org), which breaks the same embeds.
+/// We therefore host rooms on a public community instance where the first
+/// joiner becomes moderator with no login.
 const String kDigiJitsiDomain = String.fromEnvironment(
   'JITSI_DOMAIN',
-  defaultValue: 'jitsi.debian.social',
+  defaultValue: 'jitsi.member.fsf.org',
 );
 
 bool isLockedPublicJitsiHost(String host) {
@@ -15,7 +17,8 @@ bool isLockedPublicJitsiHost(String host) {
   return h == 'meet.jit.si' ||
       h == '8x8.vc' ||
       h.endsWith('.8x8.vc') ||
-      h == 'jaas.8x8.vc';
+      h == 'jaas.8x8.vc' ||
+      h == 'jitsi.debian.social';
 }
 
 String digiJitsiDomainFromUrl(String meetingUrl) {

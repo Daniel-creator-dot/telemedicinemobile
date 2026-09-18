@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'jitsi_embed_api.dart';
@@ -30,6 +32,7 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
   late final WebViewController _web;
   late final JitsiRoomController _room;
   bool _fellBack = false;
+  bool _ready = false;
 
   @override
   void initState() {
@@ -57,6 +60,28 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
     _room.switchCamera = () => _web.runJavaScript('switchCamera();');
     _room.hangup = () => _web.runJavaScript('hangup();');
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onControllerReady?.call(_room);
+      _prepareAndLoad();
+    });
+  }
+
+  Future<void> _prepareAndLoad() async {
+    // Android WebView getUserMedia requires the app to hold runtime grants.
+    if (!kIsWeb) {
+      try {
+        await [
+          Permission.camera,
+          Permission.microphone,
+        ].request();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _loadEmbed();
+    setState(() => _ready = true);
+  }
+
+  void _loadEmbed() {
     final normalized = normalizeJitsiMeetingUrl(widget.meetingUrl);
     final domain = digiJitsiDomainFromUrl(normalized);
     final html = buildJitsiHostHtml(
@@ -67,10 +92,6 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
       startVideoMuted: widget.startVideoMuted,
     );
     _web.loadHtmlString(html, baseUrl: 'https://$domain/');
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.onControllerReady?.call(_room);
-    });
   }
 
   void _fallbackToDirectJitsi() {
@@ -90,6 +111,14 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) {
+      return const ColoredBox(
+        color: Color(0xFF071018),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFF00D2C4)),
+        ),
+      );
+    }
     return WebViewWidget(controller: _web);
   }
 }

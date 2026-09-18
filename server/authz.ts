@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { query } from './db';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
+import { normalizeJitsiMeetingLink } from './jitsi';
 
 export type AuthedUser = { id: number; username: string; role: string };
 export type AuthedRequest = Request & { user?: AuthedUser };
@@ -74,6 +75,7 @@ export function dateOnly(value: unknown): string | null {
 
 export function serializeAppointment(row: any) {
   if (!row) return row;
+  const meetingLink = normalizeJitsiMeetingLink(row.meeting_link);
   return {
     ...row,
     preferred_date: dateOnly(row.preferred_date) ?? row.preferred_date,
@@ -81,6 +83,9 @@ export function serializeAppointment(row: any) {
       row.preferred_time == null
         ? row.preferred_time
         : String(row.preferred_time).slice(0, 8),
+    // Always surface the Medilynks host so patient + doctor share one room URL
+    // even when the DB still has a legacy meet.jit.si / debian.social link.
+    meeting_link: meetingLink ?? row.meeting_link,
   };
 }
 
