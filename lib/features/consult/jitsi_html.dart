@@ -83,21 +83,45 @@ String jitsiDirectJoinUrl({
   final normalized = normalizeJitsiMeetingUrl(meetingUrl);
   final domain = digiJitsiDomainFromUrl(normalized);
   final room = jitsiRoomNameFromUrl(normalized);
-  final name = Uri.encodeQueryComponent(sanitizeJitsiName(displayName));
+  // Do not encodeQueryComponent inside quotes — Jitsi hash parser wants a plain name.
+  final name = sanitizeJitsiName(displayName).replaceAll('"', '');
   return 'https://$domain/$room'
       '#userInfo.displayName="$name"'
       '&config.prejoinConfig.enabled=false'
       '&config.prejoinPageEnabled=false'
       '&config.startWithAudioMuted=$startAudioMuted'
       '&config.startWithVideoMuted=$startVideoMuted'
+      '&config.p2p.enabled=false'
       '&config.disableDeepLinking=true'
       '&config.enableWelcomePage=false'
       '&config.requireDisplayName=false'
       '&config.enableClosePage=false'
       '&config.disableInviteFunctions=true'
+      '&config.startSilent=false'
       '&interfaceConfig.MOBILE_APP_PROMO=false'
       '&interfaceConfig.SHOW_JITSI_WATERMARK=false'
       '&interfaceConfig.DISABLE_JOIN_LEAVE_NOTIFICATIONS=true';
+}
+
+/// Warm getUserMedia before/alongside Jitsi join (Android WebView WebRTC).
+String jitsiMediaWarmupScript() {
+  return r'''
+(function () {
+  if (window.__digiMediaWarm) return;
+  window.__digiMediaWarm = true;
+  function notify(event) {
+    try { if (window.DigiJitsi) DigiJitsi.postMessage(event); } catch (e) {}
+  }
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+      .then(function (stream) {
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      })
+      .catch(function () { notify('mediaDenied'); });
+  } catch (e) { notify('mediaDenied'); }
+})();
+''';
 }
 
 String sanitizeJitsiName(String name) {
@@ -144,7 +168,11 @@ String jitsiMeetBridgeScript() {
         try { if (APP.conference && APP.conference.switchCamera) APP.conference.switchCamera(); } catch (e) {}
       };
       window.hangup = function () {
-        try { if (conf.hangup) conf.hangup(); else if (APP.conference && APP.conference.hangup) APP.conference.hangup(); } catch (e) {}
+        try {
+          if (conf.hangup) conf.hangup();
+          else if (APP.conference && APP.conference.hangup) APP.conference.hangup();
+        } catch (e) {}
+        try { if (APP.UI && typeof APP.UI.hangup === 'function') APP.UI.hangup(); } catch (e) {}
       };
       notify('ready');
       return true;
@@ -226,6 +254,8 @@ String buildJitsiHostHtml({
             prejoinConfig: { enabled: false },
             startWithAudioMuted: $startAudioMuted,
             startWithVideoMuted: $startVideoMuted,
+            p2p: { enabled: false },
+            startSilent: false,
             disableDeepLinking: true,
             disableInviteFunctions: true,
             disableModeratorIndicator: true,

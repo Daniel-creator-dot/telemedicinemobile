@@ -131,6 +131,16 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
           doctorName: latest.doctorName ?? _apt.doctorName,
         );
       });
+      // Patient: doctor completed elsewhere / status flipped → leave the call UI.
+      final st = latest.status.toLowerCase();
+      if (!_isClinician && (st == 'completed' || st == 'cancelled') && _inCall) {
+        await _leaveCallUi(
+          notice: st == 'completed'
+              ? 'Visit completed by your clinician.'
+              : 'This visit was cancelled.',
+        );
+        return;
+      }
       _maybeEnterCall();
       if (_showChat) await _loadChat();
     } catch (_) {}
@@ -173,6 +183,10 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
     final hasLink = _apt.hasMeetingLink;
     if (!hasLink) return;
     if (_inCall) return;
+    final st = _apt.status.toLowerCase();
+    if (st == 'completed' || st == 'cancelled' || st == 'missed' || st == 'rejected') {
+      return;
+    }
     // Patients wait until approved/arrived/consulting (or live consult_now after approval).
     final ready = _isClinician || _apt.isLiveConsult || !_apt.isWaitingInQueue;
     if (!ready) return;
@@ -180,6 +194,29 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
       _inCall = true;
       _connection = 'Connecting';
     });
+  }
+
+  Future<void> _hangupJitsi() async {
+    try {
+      await _jitsi?.hangup?.call();
+    } catch (_) {}
+    // Give WebRTC a beat to leave the conference before disposing the WebView.
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+  }
+
+  Future<void> _leaveCallUi({String? notice}) async {
+    _poll?.cancel();
+    _clock?.cancel();
+    await _hangupJitsi();
+    if (!mounted) return;
+    if (notice != null && notice.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(notice), duration: const Duration(seconds: 4)),
+      );
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+    }
   }
 
   void _startTimer() {
@@ -283,7 +320,7 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
     } catch (_) {}
   }
 
-  Future<void> _saveSoap({String status = 'in_progress'}) async {
+  Future<void> _saveSoap({String status = 'in_progress', bool silent = false}) async {
     try {
       final api = context.read<ApiClient>();
       final payload = {
@@ -306,53 +343,100 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
         final res = await api.dio.post<Map<String, dynamic>>('/api/consultations', data: payload);
         _consultation = res.data;
       }
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(status == 'completed' ? 'Consult completed' : 'SOAP draft saved')),
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('SOAP save failed: $e')));
       }
+      rethrow;
     }
   }
 
   Future<void> _endCall({bool complete = false}) async {
     if (_completing) return;
-    if (complete) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: _panel,
-          title: Text('Complete consult?', style: GoogleFonts.roboto(color: Colors.white)),
-          content: Text(
-            'End the video call and mark this consultation as completed.',
-            style: GoogleFonts.roboto(color: Colors.white70),
+
+    if (!complete) {
+      // Soft leave: hang up media and pop without changing appointment status.
+      await _leaveCallUi();
+      return;
+    }
+
+    // Doctor Complete: hang up → mark appointment completed → leave UI.
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _panel,
+        title: Text('Complete consult?', style: GoogleFonts.roboto(color: Colors.white)),
+        content: Text(
+          'End the video call and mark this consultation as completed. '
+          'The patient will leave the active visit.',
+          style: GoogleFonts.roboto(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Stay')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _teal, foregroundColor: Colors.black),
+            child: const Text('Complete'),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Stay')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: _teal, foregroundColor: Colors.black),
-              child: const Text('Complete'),
-            ),
-          ],
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _completing = true);
+    final repo = context.read<AppointmentsRepository>();
+
+    // 1) Leave the conference first so the patient sees the doctor drop.
+    await _hangupJitsi();
+    if (!mounted) return;
+
+    // 2) Persist SOAP as completed (best-effort; do not block status).
+    try {
+      await _saveSoap(status: 'completed', silent: true);
+    } catch (_) {}
+
+    // 3) Mark appointment completed via existing status API.
+    var statusOk = false;
+    String? statusErr;
+    try {
+      await repo.updateAppointmentStatus(_apt.id, 'completed');
+      statusOk = true;
+      if (mounted) {
+        setState(() => _apt = _apt.copyWith(status: 'completed'));
+      }
+    } catch (e) {
+      statusErr = e.toString();
+      // One retry — Complete must land status when possible.
+      try {
+        await repo.updateAppointmentStatus(_apt.id, 'completed');
+        statusOk = true;
+        if (mounted) {
+          setState(() => _apt = _apt.copyWith(status: 'completed'));
+        }
+      } catch (e2) {
+        statusErr = e2.toString();
+      }
+    }
+
+    if (!mounted) return;
+    if (!statusOk) {
+      setState(() => _completing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not mark visit completed: ${statusErr ?? "unknown error"}'),
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 6),
         ),
       );
-      if (ok != true) return;
-      if (!mounted) return;
-      setState(() => _completing = true);
-      await _saveSoap(status: 'completed');
-      if (!mounted) return;
-      try {
-        await context.read<AppointmentsRepository>().updateAppointmentStatus(_apt.id, 'completed');
-      } catch (_) {}
+      return;
     }
-    try {
-      await _jitsi?.hangup?.call();
-    } catch (_) {}
-    if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+
+    await _leaveCallUi(notice: 'Consult completed');
   }
 
   Future<void> _openExternal() async {
@@ -511,11 +595,13 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
                 )
               : _waitingRoom(),
         ),
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: _localPip(),
-        ),
+        // Decorative PIP only in waiting room — Jitsi already shows local video in-call.
+        if (!_inCall)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: _localPip(),
+          ),
       ],
     );
   }
@@ -718,9 +804,9 @@ class _VideoConsultScreenState extends State<VideoConsultScreen> {
           if (_isClinician)
             _roundAction(
               icon: Icons.check_circle_rounded,
-              label: 'Complete',
+              label: _completing ? '…' : 'Complete',
               active: true,
-              onTap: () => _endCall(complete: true),
+              onTap: _completing ? () {} : () => _endCall(complete: true),
             ),
         ],
       ),
