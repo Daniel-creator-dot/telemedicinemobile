@@ -82,35 +82,26 @@ class AuthBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 64.0 : 88.0;
+    final width = compact ? 176.0 : 232.0;
     return Column(
       children: [
         Container(
-          width: size,
-          height: size,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(compact ? 18 : 24),
+            borderRadius: BorderRadius.circular(compact ? 22 : 28),
             boxShadow: [
               BoxShadow(color: AdminPalette.cyan.withValues(alpha: 0.4), blurRadius: 28),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(compact ? 18 : 24),
-            child: Image.asset(AppBrand.logoAsset, fit: BoxFit.cover),
+            borderRadius: BorderRadius.circular(compact ? 22 : 28),
+            child: Image.asset(
+              AppBrand.logoLockupAsset,
+              width: width,
+              fit: BoxFit.contain,
+            ),
           ),
         ).animate().fadeIn(duration: 420.ms).scale(begin: const Offset(0.86, 0.86), curve: Curves.easeOutBack),
-        SizedBox(height: compact ? 12 : 18),
-        Text(
-          AppBrand.name,
-          textAlign: TextAlign.center,
-          style: GoogleFonts.sourceSerif4(
-            fontSize: compact ? 28 : 38,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            height: 1.05,
-          ),
-        ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.08),
-        const SizedBox(height: 6),
+        SizedBox(height: compact ? 12 : 16),
         Text(
           AppBrand.tagline,
           style: GoogleFonts.dmSans(
