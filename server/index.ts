@@ -28,6 +28,7 @@ import { registerCompleteRoutes } from './complete';
 import { registerMembershipRoutes } from './membership';
 import { registerPhaseOverviewRoutes } from './phases';
 import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
+import { applyRouteSeo, robotsTxt, sitemapXml } from './seo';
 import {
   authenticate,
   requireRoles,
@@ -107,8 +108,20 @@ async function sendPushNotification(userIds: number[], title: string, body: stri
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Compiled server lives in dist/. Prebuilt Flutter web is server/web-build/.
-const healynksWebRoot = path.resolve(__dirname, '../web-build');
+// Prebuilt Flutter web is server/web-build/.
+// `npm start` runs dist/index.js (one directory below server/).
+// `npm run dev` runs this file from server/ via ts-node.
+function resolveHealynksWebRoot(): string {
+  const candidates = [
+    path.resolve(__dirname, '../web-build'),
+    path.resolve(__dirname, 'web-build'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, 'index.html'))) return candidate;
+  }
+  return candidates[0];
+}
+const healynksWebRoot = resolveHealynksWebRoot();
 const healynksIndexHtml = path.join(healynksWebRoot, 'index.html');
 
 function healynksWebReady(): boolean {
@@ -122,13 +135,19 @@ registerAuditMiddleware(app);
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'healynks' });
 });
-app.get('/', (_req, res) => {
+app.get('/', (req, res) => {
   if (healynksWebReady()) {
-    res.sendFile(healynksIndexHtml);
+    sendHealynksPage(req, res);
     return;
   }
   res.json({ ok: true, service: 'healynks' });
 });
+
+function sendHealynksPage(req: express.Request, res: express.Response) {
+  const raw = fs.readFileSync(healynksIndexHtml, 'utf8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(applyRouteSeo(raw, req.path));
+}
 
 // Auth middleware lives in ./authz (no token / JWT payload logging).
 
@@ -1976,8 +1995,19 @@ registerCompleteRoutes(app);
 registerMembershipRoutes(app, authenticate);
 registerPhaseOverviewRoutes(app);
 
+// Crawl files are generated from HEALYNK_CANONICAL_ORIGIN so they are not the SPA shell.
+app.get('/robots.txt', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.type('text/plain').send(robotsTxt());
+});
+app.get('/sitemap.xml', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.type('application/xml').send(sitemapXml());
+});
+
 // Flutter web shell. API and /health stay on their own routes.
 // Missing files with an extension (JS, wasm, images) still 404.
+// /login, /signup, and /join get their own title, canonical, and og:url.
 if (healynksWebReady()) {
   app.use(express.static(healynksWebRoot, {
     index: false,
@@ -1985,13 +2015,20 @@ if (healynksWebReady()) {
       if (filePath.endsWith(`${path.sep}index.html`) || filePath.endsWith(`${path.sep}flutter_bootstrap.js`)) {
         res.setHeader('Cache-Control', 'no-cache');
       }
+      if (filePath.endsWith(`${path.sep}robots.txt`)) {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      }
+      if (filePath.endsWith(`${path.sep}sitemap.xml`)) {
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      }
     },
   }));
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     if (req.path === '/health' || req.path === '/api' || req.path.startsWith('/api/')) return next();
+    if (req.path === '/robots.txt' || req.path === '/sitemap.xml') return next();
     if (path.extname(req.path)) return next();
-    res.sendFile(healynksIndexHtml);
+    sendHealynksPage(req, res);
   });
 }
 

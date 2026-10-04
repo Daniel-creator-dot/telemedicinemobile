@@ -22,13 +22,37 @@ The server binds `0.0.0.0:$PORT` (default `5000`) for local and Render.
 
 ### Public web app
 
-Open **https://telemedicine-server-l2bj.onrender.com** and send that link. It is the Healynks login. Patient OTP signup is [/signup](https://telemedicine-server-l2bj.onrender.com/signup). Doctors and nurse agencies use [/join](https://telemedicine-server-l2bj.onrender.com/join).
+Open **https://healynks.app** (login: **https://healynks.app/login**). Patient OTP signup is [/signup](https://healynks.app/signup). Doctors and nurse agencies use [/join](https://healynks.app/join). Checked 4 October 2026: those URLs return the Healynks app. `www.healynks.app` redirects to the apex.
 
-The release build is committed in `server/web-build/` (`--dart-define=API_URL=https://telemedicine-server-l2bj.onrender.com`). The API service serves it and rewrites app routes to `index.html`. `/health` stays JSON.
+The Render service is still **https://telemedicine-server-l2bj.onrender.com** if you need that hostname directly.
 
-`render.yaml` also defines a static site named **healynks-web** (publish path `server/web-build`, rewrite `/*` to `/index.html`). That hostname was not created in the dashboard yet, so do not send `healynks-web.onrender.com`.
+The release build is committed in `server/web-build/` (`--dart-define=API_URL=https://telemedicine-server-l2bj.onrender.com`). The API service serves it. `/`, `/login`, `/signup`, and `/join` each get their own title and canonical URL. `/health` stays JSON. `/robots.txt` and `/sitemap.xml` are crawl files, not the app shell.
 
-A custom domain is not attached. See [DOMAIN.md](DOMAIN.md). `healynks.com` and `app.healynks.com` are examples, not purchased names.
+DNS for the custom domain is in [DOMAIN.md](DOMAIN.md). `healynks.com` and `app.healynks.com` are examples, not purchased names.
+
+### Search
+
+Public pages are real HTML for crawlers, not only the Flutter shell.
+
+The canonical origin is **https://healynks.app**. On 4 October 2026, curl showed that host returns Healynks HTML (HTTP 200). `www.healynks.app` redirects to the apex. That origin is the constant `HEALYNK_CANONICAL_ORIGIN` in `server/seo.ts`, and the same string is in `web/index.html`, `web/robots.txt`, and `web/sitemap.xml`. Switch the constant to `https://healynks.app` once the domain returns Healynks HTML (already true). If the domain later stops serving the app, point the constant and those three files at `https://telemedicine-server-l2bj.onrender.com` so Google is not told to index a dead host.
+
+What is published:
+
+- Unique title, description, canonical URL, Open Graph, Twitter card, and JSON-LD for `/`, `/login`, `/signup`, and `/join`. The API rewrites `index.html` per route and leaves the Flutter bootstrap script in place.
+- `robots.txt` allows `/`, `/login`, `/signup`, and `/join`, disallows `/api/`, and links the sitemap.
+- `sitemap.xml` lists those four URLs (home priority 1.0, login 0.8).
+- Organization and WebSite structured data, plus a WebPage node on each public URL including `/login`.
+- Open Graph image: `https://healynks.app/icons/Icon-512.png`.
+
+Search tags do not create rankings by themselves. After the site is reachable and the sitemap is submitted, indexing usually takes days to weeks.
+
+Do this in your own Google and Bing accounts (this repo cannot sign in for you):
+
+1. [Google Search Console](https://search.google.com/search-console): add a **domain** property for `healynks.app` (DNS already answers and the app is served there). Verify it, then submit `https://healynks.app/sitemap.xml`.
+2. [Bing Webmaster Tools](https://www.bing.com/webmasters): add the site and submit the same sitemap URL.
+3. IndexNow is not set up here. It needs a key from a Bing account, and a placeholder key would not be valid.
+
+Keep the Cloudflare DNS in [DOMAIN.md](DOMAIN.md): grey-cloud CNAME for `@` and `www` to `telemedicine-server-l2bj.onrender.com`, SSL/TLS mode **Full**, and no conflicting AAAA records. In Render, open **telemedicine-server** → **Custom Domains** and click **Verify** if a certificate is still pending.
 
 Required environment:
 

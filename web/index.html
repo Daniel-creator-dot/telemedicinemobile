@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -16,7 +16,6 @@
   -->
   <base href="$FLUTTER_BASE_HREF">
 
-  <meta name="description" content="Healynks — connected care for Ghana">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta charset="UTF-8">
   <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, display-capture=*, autoplay=*, fullscreen=*">
@@ -30,10 +29,43 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Healynks</title>
+  <!--
+    Canonical origin is https://healynks.app (verified 2026-10-04).
+    The server rewrites this block per route from HEALYNK_CANONICAL_ORIGIN
+    in server/seo.ts. If the custom domain stops serving Healynks HTML,
+    point that constant and web/robots.txt / web/sitemap.xml at
+    https://telemedicine-server-l2bj.onrender.com.
+  -->
+  <!-- healynks-seo:start -->
+  <title>Healynks — doctors, nurses, and video consults in Ghana</title>
+  <meta name="description" content="Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#1D6BFF">
+  <link rel="canonical" href="https://healynks.app/">
+  <meta property="og:title" content="Healynks — doctors, nurses, and video consults in Ghana">
+  <meta property="og:description" content="Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.">
+  <meta property="og:url" content="https://healynks.app/">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://healynks.app/icons/Icon-512.png">
+  <meta property="og:site_name" content="Healynks">
+  <meta property="og:locale" content="en_GH">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Healynks — doctors, nurses, and video consults in Ghana">
+  <meta name="twitter:description" content="Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.">
+  <meta name="twitter:image" content="https://healynks.app/icons/Icon-512.png">
+  <script type="application/ld+json" id="healynks-jsonld">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://healynks.app/#organization","name":"Healynks","url":"https://healynks.app/","logo":"https://healynks.app/icons/Icon-512.png","description":"Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.","areaServed":{"@type":"Country","name":"Ghana"}},{"@type":"WebSite","@id":"https://healynks.app/#website","name":"Healynks","url":"https://healynks.app/","description":"Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.","inLanguage":"en","publisher":{"@id":"https://healynks.app/#organization"}},{"@type":"WebPage","@id":"https://healynks.app/#webpage","url":"https://healynks.app/","name":"Healynks — doctors, nurses, and video consults in Ghana","description":"Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.","inLanguage":"en","isPartOf":{"@id":"https://healynks.app/#website"},"about":{"@id":"https://healynks.app/#organization"}}]}</script>
+  <!-- healynks-seo:end -->
+
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- healynks-noscript:start -->
+  <noscript>
+  <h1>Healynks</h1>
+  <p>Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.</p>
+  <p><a href="https://healynks.app/login">Log in</a> · <a href="https://healynks.app/signup">Create a patient account</a> · <a href="https://healynks.app/join">Join as a doctor or nurse</a></p>
+</noscript>
+  <!-- healynks-noscript:end -->
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

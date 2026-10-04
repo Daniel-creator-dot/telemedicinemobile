@@ -1,0 +1,26 @@
+# Healynks public site. Canonical origin is HEALYNK_CANONICAL_ORIGIN in server/seo.ts.
+# Switch that constant (and web/index.html, web/robots.txt, web/sitemap.xml) to
+# https://healynks.app once the domain returns Healynks HTML. If it stops,
+# point them at https://telemedicine-server-l2bj.onrender.com instead.
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /signup
+Allow: /join
+Disallow: /api/
+Disallow: /health
+Disallow: /paystack/
+Disallow: /patient
+Disallow: /doctor
+Disallow: /admin
+Disallow: /nurse
+Disallow: /ops
+Disallow: /lab-technician
+Disallow: /pharmacy
+Disallow: /imaging
+Disallow: /corporate
+Disallow: /insurance
+Disallow: /finance
+Disallow: /hospital
+
+Sitemap: https://healynks.app/sitemap.xml

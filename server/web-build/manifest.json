@@ -3,9 +3,9 @@
     "short_name": "Healynks",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Healynks — connected care for Ghana",
+    "background_color": "#F4F7FB",
+    "theme_color": "#1D6BFF",
+    "description": "Healynks connects people in Ghana with doctors and nurses for video consults and prescriptions.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

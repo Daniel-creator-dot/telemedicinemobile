@@ -1,6 +1,10 @@
 # Attach healynks.app to Healynks
 
-You own **healynks.app** (Cloudflare Registrar). The name does not open the app yet. Until the DNS records below are saved and Render shows the certificate as issued, send:
+You own **healynks.app** (Cloudflare Registrar). Checked 4 October 2026: `https://healynks.app/` and `https://healynks.app/login` return Healynks HTML (HTTP 200). `https://www.healynks.app/` redirects to `https://healynks.app/`.
+
+Search uses **https://healynks.app** as the canonical origin (`HEALYNK_CANONICAL_ORIGIN` in `server/seo.ts`, also written in `web/index.html`, `web/robots.txt`, and `web/sitemap.xml`). Switch that constant to `https://healynks.app` once curl shows the domain returns Healynks HTML — that is already the case. If the domain later stops serving the app, point the constant and those files at the Render host below so crawlers are not sent to a dead host.
+
+The Render hostname remains a working fallback:
 
 **https://telemedicine-server-l2bj.onrender.com**
 
@@ -8,7 +12,7 @@ You own **healynks.app** (Cloudflare Registrar). The name does not open the app 
 - Patient signup: https://telemedicine-server-l2bj.onrender.com/signup
 - Doctor and nurse-agency signup: https://telemedicine-server-l2bj.onrender.com/join
 
-That host is HTTPS and serves the Flutter web app and the API. Attach the domain to the Render web service **telemedicine-server** only. Do not use **healynks-web** (`healynks-web.onrender.com` returns 404).
+That host is HTTPS and serves the Flutter web app and the API. The custom domain is attached to the Render web service **telemedicine-server** only.
 
 ## 1. Add the domain in Render
 
@@ -41,4 +45,4 @@ Also:
 
 Save both records. DNS often updates in a few minutes. Back in Render, open **Custom Domains** and click **Verify** if the rows are still waiting. When both certificates show as issued, you can optionally switch Proxy status to **Proxied** (orange cloud).
 
-`https://healynks.app` stays unreachable until those records exist. Routes `/`, `/login`, `/signup`, and `/join` are already served by **telemedicine-server**.
+Those records are what keep `https://healynks.app` on **telemedicine-server**. Routes `/`, `/login`, `/signup`, and `/join` are served there. Sitemap: `https://healynks.app/sitemap.xml`.
