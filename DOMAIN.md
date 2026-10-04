@@ -1,8 +1,12 @@
 # Attach a domain to Healynks
 
-The site people can open today is the `https://*.onrender.com` address in the README (Public web app). That link is HTTPS and does not need a custom domain. A custom domain is not live until you buy one and point DNS at Render.
+Send this link today: **https://telemedicine-server-l2bj.onrender.com**
 
-You cannot skip the registrar step from this repo. Buy the name yourself, then attach it in the Render dashboard. Examples to search for, not names this project owns: `healynks.com` or `app.healynks.com`.
+- Login: https://telemedicine-server-l2bj.onrender.com/login
+- Patient signup: https://telemedicine-server-l2bj.onrender.com/signup
+- Doctor and nurse-agency signup: https://telemedicine-server-l2bj.onrender.com/join
+
+That host is HTTPS. No custom domain is live. Buy a name yourself, then attach it in the Render dashboard. Examples to search for, not names this project owns: `healynks.com` or `app.healynks.com`.
 
 ## 1. Buy a domain
 
@@ -26,7 +30,7 @@ Use the apex (`healynks.com`) if you want the shortest link, or a subdomain (`ap
 
 At the registrar (or wherever DNS is hosted):
 
-- **Subdomain** such as `app.healynks.com`: add the **CNAME** Render shows. It usually points at the service hostname (`healynks-web.onrender.com`).
+- **Subdomain** such as `app.healynks.com`: add the **CNAME** Render shows. On the live service that is `telemedicine-server-l2bj.onrender.com`. If you later publish the **healynks-web** static site, the CNAME target is that site’s `onrender.com` hostname instead.
 - **Apex** such as `healynks.com`: add the **A** or **ALIAS / ANAME** record Render shows. Cloudflare can use CNAME flattening on the apex if Render tells you to use a CNAME.
 
 Remove any old A or CNAME on that same host name so only Render’s records remain. Save, then wait for DNS to propagate (often a few minutes, sometimes longer).

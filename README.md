@@ -22,12 +22,11 @@ The server binds `0.0.0.0:$PORT` (default `5000`) for local and Render.
 
 ### Public web app
 
-Release web assets are committed in `server/web-build/` (built with `--dart-define=API_URL=https://telemedicine-server-l2bj.onrender.com`).
+Open **https://telemedicine-server-l2bj.onrender.com** and send that link. It is the Healynks login. Patient OTP signup is [/signup](https://telemedicine-server-l2bj.onrender.com/signup). Doctors and nurse agencies use [/join](https://telemedicine-server-l2bj.onrender.com/join).
 
-- **healynks-web** in `render.yaml` is a static site. Publish path is `server/web-build`. Every route is rewritten to `index.html`.
-- The API service serves that same build at its root after this change is deployed. `/health` stays JSON.
+The release build is committed in `server/web-build/` (`--dart-define=API_URL=https://telemedicine-server-l2bj.onrender.com`). The API service serves it and rewrites app routes to `index.html`. `/health` stays JSON.
 
-Patient OTP signup is `/signup`. Doctors and nurse agencies use `/join`.
+`render.yaml` also defines a static site named **healynks-web** (publish path `server/web-build`, rewrite `/*` to `/index.html`). That hostname was not created in the dashboard yet, so do not send `healynks-web.onrender.com`.
 
 A custom domain is not attached. See [DOMAIN.md](DOMAIN.md). `healynks.com` and `app.healynks.com` are examples, not purchased names.
 
