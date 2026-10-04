@@ -25,8 +25,8 @@ class AppEnv {
         return 'http://localhost:5000';
       }
     }
-    // Debug on device/emulator: prefer emulator host mapping over Render so
-    // "cannot reach server" is local and [debugHostHint] shows a real URL.
+    // Debug on device/emulator: prefer emulator host mapping over the live API
+    // so a missing local server fails locally instead of hitting production.
     if (kDebugMode && !kIsWeb) {
       return 'http://10.0.2.2:5000';
     }
@@ -44,11 +44,5 @@ class AppEnv {
     return RegExp(
       r'https?://(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)',
     ).hasMatch(resolved);
-  }
-
-  /// Shown on login in debug, or whenever [apiUrl] was set via dart-define.
-  static String get debugHostHint {
-    if (kDebugMode || apiUrl.isNotEmpty) return resolveApiBaseUrl();
-    return '';
   }
 }

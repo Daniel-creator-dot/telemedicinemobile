@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/brand.dart';
-import '../../core/env.dart';
 import '../../shared/widgets/clinical_ui.dart';
 
 void goHomeForRole(BuildContext context, String role) {
@@ -132,13 +131,6 @@ class _AuthAside extends StatelessWidget {
                   title: 'Agencies',
                   body: 'Register a nurse agency. Healynks reviews the profile before it goes live.',
                 ),
-                if (AppEnv.debugHostHint.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    AppEnv.debugHostHint,
-                    style: GoogleFonts.dmSans(fontSize: 11, color: digiSlate),
-                  ),
-                ],
               ],
             ),
           ),
@@ -214,14 +206,6 @@ class AuthBrandHeader extends StatelessWidget {
           textAlign: TextAlign.center,
           style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4),
         ),
-        if (AppEnv.debugHostHint.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text(
-            AppEnv.debugHostHint,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.dmSans(fontSize: 11, color: digiSlate),
-          ),
-        ],
       ],
     );
   }

@@ -6,7 +6,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../core/session.dart';
 import '../../core/notification_service.dart';
-import '../../core/env.dart';
 import '../../models/doctor_profile.dart';
 import 'appointments_repository.dart';
 import 'care_repository.dart';
@@ -299,7 +298,7 @@ class _BookAppointmentDialogState extends State<BookAppointmentDialog> {
         return 'Server took too long. Check that the local API is running.';
       }
       if (e.type == DioExceptionType.connectionError) {
-        return 'Cannot reach the API at ${AppEnv.resolveApiBaseUrl()}.';
+        return 'Cannot reach the server. Check your connection and try again.';
       }
       return e.message ?? e.toString();
     }
