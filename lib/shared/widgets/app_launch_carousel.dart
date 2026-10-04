@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/brand.dart';
 import '../../features/admin/admin_chrome.dart';
+import 'clinical_ui.dart';
 
 /// Cinematic Healynks boot intro.
 class AppLaunchCarousel extends StatefulWidget {
@@ -95,13 +96,7 @@ class _AppLaunchCarouselState extends State<AppLaunchCarousel>
               const SizedBox(height: 28),
               Text(
                 AppBrand.name,
-                style: GoogleFonts.sourceSerif4(
-                  fontSize: 42,
-                  fontWeight: FontWeight.w700,
-                  color: AdminPalette.ink,
-                  letterSpacing: -0.8,
-                  height: 1,
-                ),
+                style: clinicalDisplay(42, color: AdminPalette.ink, letterSpacing: -1),
               )
                   .animate()
                   .fadeIn(delay: 280.ms, duration: 520.ms)
