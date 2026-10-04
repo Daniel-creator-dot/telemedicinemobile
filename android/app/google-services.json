@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "971537987494",
+    "project_id": "telemedicine-a79f4",
+    "storage_bucket": "telemedicine-a79f4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:971537987494:android:713437deec820cc35d8167",
+        "android_client_info": {
+          "package_name": "com.telemedicine.mobile.telemedicinemobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7P2mgSBPVk15SSJupw-kTKgAp-T3hxoo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

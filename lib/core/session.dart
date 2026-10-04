@@ -1,0 +1,93 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/auth_user.dart';
+import 'api_client.dart';
+
+import 'notification_service.dart';
+
+const _kToken = 'graprime_token';
+const _kUser = 'graprime_user';
+
+class Session extends ChangeNotifier {
+  Session(this._api);
+
+  final ApiClient _api;
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  String? _token;
+  AuthUser? _user;
+  bool _restoring = true;
+
+  String? get token => _token;
+  AuthUser? get user => _user;
+  bool get isAuthenticated => _token != null && _user != null;
+  bool get isRestoring => _restoring;
+
+  Future<void> restore() async {
+    try {
+      final token = await _storage.read(key: _kToken).timeout(const Duration(seconds: 3));
+      final userJson = await _storage.read(key: _kUser).timeout(const Duration(seconds: 3));
+      debugPrint('[SESSION] Token from storage: ${token != null ? 'Present' : 'Missing'}');
+      debugPrint('[SESSION] User from storage: ${userJson != null ? 'Present' : 'Missing'}');
+      
+      if (token != null && userJson != null) {
+        _token = token;
+        _user = AuthUser.fromJson(
+          jsonDecode(userJson) as Map<String, dynamic>,
+        );
+        _api.setToken(token);
+        debugPrint('[SESSION] Session restored successfully');
+        
+        // Register FCM Token on restore
+        NotificationService().registerTokenWithBackend(_api);
+      } else {
+        debugPrint('[SESSION] No session data found');
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Session restore failed: $e');
+      await clear();
+    } finally {
+      _restoring = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setSession({
+    required String token,
+    required AuthUser user,
+  }) async {
+    debugPrint('[SESSION] Setting session');
+    debugPrint('[SESSION] User: ${user.username}, role: ${user.role.name}');
+    
+    _token = token;
+    _user = user;
+    _restoring = false;
+    _api.setToken(token);
+    
+    await _storage.write(key: _kToken, value: token);
+    await _storage.write(key: _kUser, value: jsonEncode(user.toJson()));
+    
+    debugPrint('[SESSION] Session saved to storage');
+    
+    // Register FCM Token on login
+    NotificationService().registerTokenWithBackend(_api);
+    
+    notifyListeners();
+  }
+
+  Future<void> clear() async {
+    _token = null;
+    _user = null;
+    _api.setToken(null);
+    await _storage.delete(key: _kToken);
+    await _storage.delete(key: _kUser);
+    notifyListeners();
+  }
+
+  void patchUser(AuthUser user) {
+    _user = user;
+    _storage.write(key: _kUser, value: jsonEncode(user.toJson()));
+    notifyListeners();
+  }
+}

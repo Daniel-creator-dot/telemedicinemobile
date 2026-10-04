@@ -1,0 +1,1076 @@
+import type { Express, Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
+import { query } from './db';
+import { haversineKm, regionCentroid } from './phase5';
+import { getAccessiblePatientIds, getPatientForUser } from './patients';
+
+type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
+
+type Deps = {
+  authenticate: (req: AuthedRequest, res: Response, next: NextFunction) => void;
+  sendSMS: (recipient: string, message: string) => Promise<void>;
+  sendPushNotification: (
+    userIds: number[],
+    title: string,
+    body: string,
+    data?: Record<string, string>
+  ) => Promise<void>;
+};
+
+const PARTNER_TYPES = ['pharmacy', 'laboratory', 'imaging', 'hospital'] as const;
+
+export async function initPhase2Schema() {
+  await query(`CREATE SEQUENCE IF NOT EXISTS referral_code_seq START 200001`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS partner_orgs (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(160) NOT NULL,
+      type VARCHAR(30) NOT NULL,
+      region VARCHAR(80),
+      town VARCHAR(80),
+      address TEXT,
+      phone VARCHAR(20),
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS partner_staff (
+      id SERIAL PRIMARY KEY,
+      org_id INTEGER REFERENCES partner_orgs(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(org_id, user_id)
+    );
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS referrals (
+      id SERIAL PRIMARY KEY,
+      referral_code VARCHAR(30) UNIQUE,
+      appointment_id INTEGER REFERENCES appointments(id),
+      patient_id INTEGER REFERENCES patients(id),
+      from_doctor_id INTEGER REFERENCES users(id),
+      to_doctor_id INTEGER REFERENCES users(id),
+      to_org_id INTEGER REFERENCES partner_orgs(id),
+      specialty VARCHAR(100),
+      reason TEXT,
+      clinical_summary TEXT,
+      urgency VARCHAR(20) DEFAULT 'routine',
+      status VARCHAR(20) DEFAULT 'pending',
+      result_notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      accepted_at TIMESTAMP,
+      completed_at TIMESTAMP
+    );
+  `);
+
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='pharmacy_id') THEN
+        ALTER TABLE prescriptions ADD COLUMN pharmacy_id INTEGER REFERENCES partner_orgs(id);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='dispense_status') THEN
+        ALTER TABLE prescriptions ADD COLUMN dispense_status VARCHAR(20) DEFAULT 'unsent';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='dispensed_at') THEN
+        ALTER TABLE prescriptions ADD COLUMN dispensed_at TIMESTAMP;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='dispensed_by') THEN
+        ALTER TABLE prescriptions ADD COLUMN dispensed_by VARCHAR(100);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prescriptions' AND column_name='pharmacy_notes') THEN
+        ALTER TABLE prescriptions ADD COLUMN pharmacy_notes TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lab_requests' AND column_name='partner_id') THEN
+        ALTER TABLE lab_requests ADD COLUMN partner_id INTEGER REFERENCES partner_orgs(id);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lab_requests' AND column_name='result_returned_at') THEN
+        ALTER TABLE lab_requests ADD COLUMN result_returned_at TIMESTAMP;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scan_requests' AND column_name='partner_id') THEN
+        ALTER TABLE scan_requests ADD COLUMN partner_id INTEGER REFERENCES partner_orgs(id);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scan_requests' AND column_name='result_returned_at') THEN
+        ALTER TABLE scan_requests ADD COLUMN result_returned_at TIMESTAMP;
+      END IF;
+    END $$;
+  `);
+
+  await seedPartnersAndStaff();
+  await seedOpsDemoLoops();
+  console.log('Phase 2 schema ready');
+}
+
+/** Seed a few open network items so Medical Ops can demo assign / re-route. */
+async function seedOpsDemoLoops() {
+  const patient = await query(
+    `SELECT id FROM patients ORDER BY id ASC LIMIT 1`
+  ).catch(() => ({ rows: [] as any[] }));
+  if (!patient.rows[0]) return;
+  const patientId = patient.rows[0].id;
+
+  const apt = await query(
+    `SELECT id, doctor_id FROM appointments WHERE patient_id = $1 ORDER BY id DESC LIMIT 1`,
+    [patientId]
+  ).catch(() => ({ rows: [] as any[] }));
+  const appointmentId = apt.rows[0]?.id || null;
+  const doctorId = apt.rows[0]?.doctor_id || null;
+
+  const openLabs = await query(
+    `SELECT COUNT(*)::int AS n FROM lab_requests WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(openLabs.rows[0]?.n || 0) === 0) {
+    await query(
+      `INSERT INTO lab_requests (appointment_id, patient_id, doctor_id, test_name, test_type, urgency, status, requested_by, partner_id)
+       VALUES ($1, $2, $3, 'CBC (demo)', 'haematology', 'routine', 'pending', 'ops-seed', NULL)`,
+      [appointmentId, patientId, doctorId]
+    ).catch(() => null);
+  }
+
+  const openScans = await query(
+    `SELECT COUNT(*)::int AS n FROM scan_requests WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(openScans.rows[0]?.n || 0) === 0) {
+    await query(
+      `INSERT INTO scan_requests (appointment_id, patient_id, doctor_id, scan_type, body_part, clinical_indication, urgency, status, requested_by, partner_id)
+       VALUES ($1, $2, $3, 'Chest X-ray (demo)', 'Chest', 'Ops demo — assign imaging partner', 'routine', 'pending', 'ops-seed', NULL)`,
+      [appointmentId, patientId, doctorId]
+    ).catch(() => null);
+  }
+
+  const openRx = await query(
+    `SELECT COUNT(*)::int AS n FROM prescriptions
+     WHERE COALESCE(dispense_status,'unsent') NOT IN ('dispensed','cancelled')`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (Number(openRx.rows[0]?.n || 0) === 0 && appointmentId) {
+    await query(
+      `INSERT INTO prescriptions (appointment_id, patient_id, medication_name, dosage, frequency, duration, dispense_status, pharmacy_id)
+       VALUES ($1, $2, 'Amoxicillin 500mg (demo)', '1 capsule', 'TDS', '5 days', 'unsent', NULL)`,
+      [appointmentId, patientId]
+    ).catch(() => null);
+  }
+}
+
+async function seedPartnersAndStaff() {
+  const existing = await query('SELECT COUNT(*) FROM partner_orgs');
+  if (parseInt(existing.rows[0].count, 10) === 0) {
+    await query(`
+      INSERT INTO partner_orgs (name, type, region, town, address, phone) VALUES
+        ('Accra Central Pharmacy', 'pharmacy', 'Greater Accra', 'Accra', 'Kojo Thompson Rd, Accra', '0302001001'),
+        ('Kumasi Community Pharmacy', 'pharmacy', 'Ashanti', 'Kumasi', 'Kejetia Market, Kumasi', '0322001002'),
+        ('Korle-Bu Diagnostic Lab', 'laboratory', 'Greater Accra', 'Accra', 'Korle-Bu Teaching Hospital', '0302002001'),
+        ('Ridge Imaging Centre', 'imaging', 'Greater Accra', 'Accra', 'Ridge Hospital Road, Accra', '0302003001'),
+        ('Tamale Regional Hospital', 'hospital', 'Northern', 'Tamale', 'Hospital Road, Tamale', '0372004001')
+    `);
+    console.log('Seeded Healynks partner network');
+  }
+
+  await ensurePartnerUser('pharmacy', 'pharm123', 'pharmacy', 'Ama Boateng', '0240000101', 'Accra Central Pharmacy');
+  await ensurePartnerUser('imaging', 'image123', 'imaging', 'Kojo Asante', '0240000102', 'Ridge Imaging Centre');
+
+  const labtech = await query("SELECT id FROM users WHERE username = 'labtech' LIMIT 1");
+  const labOrg = await query("SELECT id FROM partner_orgs WHERE name = 'Korle-Bu Diagnostic Lab' LIMIT 1");
+  if (labtech.rows[0] && labOrg.rows[0]) {
+    await query(
+      'INSERT INTO partner_staff (org_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [labOrg.rows[0].id, labtech.rows[0].id]
+    );
+  }
+}
+
+async function ensurePartnerUser(
+  username: string,
+  password: string,
+  role: string,
+  name: string,
+  phone: string,
+  orgName: string
+) {
+  let user = await query('SELECT id FROM users WHERE username = $1', [username]);
+  if (!user.rows[0]) {
+    const hashed = await bcrypt.hash(password, 10);
+    user = await query(
+      'INSERT INTO users (username, password, role, name, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [username, hashed, role, name, phone]
+    );
+    console.log(`Default ${role} user created (${username}/${password})`);
+  }
+  const org = await query('SELECT id FROM partner_orgs WHERE name = $1 LIMIT 1', [orgName]);
+  if (org.rows[0] && user.rows[0]) {
+    await query(
+      'INSERT INTO partner_staff (org_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [org.rows[0].id, user.rows[0].id]
+    );
+  }
+}
+
+function scoreLocation(patient: { region?: string; town?: string }, partner: { region?: string; town?: string }) {
+  const pRegion = (patient.region || '').trim().toLowerCase();
+  const pTown = (patient.town || '').trim().toLowerCase();
+  const oRegion = (partner.region || '').trim().toLowerCase();
+  const oTown = (partner.town || '').trim().toLowerCase();
+  let score = 0;
+  if (pTown && oTown && pTown === oTown) score += 2;
+  if (pRegion && oRegion && pRegion === oRegion) score += 1;
+  return score;
+}
+
+export async function assignNearestPartner(kind: 'laboratory' | 'imaging' | 'pharmacy', patientId: number | null) {
+  if (!patientId) return null;
+  const patient = await query('SELECT region, town, preferred_location FROM patients WHERE id = $1', [patientId]);
+  const partners = await query(
+    'SELECT * FROM partner_orgs WHERE type = $1 AND is_active = TRUE',
+    [kind]
+  );
+  if (!patient.rows[0] || partners.rows.length === 0) return null;
+
+  const loc = {
+    region: patient.rows[0].region || patient.rows[0].preferred_location,
+    town: patient.rows[0].town,
+  };
+  const origin = regionCentroid(loc.region || loc.town);
+  const ranked = partners.rows
+    .map((p: any) => {
+      let distance = 9999;
+      if (origin && p.lat != null && p.lng != null) {
+        distance = haversineKm(origin, { lat: Number(p.lat), lng: Number(p.lng) });
+      }
+      return { p, score: scoreLocation(loc, p), distance };
+    })
+    .sort((a: any, b: any) => b.score - a.score || a.distance - b.distance);
+  return ranked[0]?.p ?? null;
+}
+
+async function notifyUser(
+  deps: Pick<Deps, 'sendPushNotification'>,
+  userId: number | null | undefined,
+  title: string,
+  message: string,
+  type = 'network'
+) {
+  if (!userId) return;
+  await query(
+    'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)',
+    [userId, title, message, type]
+  );
+  await deps.sendPushNotification([userId], title, message, { type });
+}
+
+async function patientUserId(patientId: number | null | undefined) {
+  if (!patientId) return null;
+  const r = await query(
+    `SELECT p.user_id,
+            COALESCE(NULLIF(p.phone_number, ''), u.phone_number) as phone_number
+     FROM patients p
+     LEFT JOIN users u ON u.id = p.user_id
+     WHERE p.id = $1`,
+    [patientId]
+  );
+  return r.rows[0] || null;
+}
+
+export async function notifyDiagnosticClosedLoop(
+  deps: Pick<Deps, 'sendSMS' | 'sendPushNotification'>,
+  row: { patient_id?: number; doctor_id?: number; test_name?: string; scan_type?: string; results?: string },
+  kind: 'lab' | 'scan'
+) {
+  const label = kind === 'lab' ? row.test_name || 'Lab test' : row.scan_type || 'Scan';
+  const title = `${label} result ready`;
+  const body = row.results ? `${label}: ${String(row.results).slice(0, 140)}` : `${label} results have been returned.`;
+  const patient = await patientUserId(row.patient_id);
+  if (patient?.user_id) await notifyUser(deps, patient.user_id, title, body, 'result');
+  if (patient?.phone_number) {
+    await deps.sendSMS(patient.phone_number, `Healynks: ${body}`);
+  }
+  if (row.doctor_id) await notifyUser(deps, row.doctor_id, title, `Result returned for your patient. ${body}`, 'result');
+}
+
+/** Notify patient + partner staff when a lab/scan is ordered (parity with Rx send). */
+export async function notifyDiagnosticOrdered(
+  deps: Pick<Deps, 'sendSMS' | 'sendPushNotification'>,
+  row: {
+    patient_id?: number;
+    partner_id?: number | null;
+    test_name?: string;
+    scan_type?: string;
+    body_part?: string;
+  },
+  kind: 'lab' | 'scan'
+) {
+  const label =
+    kind === 'lab'
+      ? row.test_name || 'Lab test'
+      : `${row.scan_type || 'Scan'}${row.body_part ? ` (${row.body_part})` : ''}`;
+  let partnerName = kind === 'lab' ? 'a network laboratory' : 'a network imaging centre';
+  if (row.partner_id) {
+    const org = await query('SELECT name FROM partner_orgs WHERE id = $1', [row.partner_id]);
+    if (org.rows[0]?.name) partnerName = org.rows[0].name;
+  }
+  const patientTitle = kind === 'lab' ? 'Lab test ordered' : 'Imaging ordered';
+  const patientBody = `${label} was sent to ${partnerName}.`;
+  const patient = await patientUserId(row.patient_id);
+  if (patient?.user_id) await notifyUser(deps, patient.user_id, patientTitle, patientBody, 'result');
+  if (patient?.phone_number) {
+    await deps.sendSMS(patient.phone_number, `Healynks: ${patientBody}`);
+  }
+  if (row.partner_id) {
+    const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [row.partner_id]);
+    const staffTitle = kind === 'lab' ? 'New lab order' : 'New imaging order';
+    for (const s of staff.rows) {
+      await notifyUser(deps, s.user_id, staffTitle, `${label} awaiting processing.`, 'result');
+    }
+  }
+}
+
+/** Mid-status patient alerts while lab/scan is in progress (before result return). */
+export async function notifyDiagnosticProgress(
+  deps: Pick<Deps, 'sendSMS' | 'sendPushNotification'>,
+  row: {
+    patient_id?: number;
+    doctor_id?: number;
+    test_name?: string;
+    scan_type?: string;
+    partner_id?: number | null;
+  },
+  kind: 'lab' | 'scan',
+  status: string
+) {
+  const label = kind === 'lab' ? row.test_name || 'Lab test' : row.scan_type || 'Scan';
+  const labels: Record<string, string> = {
+    sample_collected: `${label}: sample collected`,
+    processing: `${label}: processing at the lab`,
+    scheduled: `${label}: imaging scheduled`,
+  };
+  const title = labels[status];
+  if (!title) return;
+
+  let partnerName = '';
+  if (row.partner_id) {
+    const org = await query('SELECT name FROM partner_orgs WHERE id = $1', [row.partner_id]);
+    partnerName = org.rows[0]?.name || '';
+  }
+  const detail = partnerName ? `${title} · ${partnerName}` : title;
+  const patient = await patientUserId(row.patient_id);
+  if (patient?.user_id) await notifyUser(deps, patient.user_id, title, detail, 'result');
+  // SMS only on scheduled (patient action) — mirror pharmacy ready/dispensed pattern
+  if (patient?.phone_number && status === 'scheduled') {
+    await deps.sendSMS(patient.phone_number, `Healynks: ${detail}`);
+  }
+}
+
+async function orgForUser(userId: number) {
+  const r = await query(
+    `SELECT o.* FROM partner_orgs o
+     JOIN partner_staff s ON s.org_id = o.id
+     WHERE s.user_id = $1
+     LIMIT 1`,
+    [userId]
+  );
+  return r.rows[0] || null;
+}
+
+function nextReferralCode(n: number) {
+  return `REF-${String(n).padStart(6, '0')}`;
+}
+
+export function registerPhase2Routes(app: Express, deps: Deps) {
+  const { authenticate } = deps;
+
+  app.get('/api/partners', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const type = String(req.query.type || '');
+      const region = String(req.query.region || '');
+      const params: any[] = [];
+      const where: string[] = ['is_active = TRUE'];
+      if (type && PARTNER_TYPES.includes(type as any)) {
+        params.push(type);
+        where.push(`type = $${params.length}`);
+      }
+      if (region) {
+        params.push(region);
+        where.push(`region ILIKE $${params.length}`);
+      }
+      const result = await query(
+        `SELECT * FROM partner_orgs WHERE ${where.join(' AND ')} ORDER BY name`,
+        params
+      );
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/partners/nearby', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const type = String(req.query.type || 'pharmacy');
+      const patientId = req.query.patient_id ? Number(req.query.patient_id) : null;
+      const partners = await query(
+        'SELECT * FROM partner_orgs WHERE type = $1 AND is_active = TRUE',
+        [type]
+      );
+      let loc = { region: '', town: '' };
+      if (patientId) {
+        const p = await query('SELECT region, town, preferred_location FROM patients WHERE id = $1', [patientId]);
+        loc = {
+          region: p.rows[0]?.region || p.rows[0]?.preferred_location || '',
+          town: p.rows[0]?.town || '',
+        };
+      }
+      const ranked = partners.rows
+        .map((p: any) => ({ ...p, match_score: scoreLocation(loc, p) }))
+        .sort((a: any, b: any) => b.match_score - a.match_score);
+      res.json(ranked);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/partners/me', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const org = await orgForUser(req.user!.id);
+      res.json(org || null);
+    } catch (err) {
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.post('/api/prescriptions/:id/send', authenticate, async (req: AuthedRequest, res) => {
+    if (!['doctor', 'admin', 'nurse'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const rx = await query('SELECT * FROM prescriptions WHERE id = $1', [req.params.id]);
+      if (!rx.rows[0]) return res.status(404).json({ message: 'Prescription not found' });
+
+      let pharmacyId = req.body.pharmacy_id ? Number(req.body.pharmacy_id) : null;
+      if (!pharmacyId) {
+        const nearest = await assignNearestPartner('pharmacy', rx.rows[0].patient_id);
+        pharmacyId = nearest?.id || null;
+      }
+      if (!pharmacyId) return res.status(400).json({ message: 'No pharmacy available on the network' });
+
+      const result = await query(
+        `UPDATE prescriptions
+         SET pharmacy_id = $1, dispense_status = 'sent'
+         WHERE id = $2 RETURNING *`,
+        [pharmacyId, req.params.id]
+      );
+      const org = await query('SELECT name, phone FROM partner_orgs WHERE id = $1', [pharmacyId]);
+      const patient = await patientUserId(rx.rows[0].patient_id);
+      const pharmacyName = org.rows[0]?.name || 'a network pharmacy';
+      if (patient?.user_id) {
+        await notifyUser(
+          deps,
+          patient.user_id,
+          'Prescription sent to pharmacy',
+          `${rx.rows[0].medication_name} was sent to ${pharmacyName}.`,
+          'pharmacy'
+        );
+      }
+      if (patient?.phone_number) {
+        await deps.sendSMS(
+          patient.phone_number,
+          `Healynks: Your prescription ${rx.rows[0].prescription_ref || ''} was sent to ${pharmacyName}.`
+        );
+      }
+      const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [pharmacyId]);
+      for (const s of staff.rows) {
+        await notifyUser(deps, s.user_id, 'New e-prescription', `${rx.rows[0].medication_name} ready to dispense.`, 'pharmacy');
+      }
+      res.json({ ...result.rows[0], pharmacy_name: pharmacyName });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/pharmacy/queue', authenticate, async (req: AuthedRequest, res) => {
+    if (!['pharmacy', 'admin', 'medical_ops'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const org = await orgForUser(req.user!.id);
+      const scope = String(req.query.scope || 'active');
+      const params: any[] = [];
+      let where =
+        scope === 'all'
+          ? `pr.dispense_status IN ('sent','received','preparing','ready','dispensed','unavailable')`
+          : scope === 'done'
+            ? `pr.dispense_status IN ('dispensed','unavailable')`
+            : scope === 'ready'
+              ? `pr.dispense_status = 'ready'`
+              : `pr.dispense_status IN ('sent','received','preparing','ready')`;
+      if (org && req.user!.role === 'pharmacy') {
+        params.push(org.id);
+        where += ` AND pr.pharmacy_id = $${params.length}`;
+      }
+      const result = await query(
+        `SELECT pr.*, a.appointment_id as apt_code, p.full_name as patient_name,
+                COALESCE(NULLIF(p.phone_number, ''), a.phone_number) as patient_phone,
+                p.patient_code, o.name as pharmacy_name
+         FROM prescriptions pr
+         JOIN patients p ON pr.patient_id = p.id
+         JOIN appointments a ON pr.appointment_id = a.id
+         LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
+         WHERE ${where}
+         ORDER BY
+           CASE pr.dispense_status
+             WHEN 'ready' THEN 0
+             WHEN 'preparing' THEN 1
+             WHEN 'received' THEN 2
+             WHEN 'sent' THEN 3
+             ELSE 4
+           END,
+           pr.created_at DESC`,
+        params
+      );
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.patch('/api/pharmacy/prescriptions/:id', authenticate, async (req: AuthedRequest, res) => {
+    if (!['pharmacy', 'admin'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const { status, notes } = req.body;
+      const allowed = ['received', 'preparing', 'ready', 'dispensed', 'unavailable'];
+      if (!allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
+
+      const user = await query('SELECT name FROM users WHERE id = $1', [req.user!.id]);
+      const org = await orgForUser(req.user!.id);
+      if (req.user!.role === 'pharmacy' && org) {
+        const owned = await query(
+          'SELECT id FROM prescriptions WHERE id = $1 AND pharmacy_id = $2',
+          [req.params.id, org.id]
+        );
+        if (!owned.rows[0]) return res.status(404).json({ message: 'Not found' });
+      }
+
+      const result = await query(
+        `UPDATE prescriptions
+         SET dispense_status = $1::varchar(20),
+             pharmacy_notes = COALESCE($2, pharmacy_notes),
+             dispensed_by = $3,
+             dispensed_at = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE dispensed_at END
+         WHERE id = $5 RETURNING *`,
+        [
+          status,
+          notes || null,
+          user.rows[0]?.name || req.user!.username,
+          status === 'dispensed',
+          req.params.id,
+        ]
+      );
+      if (!result.rows[0]) return res.status(404).json({ message: 'Not found' });
+
+      const patient = await patientUserId(result.rows[0].patient_id);
+      const labels: Record<string, string> = {
+        received: 'Pharmacy received your prescription',
+        preparing: 'Pharmacy is preparing your medication',
+        ready: 'Your medication is ready for pickup',
+        dispensed: 'Your medication has been dispensed',
+        unavailable: 'Pharmacy could not fill this prescription',
+      };
+      const title = labels[status];
+      const detail = `${result.rows[0].medication_name}${org?.name ? ` · ${org.name}` : ''}`;
+      if (patient?.user_id) await notifyUser(deps, patient.user_id, title, detail, 'pharmacy');
+      if (patient?.phone_number && (status === 'ready' || status === 'dispensed')) {
+        await deps.sendSMS(patient.phone_number, `Healynks: ${title} — ${result.rows[0].medication_name}`);
+      }
+      // Notify prescribing doctor when dispensed or unavailable
+      if (status === 'dispensed' || status === 'unavailable') {
+        const apt = await query(
+          `SELECT a.doctor_id FROM appointments a
+           JOIN prescriptions pr ON pr.appointment_id = a.id
+           WHERE pr.id = $1`,
+          [req.params.id]
+        );
+        if (apt.rows[0]?.doctor_id) {
+          await notifyUser(
+            deps,
+            apt.rows[0].doctor_id,
+            status === 'dispensed' ? 'Prescription dispensed' : 'Prescription not filled',
+            detail,
+            'pharmacy'
+          );
+        }
+      }
+      res.json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.post('/api/referrals', authenticate, async (req: AuthedRequest, res) => {
+    if (!['doctor', 'admin'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const {
+        appointment_id,
+        patient_id,
+        to_doctor_id,
+        to_org_id,
+        specialty,
+        reason,
+        clinical_summary,
+        urgency,
+      } = req.body;
+      if (!patient_id || !reason) return res.status(400).json({ message: 'Patient and reason are required' });
+
+      const seq = await query(`SELECT nextval('referral_code_seq') AS n`);
+      const code = nextReferralCode(seq.rows[0].n);
+      const result = await query(
+        `INSERT INTO referrals (
+           referral_code, appointment_id, patient_id, from_doctor_id, to_doctor_id, to_org_id,
+           specialty, reason, clinical_summary, urgency, status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending') RETURNING *`,
+        [
+          code,
+          appointment_id || null,
+          patient_id,
+          req.user!.id,
+          to_doctor_id || null,
+          to_org_id || null,
+          specialty || null,
+          reason,
+          clinical_summary || null,
+          urgency || 'routine',
+        ]
+      );
+      const row = result.rows[0];
+      if (to_doctor_id) {
+        await notifyUser(deps, to_doctor_id, 'New specialist referral', `${code}: ${reason}`, 'referral');
+      }
+      if (to_org_id) {
+        const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [to_org_id]);
+        for (const s of staff.rows) {
+          await notifyUser(deps, s.user_id, 'Inbound hospital referral', `${code}: ${specialty || 'specialist'} — ${reason}`, 'referral');
+        }
+      }
+      const patient = await patientUserId(patient_id);
+      if (patient?.user_id) {
+        await notifyUser(deps, patient.user_id, 'Specialist referral created', `${code} — ${specialty || 'specialist'}`, 'referral');
+      }
+      res.status(201).json(row);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/referrals', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const role = req.user!.role;
+      const params: any[] = [];
+      let where = 'TRUE';
+      if (role === 'doctor') {
+        params.push(req.user!.id);
+        where = `(r.from_doctor_id = $${params.length} OR r.to_doctor_id = $${params.length})`;
+      } else if (role === 'patient') {
+        const patient = await query('SELECT id FROM patients WHERE user_id = $1', [req.user!.id]);
+        if (!patient.rows[0]) return res.json([]);
+        params.push(patient.rows[0].id);
+        where = `r.patient_id = $${params.length}`;
+      } else if (!['admin', 'medical_ops', 'nurse'].includes(role)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
+      const result = await query(
+        `SELECT r.*, p.full_name as patient_name, p.patient_code,
+                fd.name as from_doctor_name, td.name as to_doctor_name, o.name as org_name
+         FROM referrals r
+         JOIN patients p ON r.patient_id = p.id
+         LEFT JOIN users fd ON r.from_doctor_id = fd.id
+         LEFT JOIN users td ON r.to_doctor_id = td.id
+         LEFT JOIN partner_orgs o ON r.to_org_id = o.id
+         WHERE ${where}
+         ORDER BY r.created_at DESC`,
+        params
+      );
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.patch('/api/referrals/:id', authenticate, async (req: AuthedRequest, res) => {
+    if (!['doctor', 'admin', 'medical_ops', 'hospital'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const { status, result_notes, to_doctor_id } = req.body;
+      const existing = await query('SELECT * FROM referrals WHERE id = $1', [req.params.id]);
+      if (!existing.rows[0]) return res.status(404).json({ message: 'Not found' });
+
+      if (req.user!.role === 'hospital') {
+        const org = await orgForUser(req.user!.id);
+        if (!org || existing.rows[0].to_org_id !== org.id) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+      }
+
+      const allowed = ['pending', 'accepted', 'in_progress', 'completed', 'declined'];
+      if (status && !allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
+
+      const result = await query(
+        `UPDATE referrals SET
+           status = COALESCE($1::varchar(20), status),
+           result_notes = COALESCE($2, result_notes),
+           to_doctor_id = COALESCE($3, to_doctor_id),
+           accepted_at = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE accepted_at END,
+           completed_at = CASE WHEN $5 THEN CURRENT_TIMESTAMP ELSE completed_at END
+         WHERE id = $6 RETURNING *`,
+        [
+          status || null,
+          result_notes || null,
+          to_doctor_id || null,
+          status === 'accepted',
+          status === 'completed',
+          req.params.id,
+        ]
+      );
+      const row = result.rows[0];
+      if (status === 'completed' || result_notes) {
+        await notifyUser(
+          deps,
+          row.from_doctor_id,
+          'Referral result returned',
+          `${row.referral_code}: ${result_notes || 'Specialist completed the referral.'}`,
+          'referral'
+        );
+        const patient = await patientUserId(row.patient_id);
+        if (patient?.user_id) {
+          await notifyUser(deps, patient.user_id, 'Specialist update', `${row.referral_code} is ${row.status}.`, 'referral');
+        }
+      }
+      if (status === 'accepted') {
+        const patient = await patientUserId(row.patient_id);
+        if (patient?.user_id) {
+          await notifyUser(deps, patient.user_id, 'Referral accepted', `${row.referral_code} was accepted by the specialist.`, 'referral');
+        }
+      }
+      res.json(row);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.get('/api/network/mine', authenticate, async (req: AuthedRequest, res) => {
+    try {
+      const patient = await getPatientForUser(req.user!.id);
+      const ids = await getAccessiblePatientIds(req.user!.id);
+      const idList = ids.length ? ids : patient?.id ? [patient.id] : [];
+      if (!idList.length) return res.json({ labs: [], scans: [], referrals: [], prescriptions: [] });
+
+      const [labs, scans, referrals, prescriptions] = await Promise.all([
+        query(
+          `SELECT lr.*, o.name as partner_name
+           FROM lab_requests lr LEFT JOIN partner_orgs o ON lr.partner_id = o.id
+           WHERE lr.patient_id = ANY($1) ORDER BY lr.created_at DESC`,
+          [idList]
+        ),
+        query(
+          `SELECT sr.*, o.name as partner_name
+           FROM scan_requests sr LEFT JOIN partner_orgs o ON sr.partner_id = o.id
+           WHERE sr.patient_id = ANY($1) ORDER BY sr.created_at DESC`,
+          [idList]
+        ),
+        query(
+          `SELECT r.*, td.name as to_doctor_name, o.name as org_name
+           FROM referrals r
+           LEFT JOIN users td ON r.to_doctor_id = td.id
+           LEFT JOIN partner_orgs o ON r.to_org_id = o.id
+           WHERE r.patient_id = ANY($1) ORDER BY r.created_at DESC`,
+          [idList]
+        ),
+        query(
+          `SELECT pr.*, o.name as pharmacy_name
+           FROM prescriptions pr LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
+           WHERE pr.patient_id = ANY($1) ORDER BY pr.created_at DESC`,
+          [idList]
+        ),
+      ]);
+      res.json({
+        labs: labs.rows,
+        scans: scans.rows,
+        referrals: referrals.rows,
+        prescriptions: prescriptions.rows,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Phase 2 Medical Ops board: live queue + closed-loop network status. */
+  app.get('/api/ops/board', authenticate, async (req: AuthedRequest, res) => {
+    if (!['medical_ops', 'admin', 'nurse'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const [
+        stats,
+        queue,
+        doctors,
+        labs,
+        scans,
+        pharmacy,
+        referrals,
+        partners,
+      ] = await Promise.all([
+        query(`
+          SELECT
+            (SELECT COUNT(*) FROM doctors
+              WHERE is_active = TRUE
+                AND COALESCE(is_online, FALSE) = TRUE
+                AND last_seen_at IS NOT NULL
+                AND last_seen_at > NOW() - INTERVAL '90 seconds') AS doctors_online,
+            (SELECT COUNT(*) FROM appointments WHERE status = 'consulting') AS consulting_now,
+            (SELECT COUNT(*) FROM appointments
+              WHERE COALESCE(booking_type,'scheduled') = 'consult_now'
+                AND status IN ('queued','pending','approved')) AS patients_waiting,
+            (SELECT COUNT(*) FROM lab_requests
+              WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS pending_labs,
+            (SELECT COUNT(*) FROM scan_requests
+              WHERE COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS pending_scans,
+            (SELECT COUNT(*) FROM prescriptions
+              WHERE COALESCE(dispense_status,'unsent') IN ('sent','received','preparing','ready','unsent')) AS pending_pharmacy,
+            (SELECT COUNT(*) FROM referrals
+              WHERE COALESCE(status,'pending') NOT IN ('completed','declined','cancelled')) AS open_referrals,
+            (SELECT COUNT(*) FROM lab_requests
+              WHERE partner_id IS NULL AND COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS unassigned_labs,
+            (SELECT COUNT(*) FROM scan_requests
+              WHERE partner_id IS NULL AND COALESCE(status,'pending') NOT IN ('completed','cancelled')) AS unassigned_scans,
+            (SELECT COUNT(*) FROM prescriptions
+              WHERE pharmacy_id IS NULL
+                AND COALESCE(dispense_status,'unsent') NOT IN ('dispensed','cancelled')) AS unassigned_rx
+        `),
+        query(`
+          SELECT a.id, a.appointment_id, a.full_name, a.status, a.queue_number, a.priority,
+                 a.doctor_id, a.patient_id, a.created_at, a.eta_minutes,
+                 d.name as doctor_name, d.is_online as doctor_online,
+                 t.id as triage_id, t.urgency, t.complaint, t.symptoms, t.status as triage_status,
+                 p.patient_code, p.region, p.town
+          FROM appointments a
+          LEFT JOIN doctors d ON a.doctor_id = d.id
+          LEFT JOIN triage_records t ON t.appointment_id = a.id
+          LEFT JOIN patients p ON p.id = a.patient_id
+          WHERE COALESCE(a.booking_type,'scheduled') = 'consult_now'
+            AND a.status IN ('queued','pending','approved','arrived','consulting')
+          ORDER BY
+            CASE COALESCE(t.urgency, a.priority)
+              WHEN 'emergency' THEN 0 WHEN 'High' THEN 1 WHEN 'urgent' THEN 1
+              WHEN 'Medium' THEN 2 ELSE 3
+            END,
+            a.queue_number ASC NULLS LAST,
+            a.created_at ASC
+          LIMIT 60
+        `),
+        query(`
+          SELECT d.id, d.name, d.specialty, d.region,
+                 COALESCE(d.is_online, FALSE) = TRUE
+                   AND d.last_seen_at IS NOT NULL
+                   AND d.last_seen_at > NOW() - INTERVAL '90 seconds' AS is_online,
+                 (SELECT COUNT(*) FROM appointments a
+                  WHERE a.doctor_id = d.id
+                    AND a.status IN ('queued','pending','approved','arrived','consulting')) AS open_cases
+          FROM doctors d
+          WHERE d.is_active = TRUE
+          ORDER BY is_online DESC, d.name ASC
+        `),
+        query(`
+          SELECT lr.*, p.full_name as patient_name, p.patient_code, o.name as partner_name,
+                 u.name as doctor_name
+          FROM lab_requests lr
+          LEFT JOIN patients p ON p.id = lr.patient_id
+          LEFT JOIN partner_orgs o ON o.id = lr.partner_id
+          LEFT JOIN users u ON u.id = lr.doctor_id
+          WHERE COALESCE(lr.status,'pending') NOT IN ('completed','cancelled')
+          ORDER BY lr.created_at DESC LIMIT 40
+        `),
+        query(`
+          SELECT sr.*, p.full_name as patient_name, p.patient_code, o.name as partner_name,
+                 u.name as doctor_name
+          FROM scan_requests sr
+          LEFT JOIN patients p ON p.id = sr.patient_id
+          LEFT JOIN partner_orgs o ON o.id = sr.partner_id
+          LEFT JOIN users u ON u.id = sr.doctor_id
+          WHERE COALESCE(sr.status,'pending') NOT IN ('completed','cancelled')
+          ORDER BY sr.created_at DESC LIMIT 40
+        `),
+        query(`
+          SELECT pr.*, p.full_name as patient_name, p.patient_code, o.name as pharmacy_name,
+                 a.appointment_id as apt_code
+          FROM prescriptions pr
+          LEFT JOIN patients p ON p.id = pr.patient_id
+          LEFT JOIN partner_orgs o ON o.id = pr.pharmacy_id
+          LEFT JOIN appointments a ON a.id = pr.appointment_id
+          WHERE COALESCE(pr.dispense_status,'unsent') NOT IN ('dispensed','cancelled')
+          ORDER BY pr.created_at DESC LIMIT 40
+        `),
+        query(`
+          SELECT r.*, p.full_name as patient_name, p.patient_code,
+                 fd.name as from_doctor_name, o.name as org_name
+          FROM referrals r
+          LEFT JOIN patients p ON p.id = r.patient_id
+          LEFT JOIN users fd ON fd.id = r.from_doctor_id
+          LEFT JOIN partner_orgs o ON o.id = r.to_org_id
+          WHERE COALESCE(r.status,'pending') NOT IN ('completed','declined','cancelled')
+          ORDER BY r.created_at DESC LIMIT 40
+        `),
+        query(`SELECT id, name, type, region, town, is_active FROM partner_orgs WHERE is_active = TRUE ORDER BY type, name`),
+      ]);
+
+      const byType: Record<string, any[]> = {
+        pharmacy: [],
+        laboratory: [],
+        imaging: [],
+        hospital: [],
+      };
+      for (const p of partners.rows) {
+        const key = String(p.type || '');
+        if (byType[key]) byType[key].push(p);
+      }
+
+      res.json({
+        stats: stats.rows[0] || {},
+        queue: queue.rows,
+        doctors: doctors.rows,
+        labs: labs.rows,
+        scans: scans.rows,
+        pharmacy: pharmacy.rows,
+        referrals: referrals.rows,
+        partners: byType,
+        note: 'Medical Ops assigns clinicians and network partners. Clinical notes stay with the treating doctor.',
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  /** Reassign lab / imaging / pharmacy partner from Medical Ops. */
+  app.patch('/api/ops/partner-assign', authenticate, async (req: AuthedRequest, res) => {
+    if (!['medical_ops', 'admin', 'nurse'].includes(req.user!.role)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const kind = String(req.body?.kind || '').toLowerCase();
+      const id = Number(req.body?.id);
+      const partnerId = Number(req.body?.partner_id);
+      if (!id || !partnerId || !['lab', 'scan', 'pharmacy', 'referral'].includes(kind)) {
+        return res.status(400).json({ message: 'kind, id and partner_id are required' });
+      }
+
+      const org = await query('SELECT * FROM partner_orgs WHERE id = $1 AND is_active = TRUE', [partnerId]);
+      if (!org.rows[0]) return res.status(404).json({ message: 'Partner not found' });
+
+      const expectedType =
+        kind === 'lab' ? 'laboratory' : kind === 'scan' ? 'imaging' : kind === 'pharmacy' ? 'pharmacy' : 'hospital';
+      if (org.rows[0].type !== expectedType) {
+        return res.status(400).json({ message: `Partner must be type ${expectedType}` });
+      }
+
+      let row: any = null;
+      if (kind === 'lab') {
+        const result = await query(
+          `UPDATE lab_requests SET partner_id = $1 WHERE id = $2
+           AND COALESCE(status,'pending') NOT IN ('completed','cancelled') RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          await notifyDiagnosticOrdered(deps, row, 'lab');
+        }
+      } else if (kind === 'scan') {
+        const result = await query(
+          `UPDATE scan_requests SET partner_id = $1 WHERE id = $2
+           AND COALESCE(status,'pending') NOT IN ('completed','cancelled') RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          await notifyDiagnosticOrdered(deps, row, 'scan');
+        }
+      } else if (kind === 'pharmacy') {
+        const result = await query(
+          `UPDATE prescriptions
+           SET pharmacy_id = $1,
+               dispense_status = CASE
+                 WHEN COALESCE(dispense_status,'unsent') = 'unsent' THEN 'sent'
+                 ELSE dispense_status
+               END
+           WHERE id = $2
+             AND COALESCE(dispense_status,'unsent') NOT IN ('dispensed','cancelled')
+           RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          const patient = await patientUserId(row.patient_id);
+          const pharmacyName = org.rows[0].name;
+          if (patient?.user_id) {
+            await notifyUser(
+              deps,
+              patient.user_id,
+              'Pharmacy updated',
+              `${row.medication_name} was routed to ${pharmacyName}.`,
+              'pharmacy'
+            );
+          }
+          const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [partnerId]);
+          for (const s of staff.rows) {
+            await notifyUser(deps, s.user_id, 'Prescription assigned', `${row.medication_name} ready to dispense.`, 'pharmacy');
+          }
+        }
+      } else {
+        const result = await query(
+          `UPDATE referrals SET to_org_id = $1 WHERE id = $2
+           AND COALESCE(status,'pending') NOT IN ('completed','declined','cancelled') RETURNING *`,
+          [partnerId, id]
+        );
+        row = result.rows[0];
+        if (row) {
+          const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [partnerId]);
+          for (const s of staff.rows) {
+            await notifyUser(
+              deps,
+              s.user_id,
+              'Referral routed',
+              `${row.referral_code}: ${row.specialty || 'specialist'} — ${row.reason}`,
+              'referral'
+            );
+          }
+          const patient = await patientUserId(row.patient_id);
+          if (patient?.user_id) {
+            await notifyUser(
+              deps,
+              patient.user_id,
+              'Referral facility updated',
+              `${row.referral_code} was sent to ${org.rows[0].name}.`,
+              'referral'
+            );
+          }
+        }
+      }
+
+      if (!row) return res.status(404).json({ message: 'Open request not found' });
+      res.json({ ...row, partner_name: org.rows[0].name, partner_type: org.rows[0].type });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+}
