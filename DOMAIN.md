@@ -1,44 +1,44 @@
-# Attach a domain to Healynks
+# Attach healynks.app to Healynks
 
-Send this link today: **https://telemedicine-server-l2bj.onrender.com**
+You own **healynks.app** (Cloudflare Registrar). The name does not open the app yet. Until the DNS records below are saved and Render shows the certificate as issued, send:
+
+**https://telemedicine-server-l2bj.onrender.com**
 
 - Login: https://telemedicine-server-l2bj.onrender.com/login
 - Patient signup: https://telemedicine-server-l2bj.onrender.com/signup
 - Doctor and nurse-agency signup: https://telemedicine-server-l2bj.onrender.com/join
 
-That host is HTTPS. No custom domain is live. Buy a name yourself, then attach it in the Render dashboard. Examples to search for, not names this project owns: `healynks.com` or `app.healynks.com`.
+That host is HTTPS and serves the Flutter web app and the API. Attach the domain to the Render web service **telemedicine-server** only. Do not use **healynks-web** (`healynks-web.onrender.com` returns 404).
 
-## 1. Buy a domain
-
-Buy any domain at a registrar:
-
-- [Cloudflare Registrar](https://www.cloudflare.com/products/registrar/)
-- [Namecheap](https://www.namecheap.com/)
-- [Google Domains](https://domains.google/) (registration now goes through Squarespace)
-
-Use the apex (`healynks.com`) if you want the shortest link, or a subdomain (`app.healynks.com`) if the apex already has another site.
-
-## 2. Add it on the Render static site
+## 1. Add the domain in Render
 
 1. Open the [Render dashboard](https://dashboard.render.com/).
-2. Open the service that serves the Flutter app. Prefer the **healynks-web** static site. If that service is not in the dashboard yet, use **telemedicine-server** (it serves the same web build at its root, and `/health` stays the API health check).
+2. Open the web service **telemedicine-server** (hostname `telemedicine-server-l2bj.onrender.com`).
 3. Go to **Settings → Custom Domains**.
-4. Choose **Add Custom Domain** and enter the domain you bought, for example `app.healynks.com` or `healynks.com`.
-5. Render shows the DNS records to create. Copy those values. They are the source of truth; do not guess an IP from an old blog post.
+4. Click **Add Custom Domain**.
+5. Enter `healynks.app` and save.
+6. Adding the apex also adds `www.healynks.app` (and the other way around), with a redirect between them. If `www.healynks.app` is not listed, click **Add Custom Domain** again and enter `www.healynks.app`.
 
-## 3. Set the DNS records Render shows
+Render shows the same DNS target on that page. It is `telemedicine-server-l2bj.onrender.com`. Do not type an IP address.
 
-At the registrar (or wherever DNS is hosted):
+## 2. DNS records in Cloudflare
 
-- **Subdomain** such as `app.healynks.com`: add the **CNAME** Render shows. On the live service that is `telemedicine-server-l2bj.onrender.com`. If you later publish the **healynks-web** static site, the CNAME target is that site’s `onrender.com` hostname instead.
-- **Apex** such as `healynks.com`: add the **A** or **ALIAS / ANAME** record Render shows. Cloudflare can use CNAME flattening on the apex if Render tells you to use a CNAME.
+Cloudflare dashboard → **healynks.app** → **DNS** → **Records** → **Add record**.
 
-Remove any old A or CNAME on that same host name so only Render’s records remain. Save, then wait for DNS to propagate (often a few minutes, sometimes longer).
+Create both records. Leave **Proxy status** as **DNS only** (grey cloud) until Render shows the certificate as issued. An orange cloud sends visitors through Cloudflare and blocks that check.
 
-## 4. Wait for the certificate
+| Type | Name | Target | Proxy status |
+|------|------|--------|----------------|
+| CNAME | `@` | `telemedicine-server-l2bj.onrender.com` | DNS only (grey cloud) |
+| CNAME | `www` | `telemedicine-server-l2bj.onrender.com` | DNS only (grey cloud) |
 
-Back on the Render custom domain row, wait until the domain shows as verified and the certificate is issued. Render requests the HTTPS certificate for you. When it is verified, `https://` on your domain opens the Healynks login.
+`@` is the apex `healynks.app`. Cloudflare flattens that CNAME. On Cloudflare, do not create an A record and do not use a Render load-balancer IP.
 
-Routes `/`, `/login`, `/signup`, and `/join` are rewritten to `index.html` on the static site, so those links keep working on the custom domain.
+Also:
 
-Patient registration is `/signup`. Doctors and nurse agencies register at `/join`.
+- Delete any **AAAA** records for `@` and `www`. Render does not serve IPv6.
+- Set **SSL/TLS → Overview → encryption mode** to **Full**.
+
+Save both records. DNS often updates in a few minutes. Back in Render, open **Custom Domains** and click **Verify** if the rows are still waiting. When both certificates show as issued, you can optionally switch Proxy status to **Proxied** (orange cloud).
+
+`https://healynks.app` stays unreachable until those records exist. Routes `/`, `/login`, `/signup`, and `/join` are already served by **telemedicine-server**.
