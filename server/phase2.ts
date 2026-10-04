@@ -98,8 +98,20 @@ export async function initPhase2Schema() {
     END $$;
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS prescription_refills (
+      id SERIAL PRIMARY KEY,
+      prescription_id INTEGER REFERENCES prescriptions(id) ON DELETE CASCADE,
+      patient_id INTEGER REFERENCES patients(id),
+      note TEXT,
+      status VARCHAR(20) DEFAULT 'requested',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   await seedPartnersAndStaff();
   await seedOpsDemoLoops();
+  await seedPatientRxDesk();
   console.log('Phase 2 schema ready');
 }
 
@@ -151,6 +163,156 @@ async function seedOpsDemoLoops() {
       [appointmentId, patientId]
     ).catch(() => null);
   }
+}
+
+/** Demo pickup statuses for Abena Mensah (0241555000) on the patient prescription desk. */
+async function seedPatientRxDesk() {
+  const patient = await query(
+    `SELECT id, full_name, phone_number FROM patients
+     WHERE phone_number = $1 OR phone_number = $2
+     ORDER BY id ASC LIMIT 1`,
+    ['0241555000', '233241555000']
+  );
+  if (!patient.rows[0]) {
+    console.log('Prescription desk seed skipped: demo patient 0241555000 not found');
+    return;
+  }
+  const patientId = patient.rows[0].id as number;
+  const existing = await query(
+    `SELECT COUNT(*)::int AS n FROM prescriptions
+     WHERE patient_id = $1 AND prescription_ref LIKE 'RX-DESK-%'`,
+    [patientId]
+  );
+  if (Number(existing.rows[0]?.n || 0) >= 3) {
+    console.log('Prescription desk scripts already seeded');
+    return;
+  }
+
+  const code = `APT-RXDESK-${patientId}`;
+  let apt = await query('SELECT id, doctor_id FROM appointments WHERE appointment_id = $1', [code]);
+  if (!apt.rows[0]) {
+    const doctor = await query(
+      `SELECT id FROM doctors WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC LIMIT 1`
+    );
+    apt = await query(
+      `INSERT INTO appointments (
+         appointment_id, patient_id, full_name, phone_number, doctor_id,
+         preferred_date, preferred_time, status, is_telemedicine, service, notes, completed_at
+       ) VALUES (
+         $1, $2, $3, $4, $5,
+         CURRENT_DATE, '10:00', 'completed', TRUE, 'Telemedicine', 'Prescription desk demo visit', CURRENT_TIMESTAMP
+       )
+       RETURNING id, doctor_id`,
+      [
+        code,
+        patientId,
+        patient.rows[0].full_name || 'Abena Mensah',
+        patient.rows[0].phone_number || '0241555000',
+        doctor.rows[0]?.id || null,
+      ]
+    );
+    console.log(`Created completed telemedicine visit ${code}`);
+  }
+  const appointmentId = apt.rows[0].id;
+
+  const pharmacy = await query(
+    `SELECT id FROM partner_orgs WHERE name = 'Accra Central Pharmacy' LIMIT 1`
+  );
+  const pharmacyId = pharmacy.rows[0]?.id || null;
+
+  const scripts: Array<{
+    ref: string;
+    name: string;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    strength: string;
+    route: string;
+    quantity: string;
+    status: string;
+    notes: string;
+    instructions: string;
+    dispensed: boolean;
+  }> = [
+    {
+      ref: 'RX-DESK-AML',
+      name: 'Amlodipine 5mg',
+      dosage: '1 tablet',
+      frequency: 'once daily',
+      duration: '30 days',
+      strength: '5 mg',
+      route: 'oral',
+      quantity: '30',
+      status: 'ready',
+      notes: 'Counter 2. Bring a photo ID.',
+      instructions: 'Take one tablet each morning with water. Do not stop this medicine suddenly.',
+      dispensed: false,
+    },
+    {
+      ref: 'RX-DESK-MET',
+      name: 'Metformin 500mg',
+      dosage: '1 tablet',
+      frequency: 'twice daily',
+      duration: '30 days',
+      strength: '500 mg',
+      route: 'oral',
+      quantity: '60',
+      status: 'dispensed',
+      notes: 'Collected at the counter.',
+      instructions: 'Take one tablet with breakfast and one with the evening meal.',
+      dispensed: true,
+    },
+    {
+      ref: 'RX-DESK-AMX',
+      name: 'Amoxicillin 500mg',
+      dosage: '1 capsule',
+      frequency: 'three times daily',
+      duration: '5 days',
+      strength: '500 mg',
+      route: 'oral',
+      quantity: '15',
+      status: 'sent',
+      notes: '',
+      instructions: 'Take one capsule three times a day and finish the course.',
+      dispensed: false,
+    },
+  ];
+
+  for (const s of scripts) {
+    const found = await query(
+      'SELECT id FROM prescriptions WHERE patient_id = $1 AND prescription_ref = $2',
+      [patientId, s.ref]
+    );
+    if (found.rows[0]) continue;
+    await query(
+      `INSERT INTO prescriptions (
+         appointment_id, patient_id, medication_name, dosage, frequency, duration, instructions,
+         prescription_ref, strength, route, quantity, pharmacy_id, dispense_status, pharmacy_notes, dispensed_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7,
+         $8, $9, $10, $11, $12, $13, $14,
+         CASE WHEN $15::boolean THEN CURRENT_TIMESTAMP ELSE NULL END
+       )`,
+      [
+        appointmentId,
+        patientId,
+        s.name,
+        s.dosage,
+        s.frequency,
+        s.duration,
+        s.instructions,
+        s.ref,
+        s.strength,
+        s.route,
+        s.quantity,
+        pharmacyId,
+        s.status,
+        s.notes || null,
+        s.dispensed,
+      ]
+    );
+  }
+  console.log('Seeded patient prescription desk for 0241555000');
 }
 
 async function seedPartnersAndStaff() {
@@ -482,6 +644,86 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
         await notifyUser(deps, s.user_id, 'New e-prescription', `${rx.rows[0].medication_name} ready to dispense.`, 'pharmacy');
       }
       res.json({ ...result.rows[0], pharmacy_name: pharmacyName });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  app.post('/api/prescriptions/:id/refill', authenticate, async (req: AuthedRequest, res) => {
+    if (req.user!.role !== 'patient') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    try {
+      const patient = await getPatientForUser(req.user!.id);
+      if (!patient) return res.status(403).json({ message: 'Forbidden' });
+
+      const rx = await query(
+        'SELECT * FROM prescriptions WHERE id = $1 AND patient_id = $2',
+        [req.params.id, patient.id]
+      );
+      if (!rx.rows[0]) return res.status(404).json({ message: 'Prescription not found' });
+
+      const open = await query(
+        `SELECT id FROM prescription_refills
+         WHERE prescription_id = $1 AND status = 'requested'
+         LIMIT 1`,
+        [req.params.id]
+      );
+      if (open.rows[0]) {
+        return res.status(409).json({ message: 'A refill request is already open for this prescription' });
+      }
+
+      const rawNote = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 500) : '';
+      const note = rawNote.length ? rawNote : null;
+      const inserted = await query(
+        `INSERT INTO prescription_refills (prescription_id, patient_id, note, status)
+         VALUES ($1, $2, $3, 'requested')
+         RETURNING *`,
+        [rx.rows[0].id, patient.id, note]
+      );
+
+      const med = rx.rows[0].medication_name || 'a prescription';
+      const who = patient.full_name || 'A patient';
+      const doctor = await query(
+        `SELECT d.user_id
+         FROM prescriptions pr
+         JOIN appointments a ON a.id = pr.appointment_id
+         LEFT JOIN doctors d ON d.id = a.doctor_id
+         WHERE pr.id = $1`,
+        [rx.rows[0].id]
+      );
+      const doctorUserId = doctor.rows[0]?.user_id as number | null | undefined;
+      const detail = note
+        ? `${who} requested a refill for ${med}. Note: ${note}`
+        : `${who} requested a refill for ${med}.`;
+      if (doctorUserId) {
+        await notifyUser(deps, doctorUserId, 'Refill requested', detail, 'pharmacy');
+      } else {
+        const ops = await query(
+          `SELECT id FROM users WHERE role = 'medical_ops' ORDER BY id ASC LIMIT 5`
+        );
+        for (const s of ops.rows) {
+          await notifyUser(
+            deps,
+            s.id,
+            'Refill requested',
+            `${detail} No prescribing clinician is linked.`,
+            'pharmacy'
+          );
+        }
+      }
+      if (patient.user_id) {
+        await notifyUser(
+          deps,
+          patient.user_id,
+          'Refill request sent',
+          `Your refill request for ${med} was sent to your clinician.`,
+          'pharmacy'
+        );
+      }
+
+      res.status(201).json(inserted.rows[0]);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });

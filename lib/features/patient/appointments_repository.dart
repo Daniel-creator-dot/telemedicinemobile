@@ -97,6 +97,17 @@ class AppointmentsRepository {
     return res.data!.map((json) => Prescription.fromJson(json as Map<String, dynamic>)).toList();
   }
 
+  Future<Map<String, dynamic>> requestRefill(int id, {String? note}) async {
+    final trimmed = note?.trim();
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/prescriptions/$id/refill',
+      data: {
+        if (trimmed != null && trimmed.isNotEmpty) 'note': trimmed,
+      },
+    );
+    return res.data ?? {};
+  }
+
   Future<List<Consultation>> getMyConsultations() async {
     final res = await _api.dio.get<List<dynamic>>('/api/consultations/my');
     if (res.data == null) return [];

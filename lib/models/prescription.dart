@@ -17,6 +17,13 @@ class Prescription {
     this.quantity,
     this.pharmacyName,
     this.dispenseStatus,
+    this.pharmacyPhone,
+    this.pharmacyAddress,
+    this.pharmacyTown,
+    this.pharmacyNotes,
+    this.refillId,
+    this.refillStatus,
+    this.refillNote,
   });
 
   final int id;
@@ -36,6 +43,13 @@ class Prescription {
   final String? quantity;
   final String? pharmacyName;
   final String? dispenseStatus;
+  final String? pharmacyPhone;
+  final String? pharmacyAddress;
+  final String? pharmacyTown;
+  final String? pharmacyNotes;
+  final int? refillId;
+  final String? refillStatus;
+  final String? refillNote;
 
   factory Prescription.fromJson(Map<String, dynamic> json) {
     return Prescription(
@@ -56,6 +70,15 @@ class Prescription {
       quantity: json['quantity']?.toString(),
       pharmacyName: json['pharmacy_name']?.toString(),
       dispenseStatus: json['dispense_status']?.toString(),
+      pharmacyPhone: json['pharmacy_phone']?.toString(),
+      pharmacyAddress: json['pharmacy_address']?.toString(),
+      pharmacyTown: json['pharmacy_town']?.toString(),
+      pharmacyNotes: json['pharmacy_notes']?.toString(),
+      refillId: json['refill_id'] is int
+          ? json['refill_id'] as int
+          : int.tryParse(json['refill_id']?.toString() ?? ''),
+      refillStatus: json['refill_status']?.toString(),
+      refillNote: json['refill_note']?.toString(),
     );
   }
 

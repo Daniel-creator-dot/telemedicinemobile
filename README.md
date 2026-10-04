@@ -103,6 +103,13 @@ Open **Patient → Care phases** for live counts on all five.
 - Partner desks (`labtech`, `pharmacy`, `imaging`, `hospital`) still process fulfilment; Medical Ops owns routing when a facility is missing or wrong
 - Demo seed creates a few unassigned open loops when the network queues are empty so assign can be demonstrated immediately
 
+### Patient — prescription desk
+
+- **Login:** `0241555000` / `patient123` (Abena Mensah)
+- Open **Patient → Prescriptions** from the home quick action, the Prescriptions care chip, or the button on the profile prescriptions tab
+- The desk shows pharmacy pickup status for scripts at Accra Central Pharmacy (ready for pickup, collected, and sent)
+- **Request refill** when a script is collected or could not be filled. The request notifies the prescribing clinician (medical operations if no clinician is linked). A second open request is rejected until the first is closed.
+
 ### Phase 3 — corporate utilisation desk
 
 - **Login:** `corporate` / `corp123` (Ghana Ports Authority Benefits Desk; tenant-scoped via `org_accounts`)

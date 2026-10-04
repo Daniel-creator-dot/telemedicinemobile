@@ -540,10 +540,7 @@ class _DashboardViewState extends State<DashboardView> {
                   backgroundImage: 'assets/records.png',
                   overlayColor: const Color(0xFF92400E), // deep amber
                   onTap: () {
-                    final parentState = context.findAncestorStateOfType<_MainNavigationScreenState>();
-                    if (parentState != null) {
-                      parentState.setState(() => parentState._currentIndex = 3);
-                    }
+                    context.push('/patient/prescriptions');
                   },
                 ),
                 const SizedBox(width: 10),
@@ -566,6 +563,7 @@ class _DashboardViewState extends State<DashboardView> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                _CareChip(label: 'Prescriptions', icon: Icons.medication_outlined, onTap: () => context.push('/patient/prescriptions')),
                 _CareChip(label: 'Care phases', icon: Icons.account_tree_outlined, onTap: () => context.push('/patient/phases')),
                 _CareChip(label: 'Health journey', icon: Icons.timeline, onTap: () => context.push('/patient/journey')),
                 _CareChip(label: 'Records vault', icon: Icons.folder_shared_outlined, onTap: () => context.push('/patient/records')),
@@ -2195,58 +2193,77 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Widget _buildPrescriptionsTab() {
-    if (_prescriptions.isEmpty) {
-      return Center(
-        child: Text('No active prescriptions registered.', style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13)),
-      );
-    }
+    final list = _prescriptions.isEmpty
+        ? Center(
+            child: Text(
+              'No active prescriptions registered.',
+              style: GoogleFonts.roboto(color: Colors.white24, fontSize: 13),
+            ),
+          )
+        : ListView.builder(
+            physics: const BouncingScrollPhysics(),
+            itemCount: _prescriptions.length,
+            itemBuilder: (context, index) {
+              final pr = _prescriptions[index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.02)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pr.prescriptionRef != null ? '${pr.prescriptionRef} · ${pr.medicationName}' : pr.medicationName,
+                      style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Dosage: ${pr.dosage ?? "-"}  |  ${pr.strength ?? ''}  |  ${pr.route ?? ''}  |  Qty: ${pr.quantity ?? "-"}',
+                      style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11),
+                    ),
+                    if (pr.instructions != null && pr.instructions!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Instructions: ${pr.instructions}',
+                        style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                    if ((pr.pharmacyName ?? '').isNotEmpty || (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent')) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        [
+                          if ((pr.pharmacyName ?? '').isNotEmpty) pr.pharmacyName!,
+                          if (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent') pr.dispenseStatus,
+                        ].join(' · '),
+                        style: GoogleFonts.roboto(color: const Color(0xFFF59E0B), fontSize: 11),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          );
 
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      itemCount: _prescriptions.length,
-      itemBuilder: (context, index) {
-        final pr = _prescriptions[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.02)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => context.push('/patient/prescriptions'),
+            icon: const Icon(Icons.local_pharmacy_outlined, size: 18, color: Color(0xFF00D2C4)),
+            label: Text(
+              'Open prescription desk',
+              style: GoogleFonts.roboto(color: const Color(0xFF00D2C4), fontWeight: FontWeight.w600),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                pr.prescriptionRef != null ? '${pr.prescriptionRef} · ${pr.medicationName}' : pr.medicationName,
-                style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Dosage: ${pr.dosage ?? "-"}  |  ${pr.strength ?? ''}  |  ${pr.route ?? ''}  |  Qty: ${pr.quantity ?? "-"}',
-                style: GoogleFonts.roboto(color: Colors.white54, fontSize: 11),
-              ),
-              if (pr.instructions != null && pr.instructions!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Instructions: ${pr.instructions}',
-                  style: GoogleFonts.roboto(color: Color(0xFF00D2C4), fontSize: 11, fontStyle: FontStyle.italic),
-                ),
-              ],
-              if ((pr.pharmacyName ?? '').isNotEmpty || (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent')) ...[
-                const SizedBox(height: 6),
-                Text(
-                  [
-                    if ((pr.pharmacyName ?? '').isNotEmpty) pr.pharmacyName!,
-                    if (pr.dispenseStatus != null && pr.dispenseStatus != 'unsent') pr.dispenseStatus,
-                  ].join(' · '),
-                  style: GoogleFonts.roboto(color: const Color(0xFFF59E0B), fontSize: 11),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
+        ),
+        Expanded(child: list),
+      ],
     );
   }
 

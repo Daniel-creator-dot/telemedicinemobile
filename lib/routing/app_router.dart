@@ -38,6 +38,7 @@ import '../features/patient/payments_screen.dart';
 import '../features/patient/coverage_screen.dart';
 import '../features/patient/membership_screen.dart';
 import '../features/patient/phases_screen.dart';
+import '../features/patient/prescriptions_screen.dart';
 import '../features/patient/support_screen.dart';
 import '../features/patient/consents_screen.dart';
 import '../features/patient/followups_screen.dart';
@@ -134,6 +135,7 @@ GoRouter createAppRouter(Session session) {
           GoRoute(path: 'coverage', builder: (context, state) => const CoverageScreen()),
           GoRoute(path: 'membership', builder: (context, state) => const MembershipScreen()),
           GoRoute(path: 'phases', builder: (context, state) => const PhasesScreen()),
+          GoRoute(path: 'prescriptions', builder: (context, state) => const PrescriptionsScreen()),
           GoRoute(path: 'support', builder: (context, state) => const SupportScreen()),
           GoRoute(path: 'consents', builder: (context, state) => const ConsentsScreen()),
           GoRoute(path: 'followups', builder: (context, state) => const FollowupsScreen()),

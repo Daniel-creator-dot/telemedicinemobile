@@ -1238,10 +1238,19 @@ app.get('/api/prescriptions/my', authenticate, async (req: any, res) => {
     if (!patientId) return res.json([]);
 
     const result = await query(`
-      SELECT pr.*, a.appointment_id as apt_code, o.name as pharmacy_name
+      SELECT pr.*, a.appointment_id as apt_code, o.name as pharmacy_name,
+             o.phone as pharmacy_phone, o.address as pharmacy_address, o.town as pharmacy_town,
+             rf.id as refill_id, rf.status as refill_status, rf.note as refill_note
       FROM prescriptions pr
       JOIN appointments a ON pr.appointment_id = a.id
       LEFT JOIN partner_orgs o ON pr.pharmacy_id = o.id
+      LEFT JOIN LATERAL (
+        SELECT r.id, r.status, r.note
+        FROM prescription_refills r
+        WHERE r.prescription_id = pr.id
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT 1
+      ) rf ON TRUE
       WHERE pr.patient_id = $1
       ORDER BY pr.created_at DESC
     `, [patientId]);
