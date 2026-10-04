@@ -49,23 +49,28 @@ class AuthScaffold extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 960;
-            final width = constraints.maxWidth > clinicalMaxWidth ? clinicalMaxWidth : constraints.maxWidth;
-            final frame = wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Expanded(child: _AuthAside()),
-                      Container(width: 1, color: digiLine),
-                      Expanded(child: child),
-                    ],
-                  )
-                : child;
             return Align(
               alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: width,
-                height: constraints.maxHeight,
-                child: frame,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: clinicalMaxWidth),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: constraints.maxHeight,
+                  child: wide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Expanded(child: _AuthAside()),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 28, 36, 28),
+                                child: child,
+                              ),
+                            ),
+                          ],
+                        )
+                      : child,
+                ),
               ),
             );
           },
@@ -75,58 +80,70 @@ class AuthScaffold extends StatelessWidget {
   }
 }
 
+double _asideMinHeight(double maxHeight) {
+  if (!maxHeight.isFinite) return 0;
+  final spare = maxHeight - 56;
+  return spare < 0 ? 0 : spare;
+}
+
 class _AuthAside extends StatelessWidget {
   const _AuthAside();
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(40, 48, 40, 40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Image.asset(
-            AppBrand.logoLockupAsset,
-            width: 196,
-            fit: BoxFit.contain,
-          ).animate().fadeIn(duration: 240.ms),
-          const SizedBox(height: 32),
-          Text(
-            'Care that stays with you.',
-            style: GoogleFonts.sourceSerif4(
-              fontSize: 36,
-              fontWeight: FontWeight.w600,
-              color: digiInk,
-              height: 1.15,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(40, 28, 20, 28),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: _asideMinHeight(constraints.maxHeight)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Image.asset(
+                  AppBrand.logoAsset,
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.contain,
+                ).animate().fadeIn(duration: 240.ms),
+                const SizedBox(height: 20),
+                Text(AppBrand.name, style: clinicalDisplay(40, letterSpacing: -1.1)),
+                const SizedBox(height: 10),
+                Text(
+                  'Care that stays with you.',
+                  style: clinicalDisplay(26, weight: FontWeight.w600, letterSpacing: -0.4),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Consult a clinician, collect a prescription, and follow the visit — from Accra to the regions.',
+                  style: GoogleFonts.dmSans(fontSize: 15, color: digiSlate, height: 1.5),
+                ),
+                const SizedBox(height: 28),
+                const _AsideNote(
+                  title: 'Patients',
+                  body: 'Book a visit, join a consult, and see what the pharmacy has ready.',
+                ),
+                const _AsideNote(
+                  title: 'Clinicians',
+                  body: 'Work the floor, the queue, and the chart from one desk.',
+                ),
+                const _AsideNote(
+                  title: 'Agencies',
+                  body: 'Register a nurse agency. Healynks reviews the profile before it goes live.',
+                ),
+                if (AppEnv.debugHostHint.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    AppEnv.debugHostHint,
+                    style: GoogleFonts.dmSans(fontSize: 11, color: digiSlate),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Consult a clinician, collect a prescription, and follow the visit — from Accra to the regions.',
-            style: GoogleFonts.dmSans(fontSize: 15, color: digiSlate, height: 1.5),
-          ),
-          const SizedBox(height: 28),
-          const _AsideNote(
-            title: 'Patients',
-            body: 'Book a visit, join a consult, and see what the pharmacy has ready.',
-          ),
-          const _AsideNote(
-            title: 'Clinicians',
-            body: 'Work the floor, the queue, and the chart from one desk.',
-          ),
-          const _AsideNote(
-            title: 'Agencies',
-            body: 'Register a nurse agency. Healynks reviews the profile before it goes live.',
-          ),
-          if (AppEnv.debugHostHint.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(
-              AppEnv.debugHostHint,
-              style: GoogleFonts.dmSans(fontSize: 11, color: digiSlate),
-            ),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -145,10 +162,13 @@ class _AsideNote extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 2,
-            height: 36,
-            margin: const EdgeInsets.only(top: 2, right: 12),
-            color: digiGold,
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(top: 6, right: 12),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: clinicalActionGradient,
+            ),
           ),
           Expanded(
             child: Column(
@@ -181,11 +201,14 @@ class AuthBrandHeader extends StatelessWidget {
     return Column(
       children: [
         Image.asset(
-          AppBrand.logoLockupAsset,
-          width: compact ? 148 : 176,
+          AppBrand.logoAsset,
+          width: compact ? 64 : 76,
+          height: compact ? 64 : 76,
           fit: BoxFit.contain,
         ).animate().fadeIn(duration: 240.ms),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
+        Text(AppBrand.name, style: clinicalDisplay(compact ? 26 : 30, letterSpacing: -0.8)),
+        const SizedBox(height: 4),
         Text(
           AppBrand.tagline,
           textAlign: TextAlign.center,
@@ -216,7 +239,7 @@ class AuthGlassPanel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(clinicalRadius),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: digiLine),
         boxShadow: clinicalShadow,
       ),

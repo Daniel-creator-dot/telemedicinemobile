@@ -142,15 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      _title,
-                      style: GoogleFonts.sourceSerif4(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
-                        color: digiInk,
-                        height: 1.15,
-                      ),
-                    ),
+                    Text(_title, style: clinicalDisplay(28)),
                     const SizedBox(height: 8),
                     Text(
                       _subtitle,

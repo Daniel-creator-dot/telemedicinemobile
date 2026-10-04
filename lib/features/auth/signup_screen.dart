@@ -134,12 +134,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   children: [
                     Text(
                       _otpSent ? 'Verify your number' : 'Create a patient account',
-                      style: GoogleFonts.sourceSerif4(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
-                        color: digiInk,
-                        height: 1.15,
-                      ),
+                      style: clinicalDisplay(28),
                     ),
                     const SizedBox(height: 8),
                     Text(

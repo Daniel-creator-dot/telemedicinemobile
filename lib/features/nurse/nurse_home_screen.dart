@@ -131,7 +131,7 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F3EE),
+      backgroundColor: digiPaper,
       appBar: RoleChrome(
         title: 'Triage',
         subtitle: session.user?.name ?? 'Nurse',
@@ -288,7 +288,7 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
                   const SizedBox(height: 4),
                   Text(
                     agency['name']?.toString().trim().isNotEmpty == true ? agency['name'].toString() : 'Agency',
-                    style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk, height: 1.15),
+                    style: clinicalDisplay(22),
                   ),
                   if (place.isNotEmpty) ...[
                     const SizedBox(height: 6),

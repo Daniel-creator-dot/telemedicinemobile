@@ -3,30 +3,61 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/brand.dart';
 
-const digiForest = Color(0xFF1F4A3A);
-const digiGold = Color(0xFFC4A574);
-const digiPaper = Color(0xFFF6F3EE);
-const digiInk = Color(0xFF1A1814);
-const digiSlate = Color(0xFF6B6560);
-const digiLine = Color(0xFFE8E4DC);
+/// Logo blue and teal. Gradient is for the primary button and the active tab.
+const healynksBlue = Color(0xFF1D6BFF);
+const healynksTeal = Color(0xFF12C4A0);
+const healynksCanvas = Color(0xFFF4F7FB);
+const healynksInk = Color(0xFF0E1525);
+const healynksMuted = Color(0xFF5C6B7A);
+const healynksLine = Color(0xFFE6ECF2);
 
-const clinicalRadius = 12.0;
+const clinicalActionGradient = LinearGradient(
+  begin: Alignment.centerLeft,
+  end: Alignment.centerRight,
+  colors: [healynksBlue, healynksTeal],
+);
+
+/// Legacy names kept so existing screens compile against the new palette.
+const digiForest = healynksBlue;
+const digiGold = healynksTeal;
+const digiPaper = healynksCanvas;
+const digiInk = healynksInk;
+const digiSlate = healynksMuted;
+const digiLine = healynksLine;
+
+const clinicalRadius = 18.0;
+const clinicalButtonRadius = 14.0;
 const clinicalMaxWidth = 1120.0;
 
 const clinicalShadow = <BoxShadow>[
   BoxShadow(
-    color: Color(0x0F1A1814),
-    blurRadius: 16,
-    offset: Offset(0, 4),
+    color: Color(0x0F0E1525),
+    blurRadius: 24,
+    offset: Offset(0, 8),
   ),
 ];
 
-/// Legacy aliases — same clinic palette.
 const digiViolet = digiForest;
 const digiMint = digiGold;
 const digiCanvas = digiPaper;
 
 enum ClinicalTone { forest, gold, slate, clay }
+
+TextStyle clinicalDisplay(
+  double size, {
+  FontWeight weight = FontWeight.w700,
+  Color color = digiInk,
+  double height = 1.12,
+  double letterSpacing = -0.45,
+}) {
+  return GoogleFonts.plusJakartaSans(
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
+}
 
 class DigiBrandMark extends StatelessWidget {
   const DigiBrandMark({super.key, this.size = 22, this.light = false});
@@ -40,22 +71,18 @@ class DigiBrandMark extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           child: Image.asset(
             AppBrand.logoAsset,
-            width: size * 1.35,
-            height: size * 1.35,
+            width: size * 1.45,
+            height: size * 1.45,
             fit: BoxFit.cover,
           ),
         ),
-        SizedBox(width: size * 0.35),
+        SizedBox(width: size * 0.4),
         Text(
           AppBrand.name,
-          style: GoogleFonts.sourceSerif4(
-            fontSize: size,
-            fontWeight: FontWeight.w600,
-            color: light ? Colors.white : digiForest,
-          ),
+          style: clinicalDisplay(size, weight: FontWeight.w700, color: light ? Colors.white : digiInk),
         ),
       ],
     );
@@ -79,15 +106,7 @@ class ClinicalPageHeader extends StatelessWidget {
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: GoogleFonts.sourceSerif4(
-            fontSize: 28,
-            fontWeight: FontWeight.w600,
-            color: digiInk,
-            height: 1.15,
-          ),
-        ),
+        Text(title, style: clinicalDisplay(28)),
         if (subtitle != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -122,10 +141,10 @@ class ClinicalStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (Color bg, Color fg) = switch (tone) {
-      ClinicalTone.forest => (const Color(0xFFE5EFEA), digiForest),
-      ClinicalTone.gold => (const Color(0xFFF6EFE3), const Color(0xFF7A5B32)),
-      ClinicalTone.slate => (const Color(0xFFF0EDE8), digiSlate),
-      ClinicalTone.clay => (const Color(0xFFF6E8E4), const Color(0xFF8C3A2F)),
+      ClinicalTone.forest => (const Color(0xFFE5F8F3), const Color(0xFF0C7A62)),
+      ClinicalTone.gold => (const Color(0xFFEAF1FF), const Color(0xFF1D4ED8)),
+      ClinicalTone.slate => (const Color(0xFFEEF2F6), digiSlate),
+      ClinicalTone.clay => (const Color(0xFFFDECEC), const Color(0xFFB42318)),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -152,34 +171,61 @@ class ClinicalPrimaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.loading = false,
+    this.expand = true,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: FilledButton(
-        onPressed: loading ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: digiForest,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: digiForest.withValues(alpha: 0.35),
-          disabledForegroundColor: Colors.white70,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalRadius)),
+    final enabled = onPressed != null && !loading;
+    final radius = BorderRadius.circular(clinicalButtonRadius);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        gradient: enabled ? clinicalActionGradient : null,
+        color: enabled ? null : healynksBlue.withValues(alpha: 0.28),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: radius,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: expand ? 16 : 18),
+            child: SizedBox(
+              width: expand ? double.infinity : null,
+              height: 48,
+              child: loading
+                  ? const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      ),
+                    )
+                  : expand
+                      ? Center(
+                          child: Text(
+                            label,
+                            style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              label,
+                              style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ],
+                        ),
+            ),
+          ),
         ),
-        child: loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-            : Text(label, style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -203,11 +249,11 @@ class ClinicalSecondaryButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: digiForest,
+          foregroundColor: digiInk,
           side: const BorderSide(color: digiLine),
           backgroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalRadius)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalButtonRadius)),
         ),
         child: Text(label, style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w600)),
       ),
@@ -230,7 +276,7 @@ class ClinicalSkeleton extends StatelessWidget {
             height: i == 0 ? 22 : 12,
             width: i == 0 ? 168 : double.infinity,
             decoration: BoxDecoration(
-              color: digiLine,
+              color: const Color(0xFFE6ECF2),
               borderRadius: BorderRadius.circular(8),
             ),
           ),
@@ -252,7 +298,7 @@ class ClinicalCardSkeleton extends StatelessWidget {
 
 InputDecoration clinicalFieldDecoration(String label, {Widget? suffixIcon, Widget? prefixIcon}) {
   final border = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(clinicalRadius),
+    borderRadius: BorderRadius.circular(clinicalButtonRadius),
     borderSide: const BorderSide(color: digiLine),
   );
   return InputDecoration(
@@ -261,21 +307,21 @@ InputDecoration clinicalFieldDecoration(String label, {Widget? suffixIcon, Widge
     prefixIcon: prefixIcon,
     suffixIcon: suffixIcon,
     filled: true,
-    fillColor: Colors.white,
+    fillColor: const Color(0xFFF8FAFC),
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
     border: border,
     enabledBorder: border,
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(clinicalRadius),
-      borderSide: const BorderSide(color: digiForest, width: 1.4),
+      borderRadius: BorderRadius.circular(clinicalButtonRadius),
+      borderSide: const BorderSide(color: healynksBlue, width: 1.4),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(clinicalRadius),
-      borderSide: const BorderSide(color: Color(0xFF8C3A2F)),
+      borderRadius: BorderRadius.circular(clinicalButtonRadius),
+      borderSide: const BorderSide(color: Color(0xFFB42318)),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(clinicalRadius),
-      borderSide: const BorderSide(color: Color(0xFF8C3A2F), width: 1.4),
+      borderRadius: BorderRadius.circular(clinicalButtonRadius),
+      borderSide: const BorderSide(color: Color(0xFFB42318), width: 1.4),
     ),
   );
 }
@@ -307,18 +353,14 @@ class ClinicalEmptyState extends StatelessWidget {
             Container(
               width: 64,
               height: 64,
-              decoration: BoxDecoration(
-                color: digiForest.withValues(alpha: 0.08),
+              decoration: const BoxDecoration(
+                color: Color(0xFFEAF1FF),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: digiForest, size: 28),
+              child: Icon(icon, color: healynksBlue, size: 28),
             ),
             const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
-            ),
+            Text(title, textAlign: TextAlign.center, style: clinicalDisplay(22)),
             const SizedBox(height: 8),
             Text(
               message,
@@ -327,16 +369,7 @@ class ClinicalEmptyState extends StatelessWidget {
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: onAction,
-                style: FilledButton.styleFrom(
-                  backgroundColor: digiForest,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalRadius)),
-                ),
-                child: Text(actionLabel!),
-              ),
+              ClinicalPrimaryButton(label: actionLabel!, onPressed: onAction, expand: false),
             ],
           ],
         ),
@@ -364,7 +397,7 @@ class ClinicalErrorState extends StatelessWidget {
 }
 
 class StatTile extends StatelessWidget {
-  const StatTile({super.key, required this.label, required this.value, this.accent = digiForest});
+  const StatTile({super.key, required this.label, required this.value, this.accent = healynksBlue});
 
   final String label;
   final Object? value;
@@ -384,7 +417,7 @@ class StatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$value', style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: accent)),
+          Text('$value', style: clinicalDisplay(22, color: accent)),
           const SizedBox(height: 4),
           Text(label, style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate, fontWeight: FontWeight.w600)),
         ],
@@ -413,7 +446,7 @@ class RoleChrome extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: digiPaper,
+      backgroundColor: Colors.white,
       foregroundColor: digiInk,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -421,13 +454,13 @@ class RoleChrome extends StatelessWidget implements PreferredSizeWidget {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, fontSize: 20, color: digiInk)),
+          Text(title, style: clinicalDisplay(18, weight: FontWeight.w700)),
           Text(subtitle, style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate)),
         ],
       ),
       actions: [
         if (onRefresh != null)
-          IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: digiForest)),
+          IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: healynksBlue)),
         if (onLogout != null) IconButton(onPressed: onLogout, icon: const Icon(Icons.logout, color: digiSlate)),
       ],
       bottom: const PreferredSize(
@@ -476,15 +509,7 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: GoogleFonts.sourceSerif4(
-        fontSize: 22,
-        fontWeight: FontWeight.w600,
-        color: digiInk,
-        height: 1.2,
-      ),
-    );
+    return Text(text, style: clinicalDisplay(22));
   }
 }
 
@@ -503,7 +528,7 @@ class QuietChip extends StatelessWidget {
       label: Text(label, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: digiInk)),
       backgroundColor: Colors.white,
       side: const BorderSide(color: digiLine),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalRadius)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalButtonRadius)),
     );
   }
 }

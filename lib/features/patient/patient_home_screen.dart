@@ -403,10 +403,7 @@ class _DashboardViewState extends State<DashboardView> {
             children: [
               Text(_greeting(), style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate)),
               const SizedBox(height: 4),
-              Text(
-                name,
-                style: GoogleFonts.sourceSerif4(fontSize: 32, fontWeight: FontWeight.w600, color: digiInk, height: 1.1),
-              ),
+              Text(name, style: clinicalDisplay(32, letterSpacing: -0.8)),
               const SizedBox(height: 8),
               Text(
                 'Visits, prescriptions, and the rest of your chart.',
@@ -441,29 +438,33 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   Widget _searchField() {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(clinicalRadius),
-      child: InkWell(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(clinicalRadius),
-        onTap: () => context.push('/patient/doctors'),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(clinicalRadius),
-            border: Border.all(color: digiLine),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.search_rounded, color: digiSlate, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Search clinicians',
-                  style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate),
+        border: Border.all(color: digiLine),
+        boxShadow: clinicalShadow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(clinicalRadius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(clinicalRadius),
+          onTap: () => context.push('/patient/doctors'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded, color: digiSlate, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Search clinicians',
+                    style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -475,13 +476,10 @@ class _DashboardViewState extends State<DashboardView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'What do you need?',
-            style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
-          ),
+          Text('Book care', style: clinicalDisplay(20)),
           const SizedBox(height: 6),
           Text(
-            'The usual paths through the clinic.',
+            'A visit, a live consult, or the prescription desk.',
             style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4),
           ),
           const SizedBox(height: 16),
@@ -531,7 +529,7 @@ class _DashboardViewState extends State<DashboardView> {
         children: [
           Text(
             'Today',
-            style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
+            style: clinicalDisplay(20),
           ),
           const SizedBox(height: 8),
           if (visit == null && !showReady)
@@ -559,7 +557,7 @@ class _DashboardViewState extends State<DashboardView> {
           ],
           if (showReady) ...[
             const SizedBox(height: 12),
-            const ClinicalStatusPill(label: 'Ready', tone: ClinicalTone.gold),
+            const ClinicalStatusPill(label: 'Ready', tone: ClinicalTone.forest),
             const SizedBox(height: 8),
             Text(
               ready == 1 ? '1 prescription is ready for pickup.' : '$ready prescriptions are ready for pickup.',
@@ -597,7 +595,7 @@ class _DashboardViewState extends State<DashboardView> {
               Expanded(
                 child: Text(
                   'Care in progress',
-                  style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
+                  style: clinicalDisplay(20),
                 ),
               ),
               ClinicalStatusPill(
@@ -641,7 +639,7 @@ class _DashboardViewState extends State<DashboardView> {
             Expanded(
               child: Text(
                 'Clinicians',
-                style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
+                style: clinicalDisplay(20),
               ),
             ),
             TextButton(
@@ -756,7 +754,7 @@ class _DashboardViewState extends State<DashboardView> {
       children: [
         Text(
           'Your record',
-          style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
+          style: clinicalDisplay(20),
         ),
         const SizedBox(height: 6),
         Text(
@@ -2107,7 +2105,7 @@ class _PatientNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 64,
+          height: 68,
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
@@ -2120,10 +2118,22 @@ class _PatientNav extends StatelessWidget {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            Icon(
-                              index == i ? items[i].$2 : items[i].$1,
-                              size: 22,
-                              color: index == i ? digiForest : digiSlate,
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                gradient: index == i ? clinicalActionGradient : null,
+                              ),
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: index == i ? 12 : 0,
+                                  vertical: index == i ? 4 : 0,
+                                ),
+                                child: Icon(
+                                  index == i ? items[i].$2 : items[i].$1,
+                                  size: 22,
+                                  color: index == i ? Colors.white : digiSlate,
+                                ),
+                              ),
                             ),
                             if (i == 2 && unreadChats > 0)
                               Positioned(
@@ -2153,7 +2163,7 @@ class _PatientNav extends StatelessWidget {
                           style: GoogleFonts.dmSans(
                             fontSize: 11,
                             fontWeight: index == i ? FontWeight.w700 : FontWeight.w500,
-                            color: index == i ? digiForest : digiSlate,
+                            color: index == i ? healynksBlue : digiSlate,
                           ),
                         ),
                       ],

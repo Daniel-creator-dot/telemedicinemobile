@@ -216,9 +216,10 @@ class AdminUsersTab extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: BoxDecoration(
-        color: digiPaper,
-        borderRadius: BorderRadius.circular(clinicalRadius),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: digiLine),
+        boxShadow: clinicalShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -284,7 +285,7 @@ class AdminUsersTab extends StatelessWidget {
               children: [
                 Text(
                   headline.isEmpty ? 'Signup' : headline,
-                  style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600, color: digiInk),
+                  style: clinicalDisplay(18),
                 ),
                 const ClinicalStatusPill(label: 'Pending review', tone: ClinicalTone.gold),
               ],
@@ -299,22 +300,16 @@ class AdminUsersTab extends StatelessWidget {
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                FilledButton(
+                ClinicalPrimaryButton(
+                  label: 'Approve',
+                  loading: busy,
+                  expand: false,
                   onPressed: busy ? null : () => onDecide(signup.userId, 'approve'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: digiForest,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: digiForest.withValues(alpha: 0.35),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalRadius)),
-                  ),
-                  child: Text(busy ? 'Saving…' : 'Approve'),
                 ),
                 TextButton(
                   onPressed: busy ? null : () => onDecide(signup.userId, 'reject'),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF8C3A2F)),
-                  child: const Text('Decline'),
+                  style: TextButton.styleFrom(foregroundColor: digiSlate),
+                  child: Text('Decline', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600, color: digiSlate)),
                 ),
               ],
             ),

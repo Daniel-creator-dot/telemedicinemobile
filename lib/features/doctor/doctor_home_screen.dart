@@ -412,7 +412,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             children: [
               _buildTopBar(session, isDesktop),
               ColoredBox(
-                color: digiPaper,
+                color: Colors.white,
                 child: PendingReviewBanner(status: session.user?.verificationStatus),
               ),
               Expanded(
@@ -444,9 +444,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(clinicalRadius),
-          color: active ? digiForest : Colors.white,
-          border: Border.all(color: active ? digiForest : digiLine),
+          borderRadius: BorderRadius.circular(clinicalButtonRadius),
+          gradient: active ? clinicalActionGradient : null,
+          color: active ? null : Colors.white,
+          border: Border.all(color: active ? Colors.transparent : digiLine),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -484,7 +485,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        color: digiPaper,
+        color: Colors.white,
         border: Border(bottom: BorderSide(color: digiLine)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -555,7 +556,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         tabLabels[_tab]!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600, color: digiInk),
+                        style: clinicalDisplay(18),
                       ),
                       Text(
                         'Clinic floor',
@@ -599,7 +600,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             children: [
               Text(
                 AppBrand.name,
-                style: GoogleFonts.sourceSerif4(fontSize: 16, fontWeight: FontWeight.w600, color: digiForest),
+                style: clinicalDisplay(16, color: digiInk),
               ),
               Text('Clinic floor', style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate)),
             ],
@@ -635,7 +636,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(item.$2, size: 20, color: active ? digiForest : digiSlate),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: active ? clinicalActionGradient : null,
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: active ? 10 : 0, vertical: active ? 3 : 0),
+                          child: Icon(item.$2, size: 20, color: active ? Colors.white : digiSlate),
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         item.$3,
@@ -644,7 +654,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                         style: GoogleFonts.dmSans(
                           fontSize: 11,
                           fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                          color: active ? digiForest : digiSlate,
+                          color: active ? healynksBlue : digiSlate,
                         ),
                       ),
                     ],
@@ -792,12 +802,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                           ? session.user!.name
                           : 'Dr. ${session.user!.name}')
                       : 'Doctor',
-                  style: GoogleFonts.sourceSerif4(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w600,
-                    color: digiInk,
-                    height: 1.15,
-                  ),
+                  style: clinicalDisplay(28),
                 ),
                 const SizedBox(height: 8),
                 Text(

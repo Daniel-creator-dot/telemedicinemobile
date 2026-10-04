@@ -15,6 +15,7 @@ import 'features/patient/appointments_repository.dart';
 import 'features/patient/care_repository.dart';
 import 'routing/app_router.dart';
 import 'shared/widgets/app_launch_carousel.dart';
+import 'shared/widgets/clinical_ui.dart';
 import 'firebase_options.dart';
 
 void main() {
@@ -111,33 +112,30 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
         useMaterial3: true,
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
-          primary: Color(0xFF1F4A3A),
-          secondary: Color(0xFFC4A574),
-          surface: Color(0xFFF6F3EE),
+          primary: healynksBlue,
+          secondary: healynksTeal,
+          surface: Colors.white,
           onPrimary: Colors.white,
-          onSecondary: Color(0xFF1A1814),
-          onSurface: Color(0xFF1A1814),
+          onSecondary: healynksInk,
+          onSurface: healynksInk,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF6F3EE),
+        scaffoldBackgroundColor: healynksCanvas,
         appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFFF6F3EE),
-          foregroundColor: const Color(0xFF1A1814),
+          backgroundColor: Colors.white,
+          foregroundColor: healynksInk,
           elevation: 0,
-          titleTextStyle: GoogleFonts.sourceSerif4(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A1814),
-          ),
+          surfaceTintColor: Colors.transparent,
+          titleTextStyle: clinicalDisplay(20),
         ),
         textTheme: GoogleFonts.dmSansTextTheme(
           ThemeData.light().textTheme.copyWith(
-            headlineLarge: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: const Color(0xFF1A1814), fontSize: 32),
-            headlineMedium: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: const Color(0xFF1A1814), fontSize: 26),
-            titleLarge: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: const Color(0xFF1A1814), fontSize: 20),
-            bodyLarge: GoogleFonts.dmSans(color: const Color(0xFF1A1814), height: 1.45),
-            bodyMedium: GoogleFonts.dmSans(color: const Color(0xFF1A1814), height: 1.4),
-            bodySmall: GoogleFonts.dmSans(color: const Color(0xFF6B6560)),
-            labelLarge: GoogleFonts.dmSans(color: const Color(0xFF1A1814), fontWeight: FontWeight.w600),
+            headlineLarge: clinicalDisplay(32),
+            headlineMedium: clinicalDisplay(26),
+            titleLarge: clinicalDisplay(20),
+            bodyLarge: GoogleFonts.dmSans(color: healynksInk, height: 1.45),
+            bodyMedium: GoogleFonts.dmSans(color: healynksInk, height: 1.4),
+            bodySmall: GoogleFonts.dmSans(color: healynksMuted),
+            labelLarge: GoogleFonts.dmSans(color: healynksInk, fontWeight: FontWeight.w600),
           ),
         ),
       ),

@@ -162,7 +162,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const ClinicalPageHeader(
-                  title: 'Join the clinic',
+                  title: 'Join Healynks',
                   subtitle:
                       'Register as a doctor, or as the nurse agency you run. You can sign in while Healynks reviews the profile.',
                 ),
@@ -290,9 +290,8 @@ class _KindSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: digiPaper,
-        borderRadius: BorderRadius.circular(clinicalRadius),
-        border: Border.all(color: digiLine),
+        color: const Color(0xFFE8EEF5),
+        borderRadius: BorderRadius.circular(clinicalButtonRadius),
       ),
       child: Row(
         children: [
@@ -307,11 +306,13 @@ class _KindSwitch extends StatelessWidget {
     final selected = kind == value;
     return Expanded(
       child: Material(
-        color: selected ? digiForest : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        color: selected ? Colors.white : Colors.transparent,
+        elevation: 0,
+        shadowColor: const Color(0x140E1525),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onChanged == null ? null : () => onChanged!(value),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
@@ -320,7 +321,7 @@ class _KindSwitch extends StatelessWidget {
               style: GoogleFonts.dmSans(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
-                color: selected ? Colors.white : digiSlate,
+                color: selected ? healynksBlue : digiSlate,
               ),
             ),
           ),

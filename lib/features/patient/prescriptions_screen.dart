@@ -60,11 +60,8 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          backgroundColor: digiPaper,
-          title: Text(
-            'Request a refill',
-            style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600, color: digiInk),
-          ),
+          backgroundColor: Colors.white,
+          title: Text('Request a refill', style: clinicalDisplay(20)),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -104,10 +101,10 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
               onPressed: () => Navigator.pop(ctx, false),
               child: Text('Cancel', style: GoogleFonts.dmSans(color: digiSlate)),
             ),
-            FilledButton(
+            ClinicalPrimaryButton(
+              label: 'Send request',
+              expand: false,
               onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: digiForest, foregroundColor: Colors.white),
-              child: const Text('Send request'),
             ),
           ],
         );
@@ -338,10 +335,7 @@ class _PrescriptionCard extends StatelessWidget {
                           letterSpacing: 0.4,
                         ),
                       ),
-                    Text(
-                      rx.medicationName,
-                      style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
-                    ),
+                    Text(rx.medicationName, style: clinicalDisplay(20)),
                   ],
                 ),
               ),
@@ -474,7 +468,7 @@ String _refillLabel(String? status) {
 ClinicalTone _statusTone(String status) {
   switch (status) {
     case 'ready':
-      return ClinicalTone.gold;
+      return ClinicalTone.forest;
     case 'dispensed':
       return ClinicalTone.forest;
     case 'unavailable':
