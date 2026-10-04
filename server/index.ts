@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import { initDb, query } from './db';
 import { registerPhase1Routes, getPatientForUser, buildSlotsForDoctor } from './phase1';
 import { ghanaPhoneVariants, normalizeGhanaPhone, registerProfessionalSignupRoutes } from './professional_signup';
@@ -105,6 +107,14 @@ async function sendPushNotification(userIds: number[], title: string, body: stri
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Compiled server lives in dist/. Prebuilt Flutter web is server/web-build/.
+const healynksWebRoot = path.resolve(__dirname, '../web-build');
+const healynksIndexHtml = path.join(healynksWebRoot, 'index.html');
+
+function healynksWebReady(): boolean {
+  return fs.existsSync(healynksIndexHtml);
+}
+
 app.use(cors());
 app.use(express.json({ limit: '4mb' }));
 registerAuditMiddleware(app);
@@ -113,6 +123,10 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'healynks' });
 });
 app.get('/', (_req, res) => {
+  if (healynksWebReady()) {
+    res.sendFile(healynksIndexHtml);
+    return;
+  }
   res.json({ ok: true, service: 'healynks' });
 });
 
@@ -1961,6 +1975,25 @@ registerPhase5Routes(app);
 registerCompleteRoutes(app);
 registerMembershipRoutes(app, authenticate);
 registerPhaseOverviewRoutes(app);
+
+// Flutter web shell. API and /health stay on their own routes.
+// Missing files with an extension (JS, wasm, images) still 404.
+if (healynksWebReady()) {
+  app.use(express.static(healynksWebRoot, {
+    index: false,
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(`${path.sep}index.html`) || filePath.endsWith(`${path.sep}flutter_bootstrap.js`)) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path === '/health' || req.path === '/api' || req.path.startsWith('/api/')) return next();
+    if (path.extname(req.path)) return next();
+    res.sendFile(healynksIndexHtml);
+  });
+}
 
 // Initialize Database
 initDb().then(() => {

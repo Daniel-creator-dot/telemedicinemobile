@@ -8,3 +8,16 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+  # Prebuilt Flutter web (no Flutter SDK on Render). SPA routes rewrite to index.html.
+  - type: web
+    name: healynks-web
+    runtime: static
+    buildCommand: echo "Using prebuilt Flutter web in server/web-build"
+    staticPublishPath: server/web-build
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

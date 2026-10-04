@@ -20,6 +20,17 @@ The server binds `0.0.0.0:$PORT` (default `5000`) for local and Render.
 **Live API:** https://telemedicine-server-l2bj.onrender.com  
 **Health:** https://telemedicine-server-l2bj.onrender.com/health
 
+### Public web app
+
+Release web assets are committed in `server/web-build/` (built with `--dart-define=API_URL=https://telemedicine-server-l2bj.onrender.com`).
+
+- **healynks-web** in `render.yaml` is a static site. Publish path is `server/web-build`. Every route is rewritten to `index.html`.
+- The API service serves that same build at its root after this change is deployed. `/health` stays JSON.
+
+Patient OTP signup is `/signup`. Doctors and nurse agencies use `/join`.
+
+A custom domain is not attached. See [DOMAIN.md](DOMAIN.md). `healynks.com` and `app.healynks.com` are examples, not purchased names.
+
 Required environment:
 
 | Variable | Purpose |
