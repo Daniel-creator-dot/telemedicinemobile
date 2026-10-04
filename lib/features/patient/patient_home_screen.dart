@@ -21,6 +21,7 @@ import '../../models/appointment.dart';
 import '../../models/doctor_profile.dart';
 import '../../models/prescription.dart';
 import '../../models/consultation.dart';
+import '../../shared/widgets/clinical_ui.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -190,6 +191,7 @@ class DashboardView extends StatefulWidget {
 class _DashboardViewState extends State<DashboardView> {
   List<DoctorProfile> _doctors = [];
   Appointment? _nextAppointment;
+  List<Prescription>? _scripts;
   List<Map<String, dynamic>> _activeCare = [];
   int _openCareCount = 0;
   bool _loading = true;
@@ -274,6 +276,13 @@ class _DashboardViewState extends State<DashboardView> {
             : int.tryParse(journey['open_count']?.toString() ?? '') ?? activeCare.length;
       } catch (_) {}
 
+      List<Prescription>? scripts;
+      var scriptsLoaded = false;
+      try {
+        scripts = await aptRepo.getMyPrescriptions();
+        scriptsLoaded = true;
+      } catch (_) {}
+
       // Get the next scheduled approved/pending appointment
       final upcoming = myApts
           .where((a) =>
@@ -296,11 +305,23 @@ class _DashboardViewState extends State<DashboardView> {
         } else {
           _nextAppointment = null;
         }
+        if (scriptsLoaded) _scripts = scripts;
         _loading = false;
       });
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  int? get _readyPickupCount {
+    final scripts = _scripts;
+    if (scripts == null) return null;
+    return scripts.where((p) => (p.dispenseStatus ?? '').toLowerCase() == 'ready').length;
+  }
+
+  bool get _showTodayStrip {
+    final ready = _readyPickupCount;
+    return _nextAppointment != null || (ready != null && ready > 0);
   }
 
   @override
@@ -540,7 +561,9 @@ class _DashboardViewState extends State<DashboardView> {
                   backgroundImage: 'assets/records.png',
                   overlayColor: const Color(0xFF92400E), // deep amber
                   onTap: () {
-                    context.push('/patient/prescriptions');
+                    context.push('/patient/prescriptions').then((_) {
+                      if (mounted) _loadDashboardData();
+                    });
                   },
                 ),
                 const SizedBox(width: 10),
@@ -558,12 +581,33 @@ class _DashboardViewState extends State<DashboardView> {
               ],
             ).animate().fadeIn(delay: 200.ms),
 
+            if (_showTodayStrip) ...[
+              const SizedBox(height: 16),
+              _TodayStrip(
+                nextVisit: _nextAppointment,
+                readyCount: _readyPickupCount,
+                onOpenDesk: () {
+                  context.push('/patient/prescriptions').then((_) {
+                    if (mounted) _loadDashboardData();
+                  });
+                },
+              ),
+            ],
+
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                _CareChip(label: 'Prescriptions', icon: Icons.medication_outlined, onTap: () => context.push('/patient/prescriptions')),
+                _CareChip(
+                  label: 'Prescriptions',
+                  icon: Icons.medication_outlined,
+                  onTap: () {
+                    context.push('/patient/prescriptions').then((_) {
+                      if (mounted) _loadDashboardData();
+                    });
+                  },
+                ),
                 _CareChip(label: 'Care phases', icon: Icons.account_tree_outlined, onTap: () => context.push('/patient/phases')),
                 _CareChip(label: 'Health journey', icon: Icons.timeline, onTap: () => context.push('/patient/journey')),
                 _CareChip(label: 'Records vault', icon: Icons.folder_shared_outlined, onTap: () => context.push('/patient/records')),
@@ -846,7 +890,7 @@ class _DashboardViewState extends State<DashboardView> {
   }) {
     return Expanded(
       child: SizedBox(
-        height: 96,
+        height: 112,
         child: AdminActionTile(
           title: label,
           subtitle: 'Open',
@@ -2431,6 +2475,78 @@ class _ProfileViewState extends State<ProfileView> {
         ],
       ),
     );
+  }
+}
+
+class _TodayStrip extends StatelessWidget {
+  const _TodayStrip({
+    required this.nextVisit,
+    required this.readyCount,
+    required this.onOpenDesk,
+  });
+
+  final Appointment? nextVisit;
+  final int? readyCount;
+  final VoidCallback onOpenDesk;
+
+  @override
+  Widget build(BuildContext context) {
+    final visit = nextVisit;
+    final ready = readyCount;
+    final showReady = ready != null && ready > 0;
+    final visitLine = visit == null ? null : _visitLine(visit);
+
+    return DigiCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Today',
+            style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
+          ),
+          if (visitLine != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Next visit',
+              style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: digiForest),
+            ),
+            const SizedBox(height: 2),
+            Text(visitLine, style: GoogleFonts.dmSans(color: digiInk, height: 1.4)),
+          ],
+          if (showReady) ...[
+            const SizedBox(height: 10),
+            Text(
+              ready == 1 ? '1 prescription ready for pickup' : '$ready prescriptions ready for pickup',
+              style: GoogleFonts.dmSans(color: digiInk, fontWeight: FontWeight.w600, height: 1.4),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onOpenDesk,
+              style: TextButton.styleFrom(foregroundColor: digiForest, padding: EdgeInsets.zero),
+              icon: const Icon(Icons.local_pharmacy_outlined, size: 18),
+              label: Text(
+                'Open prescription desk',
+                style: GoogleFonts.dmSans(fontWeight: FontWeight.w700, color: digiForest),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _visitLine(Appointment apt) {
+    final who = (apt.doctorName ?? '').trim();
+    final when = [apt.preferredDate, apt.preferredTime].where((part) => part.trim().isNotEmpty).join(' · ');
+    if (who.isNotEmpty && when.isNotEmpty) return '$who · $when';
+    if (when.isNotEmpty) return when;
+    if (who.isNotEmpty) return who;
+    final service = (apt.service ?? '').trim();
+    if (service.isNotEmpty) return service;
+    return 'Upcoming visit';
   }
 }
 
