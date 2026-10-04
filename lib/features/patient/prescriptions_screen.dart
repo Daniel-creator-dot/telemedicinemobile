@@ -139,70 +139,148 @@ class _PrescriptionsScreenState extends State<PrescriptionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: digiPaper,
-      appBar: AppBar(
-        title: Text('Prescriptions', style: GoogleFonts.sourceSerif4(fontWeight: FontWeight.w600)),
-        backgroundColor: digiPaper,
-        foregroundColor: digiInk,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh, color: digiForest),
-            tooltip: 'Refresh',
-          ),
-        ],
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 960;
+            final width = constraints.maxWidth > clinicalMaxWidth ? clinicalMaxWidth : constraints.maxWidth;
+            return Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: width,
+                height: constraints.maxHeight,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(wide ? 32 : 16, 8, wide ? 32 : 16, 16),
+                  child: wide ? _wideBody() : _narrowBody(),
+                ),
+              ),
+            );
+          },
+        ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: digiForest))
-          : _error != null
-              ? ClinicalErrorState(message: _error!, onRetry: _load)
-              : _rows.isEmpty
-                  ? const ClinicalEmptyState(
-                      icon: Icons.medication_outlined,
-                      title: 'No prescriptions yet',
-                      message: 'When a clinician writes a script, pickup status and refill requests will appear here.',
-                    )
-                  : Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 880),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                          itemCount: _rows.length + 1,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (context, i) {
-                            if (i == 0) return const _DeskIntro();
-                            return _PrescriptionCard(
-                              rx: _rows[i - 1],
-                              submitting: _submittingId == _rows[i - 1].id,
-                              onRefill: () => _requestRefill(_rows[i - 1]),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
     );
   }
-}
 
-class _DeskIntro extends StatelessWidget {
-  const _DeskIntro();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _intro({bool showRefresh = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Pharmacy pickup',
-          style: GoogleFonts.sourceSerif4(fontSize: 28, fontWeight: FontWeight.w600, color: digiInk),
+        Row(
+          children: [
+            IconButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back, color: digiForest),
+              tooltip: 'Back',
+            ),
+            const Spacer(),
+            if (showRefresh)
+              IconButton(
+                onPressed: _loading ? null : _load,
+                icon: const Icon(Icons.refresh, color: digiForest),
+                tooltip: 'Refresh',
+              ),
+          ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          'See where each script is, and ask your clinician for a refill after it has been collected or could not be filled.',
-          style: GoogleFonts.dmSans(color: digiSlate, height: 1.45),
+        const ClinicalPageHeader(
+          title: 'Prescriptions',
+          subtitle:
+              'Where each script is, and a refill once it has been collected or could not be filled.',
         ),
       ],
+    );
+  }
+
+  Widget _narrowBody() {
+    if (_loading) {
+      return ListView(
+        children: [
+          _intro(),
+          const SizedBox(height: 20),
+          const ClinicalCardSkeleton(),
+          const SizedBox(height: 12),
+          const ClinicalCardSkeleton(),
+        ],
+      );
+    }
+    if (_error != null) {
+      return ListView(
+        children: [
+          _intro(),
+          const SizedBox(height: 24),
+          ClinicalErrorState(message: _error!, onRetry: _load),
+        ],
+      );
+    }
+    if (_rows.isEmpty) {
+      return ListView(
+        children: [
+          _intro(),
+          const SizedBox(height: 24),
+          const ClinicalEmptyState(
+            icon: Icons.medication_outlined,
+            title: 'No prescriptions yet',
+            message: 'When a clinician writes a script, pickup status and refill requests will appear here.',
+          ),
+        ],
+      );
+    }
+    return ListView.separated(
+      itemCount: _rows.length + 1,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, i) {
+        if (i == 0) return _intro();
+        final rx = _rows[i - 1];
+        return _PrescriptionCard(
+          rx: rx,
+          submitting: _submittingId == rx.id,
+          onRefill: () => _requestRefill(rx),
+        );
+      },
+    );
+  }
+
+  Widget _wideBody() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 340, child: _intro()),
+        const SizedBox(width: 24),
+        Expanded(child: _wideList()),
+      ],
+    );
+  }
+
+  Widget _wideList() {
+    if (_loading) {
+      return ListView(
+        children: const [
+          ClinicalCardSkeleton(),
+          SizedBox(height: 12),
+          ClinicalCardSkeleton(),
+        ],
+      );
+    }
+    if (_error != null) {
+      return ClinicalErrorState(message: _error!, onRetry: _load);
+    }
+    if (_rows.isEmpty) {
+      return const ClinicalEmptyState(
+        icon: Icons.medication_outlined,
+        title: 'No prescriptions yet',
+        message: 'When a clinician writes a script, pickup status and refill requests will appear here.',
+      );
+    }
+    return ListView.separated(
+      itemCount: _rows.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, i) {
+        final rx = _rows[i];
+        return _PrescriptionCard(
+          rx: rx,
+          submitting: _submittingId == rx.id,
+          onRefill: () => _requestRefill(rx),
+        );
+      },
     );
   }
 }
@@ -229,7 +307,7 @@ class _PrescriptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = (rx.dispenseStatus ?? 'unsent').toLowerCase();
     final label = dispenseStatusLabel(status);
-    final tone = _statusColor(status);
+    final tone = _statusTone(status);
     final regimen = [
       if ((rx.strength ?? '').isNotEmpty) rx.strength,
       if ((rx.dosage ?? '').isNotEmpty) rx.dosage,
@@ -268,7 +346,7 @@ class _PrescriptionCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              _StatusPill(label: label, color: tone),
+              ClinicalStatusPill(label: label, tone: tone),
             ],
           ),
           if (regimen.isNotEmpty) ...[
@@ -318,9 +396,9 @@ class _PrescriptionCard extends StatelessWidget {
           ],
           if (_openRefill || (rx.refillStatus ?? '').isNotEmpty) ...[
             const SizedBox(height: 12),
-            _StatusPill(
-              label: _openRefill ? 'Refill requested' : 'Refill ${rx.refillStatus}',
-              color: _openRefill ? digiGold : digiForest,
+            ClinicalStatusPill(
+              label: _refillLabel(rx.refillStatus),
+              tone: _openRefill ? ClinicalTone.gold : ClinicalTone.forest,
             ),
             if ((rx.refillNote ?? '').isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -331,20 +409,13 @@ class _PrescriptionCard extends StatelessWidget {
             const SizedBox(height: 14),
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: submitting ? null : onRefill,
-                style: FilledButton.styleFrom(
-                  backgroundColor: digiForest,
-                  foregroundColor: Colors.white,
+              child: SizedBox(
+                width: 200,
+                child: ClinicalPrimaryButton(
+                  label: submitting ? 'Sending…' : 'Request refill',
+                  onPressed: submitting ? null : onRefill,
+                  loading: submitting,
                 ),
-                icon: submitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(submitting ? 'Sending…' : 'Request refill'),
               ),
             ),
           ],
@@ -362,28 +433,6 @@ class _PrescriptionCard extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: color),
-      ),
-    );
-  }
-}
-
 String dispenseStatusLabel(String status) {
   switch (status) {
     case 'unsent':
@@ -395,7 +444,7 @@ String dispenseStatusLabel(String status) {
     case 'preparing':
       return 'Being prepared';
     case 'ready':
-      return 'Ready for pickup';
+      return 'Ready';
     case 'dispensed':
       return 'Collected';
     case 'unavailable':
@@ -404,20 +453,34 @@ String dispenseStatusLabel(String status) {
       return 'Cancelled';
     default:
       if (status.isEmpty) return 'On your chart';
-      return status[0].toUpperCase() + status.substring(1);
+      return 'In progress';
   }
 }
 
-Color _statusColor(String status) {
+String _refillLabel(String? status) {
+  switch ((status ?? '').toLowerCase()) {
+    case 'requested':
+      return 'Refill requested';
+    case 'approved':
+      return 'Refill approved';
+    case 'declined':
+    case 'rejected':
+      return 'Refill declined';
+    default:
+      return 'Refill on file';
+  }
+}
+
+ClinicalTone _statusTone(String status) {
   switch (status) {
     case 'ready':
-      return digiGold;
+      return ClinicalTone.gold;
     case 'dispensed':
-      return digiForest;
+      return ClinicalTone.forest;
     case 'unavailable':
     case 'cancelled':
-      return const Color(0xFF8C3A3A);
+      return ClinicalTone.clay;
     default:
-      return digiForest;
+      return ClinicalTone.slate;
   }
 }

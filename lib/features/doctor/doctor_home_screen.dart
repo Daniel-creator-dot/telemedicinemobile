@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +10,7 @@ import '../../core/api_client.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../auth/pending_review_banner.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import '../../models/appointment.dart';
 import '../admin/admin_chrome.dart';
 import '../consult/open_video_consult.dart';
@@ -182,7 +182,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         label: Text('$_unreadNotifications'),
         child: Icon(
           Icons.notifications_none_rounded,
-          color: AdminPalette.cyan,
+          color: digiForest,
           size: compact ? 22 : 24,
         ),
       ),
@@ -411,7 +411,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           child: Column(
             children: [
               _buildTopBar(session, isDesktop),
-              PendingReviewBanner(status: session.user?.verificationStatus),
+              ColoredBox(
+                color: digiPaper,
+                child: PendingReviewBanner(status: session.user?.verificationStatus),
+              ),
               Expanded(
                 child: _loading
                     ? const AdminOrbitLoader(message: 'Opening clinic floor…')
@@ -436,22 +439,28 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     return GestureDetector(
       onTap: () => setState(() => _tab = tab),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          gradient: active ? const LinearGradient(colors: [AdminPalette.gold, Color(0xFFC4A574)]) : null,
-          color: active ? null : Colors.white.withValues(alpha: 0.04),
-          border: Border.all(color: active ? Colors.transparent : Colors.white.withValues(alpha: 0.08)),
+          borderRadius: BorderRadius.circular(clinicalRadius),
+          color: active ? digiForest : Colors.white,
+          border: Border.all(color: active ? digiForest : digiLine),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: active ? Colors.black : AdminPalette.mute, size: 15),
+            Icon(icon, color: active ? Colors.white : digiSlate, size: 15),
             const SizedBox(width: 6),
-            Text(label, style: adminSans(size: 12, weight: FontWeight.w800, color: active ? Colors.black : AdminPalette.mute)),
+            Text(
+              label,
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: active ? Colors.white : digiSlate,
+              ),
+            ),
           ],
         ),
       ),
@@ -467,102 +476,110 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       _DoctorTab.reports: 'Reports & Analytics',
     };
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-      child: AdminGlass(
-        radius: 20,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: isDesktop
-            ? Row(
-                children: [
-                  _clinicMark(),
-                  const SizedBox(width: 14),
-                  Container(width: 1, height: 28, color: Colors.white.withValues(alpha: 0.08)),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: Row(
-                        children: [
-                          _headerTabItem('Floor', _DoctorTab.overview, Icons.dashboard_rounded),
-                          _headerTabItem('Bookings', _DoctorTab.appointments, Icons.calendar_month_rounded),
-                          _headerTabItem('Queue', _DoctorTab.queue, Icons.graphic_eq_rounded),
-                          _headerTabItem('Roster', _DoctorTab.doctors, Icons.people_alt_rounded),
-                          _headerTabItem('Pulse', _DoctorTab.reports, Icons.insights_rounded),
-                        ],
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: AdminPalette.gold),
-                    onPressed: _loadAll,
-                  ),
-                  _notificationButton(),
-                  const SizedBox(width: 4),
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
-                    child: Text(
-                      () {
-                        final n = (session.user?.name ?? 'D').trim();
-                        return n.isEmpty ? 'D' : n[0].toUpperCase();
-                      }(),
-                      style: adminSans(size: 13, weight: FontWeight.w800, color: AdminPalette.gold),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(session.user?.name ?? 'Doctor', style: adminSans(size: 13, weight: FontWeight.w700)),
-                  IconButton(
-                    tooltip: 'Logout',
-                    icon: const Icon(Icons.logout_rounded, color: AdminPalette.rose, size: 20),
-                    onPressed: () async {
-                      await session.clear();
-                      if (mounted) context.go('/login');
-                    },
-                  ),
-                ],
-              )
-            : Row(
-                children: [
-                  _clinicMark(compact: true),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+    final initial = () {
+      final n = (session.user?.name ?? 'D').trim();
+      return n.isEmpty ? 'D' : n[0].toUpperCase();
+    }();
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: digiPaper,
+        border: Border(bottom: BorderSide(color: digiLine)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      child: isDesktop
+          ? Row(
+              children: [
+                _clinicMark(),
+                const SizedBox(width: 16),
+                Container(width: 1, height: 28, color: digiLine),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                       children: [
-                        Text(tabLabels[_tab]!, style: adminSerif(size: 16, weight: FontWeight.w700)),
-                        Text('CLINIC FLOOR', style: adminSans(size: 9, weight: FontWeight.w800, color: AdminPalette.gold, letterSpacing: 1.4)),
+                        _headerTabItem('Floor', _DoctorTab.overview, Icons.dashboard_rounded),
+                        _headerTabItem('Bookings', _DoctorTab.appointments, Icons.calendar_month_rounded),
+                        _headerTabItem('Queue', _DoctorTab.queue, Icons.graphic_eq_rounded),
+                        _headerTabItem('Roster', _DoctorTab.doctors, Icons.people_alt_rounded),
+                        _headerTabItem('Pulse', _DoctorTab.reports, Icons.insights_rounded),
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: AdminPalette.gold),
-                    onPressed: _loadAll,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: digiForest),
+                  onPressed: _loadAll,
+                ),
+                _notificationButton(),
+                const SizedBox(width: 4),
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: digiForest.withValues(alpha: 0.08),
+                  child: Text(
+                    initial,
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: digiForest),
                   ),
-                  _notificationButton(compact: true),
-                  CircleAvatar(
-                    radius: 15,
-                    backgroundColor: AdminPalette.gold.withValues(alpha: 0.18),
-                    child: Text(
-                      () {
-                        final n = (session.user?.name ?? 'D').trim();
-                        return n.isEmpty ? 'D' : n[0].toUpperCase();
-                      }(),
-                      style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold),
-                    ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    session.user?.name ?? 'Doctor',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: digiInk),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.logout_rounded, color: AdminPalette.rose, size: 18),
-                    onPressed: () async {
-                      await session.clear();
-                      if (mounted) context.go('/login');
-                    },
+                ),
+                IconButton(
+                  tooltip: 'Logout',
+                  icon: const Icon(Icons.logout_rounded, color: digiSlate, size: 20),
+                  onPressed: () async {
+                    await session.clear();
+                    if (mounted) context.go('/login');
+                  },
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                _clinicMark(compact: true),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tabLabels[_tab]!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600, color: digiInk),
+                      ),
+                      Text(
+                        'Clinic floor',
+                        style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-      ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.refresh_rounded, color: digiForest),
+                  onPressed: _loadAll,
+                ),
+                _notificationButton(compact: true),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.logout_rounded, color: digiSlate, size: 20),
+                  onPressed: () async {
+                    await session.clear();
+                    if (mounted) context.go('/login');
+                  },
+                ),
+              ],
+            ),
     );
   }
 
@@ -571,7 +588,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           child: Image.asset(AppBrand.logoAsset, width: 36, height: 36, fit: BoxFit.cover),
         ),
         if (!compact) ...[
@@ -580,8 +597,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(AppBrand.name, style: adminSerif(size: 15, weight: FontWeight.w700)),
-              Text('CLINIC FLOOR', style: adminSans(size: 9, weight: FontWeight.w800, color: AdminPalette.gold, letterSpacing: 1.4)),
+              Text(
+                AppBrand.name,
+                style: GoogleFonts.sourceSerif4(fontSize: 16, fontWeight: FontWeight.w600, color: digiForest),
+              ),
+              Text('Clinic floor', style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate)),
             ],
           ),
         ],
@@ -597,57 +617,41 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       (_DoctorTab.doctors, Icons.people_alt_rounded, 'Doctors'),
       (_DoctorTab.reports, Icons.bar_chart_rounded, 'Reports'),
     ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: digiLine)),
+      ),
       child: SafeArea(
         top: false,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xCC0C1422),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                boxShadow: [
-                  BoxShadow(color: AdminPalette.gold.withValues(alpha: 0.12), blurRadius: 30, offset: const Offset(0, -4)),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: items.map((item) {
-                  final active = _tab == item.$1;
-                  return GestureDetector(
-                    onTap: () => setState(() => _tab = item.$1),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 240),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        gradient: active ? const LinearGradient(colors: [AdminPalette.gold, Color(0xFFC4A574)]) : null,
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: items.map((item) {
+              final active = _tab == item.$1;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _tab = item.$1),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(item.$2, size: 20, color: active ? digiForest : digiSlate),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.$3,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                          color: active ? digiForest : digiSlate,
+                        ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(item.$2, size: 20, color: active ? Colors.black : AdminPalette.mute),
-                          const SizedBox(height: 3),
-                          Text(
-                            item.$3,
-                            style: adminSans(
-                              size: 10,
-                              weight: FontWeight.w800,
-                              color: active ? Colors.black : AdminPalette.mute,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ),
       ),
@@ -773,83 +777,46 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Welcome Banner with Image ─────────────────────────────────────
-          Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            height: 188,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AdminPalette.gold.withValues(alpha: 0.28),
-                  blurRadius: 28,
-                  offset: const Offset(0, 10),
+          DigiCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$greeting,',
+                  style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  (session.user?.name != null)
+                      ? (session.user!.name.toLowerCase().startsWith('dr.')
+                          ? session.user!.name
+                          : 'Dr. ${session.user!.name}')
+                      : 'Doctor',
+                  style: GoogleFonts.sourceSerif4(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    color: digiInk,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Appointments and the queue for this clinic.',
+                  style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ClinicalStatusPill(label: '$_todayCount today', tone: ClinicalTone.forest),
+                    ClinicalStatusPill(label: '$_pendingCount waiting', tone: ClinicalTone.gold),
+                  ],
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/branding/onboarding_1.png',
-                    fit: BoxFit.cover,
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF070B14).withValues(alpha: 0.92),
-                          AdminPalette.gold.withValues(alpha: 0.22),
-                          Colors.transparent,
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(22),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            const AdminLiveDot(color: AdminPalette.gold),
-                            const SizedBox(width: 8),
-                            Text(
-                              '$greeting,',
-                              style: adminSans(size: 12, weight: FontWeight.w600, color: AdminPalette.mute, letterSpacing: 0.4),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          (session.user?.name != null)
-                              ? (session.user!.name.toLowerCase().startsWith('dr.')
-                                  ? session.user!.name
-                                  : 'Dr. ${session.user!.name}')
-                              : 'Doctor',
-                          style: adminSerif(size: 28, weight: FontWeight.w700, letterSpacing: -0.6),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            AdminStatusChip(label: '$_todayCount today', color: AdminPalette.cyan),
-                            AdminStatusChip(label: '$_pendingCount pending', color: AdminPalette.gold),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
+          ).animate().fadeIn(duration: 240.ms),
+          const SizedBox(height: 16),
 
           // ── Active Consultation Spotlight ──────────────────────────────────
           if (activeConsult != null)

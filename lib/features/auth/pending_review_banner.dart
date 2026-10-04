@@ -14,20 +14,26 @@ class PendingReviewBanner extends StatelessWidget {
     final rejected = current == 'rejected';
     if (current != 'pending' && !rejected) return const SizedBox.shrink();
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: rejected ? const Color(0xFFF3E6DC) : const Color(0xFFE7F0EA),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: digiForest.withValues(alpha: 0.16)),
-      ),
-      child: Text(
-        rejected
-            ? 'Your Healynks profile was not approved. Contact Healynks support.'
-            : 'Your Healynks profile is pending review.',
-        style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: digiForest),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: DigiCard(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClinicalStatusPill(
+              label: rejected ? 'Not approved' : 'Pending review',
+              tone: rejected ? ClinicalTone.clay : ClinicalTone.gold,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              rejected
+                  ? 'Your Healynks profile was not approved. Contact Healynks support if you think this is a mistake.'
+                  : 'Your Healynks profile is with the clinic for review. You can keep signing in while that is open.',
+              style: GoogleFonts.dmSans(fontSize: 14, color: digiInk, height: 1.45),
+            ),
+          ],
+        ),
       ),
     );
   }

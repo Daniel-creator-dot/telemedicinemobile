@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
+import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../auth/pending_review_banner.dart';
 import '../../models/appointment.dart';
@@ -259,38 +260,48 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
       _ => 'Pending review',
     };
 
+    final tone = switch (status) {
+      'approved' => ClinicalTone.forest,
+      'rejected' => ClinicalTone.clay,
+      _ => ClinicalTone.gold,
+    };
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: DigiCard(
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Agency',
-              style: GoogleFonts.dmSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: digiForest,
-                letterSpacing: 0.3,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(AppBrand.logoAsset, width: 40, height: 40, fit: BoxFit.cover),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nurse agency',
+                    style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: digiSlate),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    agency['name']?.toString().trim().isNotEmpty == true ? agency['name'].toString() : 'Agency',
+                    style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk, height: 1.15),
+                  ),
+                  if (place.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(place, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4)),
+                  ],
+                  if (phone.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(phone, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate)),
+                  ],
+                  const SizedBox(height: 10),
+                  ClinicalStatusPill(label: statusLabel, tone: tone),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              agency['name']?.toString().trim().isNotEmpty == true ? agency['name'].toString() : 'Agency',
-              style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
-            ),
-            if (place.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(place, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate)),
-            ],
-            if (phone.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(phone, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate)),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              statusLabel,
-              style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: digiForest),
             ),
           ],
         ),

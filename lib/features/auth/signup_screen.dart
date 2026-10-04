@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
-import '../admin/admin_chrome.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import 'auth_chrome.dart';
 import 'auth_repository.dart';
 
@@ -123,7 +123,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 alignment: Alignment.centerLeft,
                 child: IconButton(
                   onPressed: () => context.go('/login'),
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                  icon: const Icon(Icons.arrow_back_rounded, color: digiForest),
                 ),
               ),
               const AuthBrandHeader(compact: true),
@@ -133,19 +133,20 @@ class _SignupScreenState extends State<SignupScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      _otpSent ? 'Verify your number' : 'Create your account',
+                      _otpSent ? 'Verify your number' : 'Create a patient account',
                       style: GoogleFonts.sourceSerif4(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        color: digiInk,
+                        height: 1.15,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Text(
                       _otpSent
                           ? 'Enter the SMS code we sent to ${_phone.text.trim()}'
-                          : 'Register as a patient to book visits and join live care',
-                      style: GoogleFonts.dmSans(fontSize: 13, color: AdminPalette.mute, height: 1.35),
+                          : 'A Ghana number, a password, and consent to telemedicine care.',
+                      style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.45),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 14),
@@ -155,7 +156,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     if (!_otpSent) ...[
                       TextFormField(
                         controller: _name,
-                        style: GoogleFonts.dmSans(color: Colors.white),
+                        style: GoogleFonts.dmSans(color: digiInk),
                         textCapitalization: TextCapitalization.words,
                         decoration: authFieldDeco('Full name', Icons.person_outline),
                         validator: (v) => v == null || v.trim().isEmpty ? 'Full name is required' : null,
@@ -164,7 +165,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _email,
                         keyboardType: TextInputType.emailAddress,
-                        style: GoogleFonts.dmSans(color: Colors.white),
+                        style: GoogleFonts.dmSans(color: digiInk),
                         decoration: authFieldDeco('Email address', Icons.email_outlined),
                         validator: (v) => v == null || !v.contains('@') ? 'Enter a valid email' : null,
                       ),
@@ -172,7 +173,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _phone,
                         keyboardType: TextInputType.phone,
-                        style: GoogleFonts.dmSans(color: Colors.white),
+                        style: GoogleFonts.dmSans(color: digiInk),
                         decoration: authFieldDeco('Ghana mobile number', Icons.phone_outlined),
                         validator: (v) => v == null || v.trim().isEmpty ? 'Phone number is required' : null,
                       ),
@@ -180,12 +181,12 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _password,
                         obscureText: _obscure,
-                        style: GoogleFonts.dmSans(color: Colors.white),
+                        style: GoogleFonts.dmSans(color: digiInk),
                         decoration: authFieldDeco('Password', Icons.lock_outline).copyWith(
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: Colors.white60,
+                              color: digiSlate,
                               size: 20,
                             ),
                             onPressed: () => setState(() => _obscure = !_obscure),
@@ -213,7 +214,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _otp,
                         keyboardType: TextInputType.number,
-                        style: GoogleFonts.dmSans(color: Colors.white, letterSpacing: 4, fontSize: 18),
+                        style: GoogleFonts.dmSans(color: digiInk, letterSpacing: 4, fontSize: 18),
                         textAlign: TextAlign.center,
                         decoration: authFieldDeco('6-digit OTP', Icons.lock_clock_outlined),
                         validator: (v) => v == null || v.trim().length < 4 ? 'Enter the OTP' : null,
@@ -224,7 +225,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           child: Text(
                             'Dev OTP: $_debugOtp',
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.dmSans(color: AdminPalette.cyan, fontSize: 12, fontWeight: FontWeight.w700),
+                            style: GoogleFonts.dmSans(color: digiForest, fontSize: 12, fontWeight: FontWeight.w700),
                           ),
                         ),
                       Align(
@@ -233,7 +234,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           onPressed: _loading ? null : _resend,
                           child: Text(
                             'Resend code',
-                            style: GoogleFonts.dmSans(color: AdminPalette.violet, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.dmSans(color: digiForest, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ),
@@ -249,7 +250,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       onPressed: () => context.go('/login'),
                       child: Text(
                         'Already have an account? Sign in',
-                        style: GoogleFonts.dmSans(color: AdminPalette.cyan, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.dmSans(color: digiForest, fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -275,12 +276,12 @@ class _ConsentTile extends StatelessWidget {
     return CheckboxListTile(
       value: value,
       onChanged: (v) => onChanged(v ?? false),
-      activeColor: AdminPalette.cyan,
-      checkColor: Colors.black,
+      activeColor: digiForest,
+      checkColor: Colors.white,
       contentPadding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       controlAffinity: ListTileControlAffinity.leading,
-      title: Text(label, style: GoogleFonts.dmSans(color: Colors.white, fontSize: 12, height: 1.3)),
+      title: Text(label, style: GoogleFonts.dmSans(color: digiInk, fontSize: 13, height: 1.3)),
     );
   }
 }

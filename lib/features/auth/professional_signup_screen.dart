@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import 'auth_chrome.dart';
@@ -144,36 +143,28 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
   @override
   Widget build(BuildContext context) {
     final doctor = _kind == _JoinKind.doctor;
-    return Scaffold(
-      backgroundColor: digiPaper,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 32),
+    return AuthScaffold(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _loading ? null : () => context.go('/login'),
+              icon: const Icon(Icons.arrow_back, size: 18, color: digiForest),
+              label: Text('Sign in', style: GoogleFonts.dmSans(color: digiForest, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const AuthBrandHeader(compact: true),
+          const SizedBox(height: 8),
+          AuthGlassPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _loading ? null : () => context.go('/login'),
-                    icon: const Icon(Icons.arrow_back, size: 18, color: digiForest),
-                    label: Text('Sign in', style: GoogleFonts.dmSans(color: digiForest, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-                Text(
-                  AppBrand.name,
-                  style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w700, color: digiForest),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Join the clinic',
-                  style: GoogleFonts.sourceSerif4(fontSize: 34, fontWeight: FontWeight.w700, color: digiInk, height: 1.05),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Create a doctor account, or register the telemedicine agency you run. You can sign in right away.',
-                  style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.4),
+                const ClinicalPageHeader(
+                  title: 'Join the clinic',
+                  subtitle:
+                      'Register as a doctor, or as the nurse agency you run. You can sign in while Healynks reviews the profile.',
                 ),
                 const SizedBox(height: 20),
                 _KindSwitch(
@@ -185,7 +176,14 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                             _error = null;
                           }),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 8),
+                Text(
+                  doctor
+                      ? 'Your name, a Ghana number, and a specialty. License and facility can wait.'
+                      : 'The nurse who will sign in, and the agency they represent.',
+                  style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4),
+                ),
+                const SizedBox(height: 16),
                 _field(_name, doctor ? 'Full name' : 'Nurse full name', TextInputType.name),
                 const SizedBox(height: 12),
                 _field(_phone, 'Ghana mobile number', TextInputType.phone),
@@ -217,53 +215,20 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                   const SizedBox(height: 12),
                   _field(_address, 'Address (optional)', TextInputType.streetAddress),
                 ],
-                const SizedBox(height: 16),
                 if (_error != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8E8E4),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(_error!, style: GoogleFonts.dmSans(fontSize: 13, color: const Color(0xFF8C3A2F), fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(height: 12),
-                ] else if (!_ready && !_loading) ...[
-                  Text(
-                    'Enter the required details to continue.',
-                    style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate),
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  AuthErrorBanner(message: _error!),
                 ],
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _loading || !_ready ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: digiForest,
-                      disabledBackgroundColor: digiForest.withValues(alpha: 0.35),
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white70,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: _loading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(
-                            doctor ? 'Create doctor account' : 'Create agency account',
-                            style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700),
-                          ),
-                  ),
+                const SizedBox(height: 20),
+                ClinicalPrimaryButton(
+                  label: doctor ? 'Create doctor account' : 'Create agency account',
+                  onPressed: _loading || !_ready ? null : _submit,
+                  loading: _loading,
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -311,21 +276,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
     );
   }
 
-  InputDecoration _deco(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: GoogleFonts.dmSans(color: digiSlate, fontSize: 13),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: digiLine)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: digiLine)),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: digiForest, width: 1.5),
-      ),
-    );
-  }
+  InputDecoration _deco(String label) => clinicalFieldDecoration(label);
 }
 
 class _KindSwitch extends StatelessWidget {
@@ -339,8 +290,8 @@ class _KindSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: digiPaper,
+        borderRadius: BorderRadius.circular(clinicalRadius),
         border: Border.all(color: digiLine),
       ),
       child: Row(
@@ -357,10 +308,10 @@ class _KindSwitch extends StatelessWidget {
     return Expanded(
       child: Material(
         color: selected ? digiForest : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: onChanged == null ? null : () => onChanged!(value),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(

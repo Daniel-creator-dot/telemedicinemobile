@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/auth_user.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import 'admin_chrome.dart';
 
 class PendingSignup {
@@ -211,36 +213,43 @@ class AdminUsersTab extends StatelessWidget {
   Widget _pendingReview() {
     final doctors = signups.where((s) => s.kind == 'doctor').toList();
     final agencies = signups.where((s) => s.kind == 'agency').toList();
-    return AdminGlass(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      decoration: BoxDecoration(
+        color: digiPaper,
+        borderRadius: BorderRadius.circular(clinicalRadius),
+        border: Border.all(color: digiLine),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Pending review', style: adminSerif(size: 20)),
-          const SizedBox(height: 6),
-          Text(
-            'Self-registered doctors and nurse agencies waiting for a decision.',
-            style: adminSans(size: 12, color: AdminPalette.mute),
+          const ClinicalPageHeader(
+            title: 'Pending review',
+            subtitle: 'Doctors and nurse agencies waiting for a decision.',
           ),
           if (signups.isEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Text('Nobody is waiting for review.', style: adminSans(color: AdminPalette.mute)),
+              padding: const EdgeInsets.only(top: 16),
+              child: Text(
+                'Nobody is waiting for review.',
+                style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate),
+              ),
             )
           else ...[
             if (doctors.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text('Doctors', style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold)),
+              const SizedBox(height: 16),
+              Text('Doctors', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: digiSlate)),
               ...doctors.map(_signupTile),
             ],
             if (agencies.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text('Nurse agencies', style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold)),
+              const SizedBox(height: 16),
+              Text('Nurse agencies', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: digiSlate)),
               ...agencies.map(_signupTile),
             ],
           ],
         ],
       ),
-    ).animate().fadeIn(duration: 400.ms);
+    ).animate().fadeIn(duration: 240.ms);
   }
 
   Widget _signupTile(PendingSignup signup) {
@@ -257,43 +266,54 @@ class AdminUsersTab extends StatelessWidget {
     ];
 
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(top: 12),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
         decoration: BoxDecoration(
-          color: AdminPalette.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AdminPalette.line),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(clinicalRadius),
+          border: Border.all(color: digiLine),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(headline.isEmpty ? 'Signup' : headline, style: adminSans(size: 14, weight: FontWeight.w800)),
-            if (bits.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(bits.join(' · '), style: adminSans(size: 11, color: AdminPalette.mute)),
-            ],
-            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  headline.isEmpty ? 'Signup' : headline,
+                  style: GoogleFonts.sourceSerif4(fontSize: 18, fontWeight: FontWeight.w600, color: digiInk),
+                ),
+                const ClinicalStatusPill(label: 'Pending review', tone: ClinicalTone.gold),
+              ],
+            ),
+            if (bits.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(bits.join(' · '), style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4)),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton(
                   onPressed: busy ? null : () => onDecide(signup.userId, 'approve'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AdminPalette.lime,
-                    foregroundColor: Colors.black,
-                    visualDensity: VisualDensity.compact,
+                    backgroundColor: digiForest,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: digiForest.withValues(alpha: 0.35),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(clinicalRadius)),
                   ),
                   child: Text(busy ? 'Saving…' : 'Approve'),
                 ),
-                OutlinedButton(
+                TextButton(
                   onPressed: busy ? null : () => onDecide(signup.userId, 'reject'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AdminPalette.rose,
-                    side: const BorderSide(color: AdminPalette.rose),
-                    visualDensity: VisualDensity.compact,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF8C3A2F)),
                   child: const Text('Decline'),
                 ),
               ],

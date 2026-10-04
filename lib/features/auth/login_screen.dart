@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
-import '../admin/admin_chrome.dart';
+import '../../shared/widgets/clinical_ui.dart';
 import 'auth_chrome.dart';
 import 'auth_repository.dart';
 
@@ -94,22 +94,22 @@ class _LoginScreenState extends State<LoginScreen> {
   String get _title {
     switch (_mode) {
       case _AuthMode.signIn:
-        return 'Welcome back';
+        return 'Sign in';
       case _AuthMode.forgot:
-        return 'Forgot password';
+        return 'Reset access';
       case _AuthMode.reset:
-        return 'Reset password';
+        return 'New password';
     }
   }
 
   String get _subtitle {
     switch (_mode) {
       case _AuthMode.signIn:
-        return 'Sign in to your clinical workspace';
+        return 'Use the phone or username on your Healynks record.';
       case _AuthMode.forgot:
-        return 'Enter your username or phone to receive an SMS code';
+        return 'We will text a code to the number on the account.';
       case _AuthMode.reset:
-        return 'Enter the verification code and a new password';
+        return 'Enter the code from the text, then choose a password.';
     }
   }
 
@@ -131,14 +131,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return AuthScaffold(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              const SizedBox(height: 18),
               const AuthBrandHeader(),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               AuthGlassPanel(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -146,24 +145,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       _title,
                       style: GoogleFonts.sourceSerif4(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        color: digiInk,
+                        height: 1.15,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Text(
                       _subtitle,
-                      style: GoogleFonts.dmSans(fontSize: 13, color: AdminPalette.mute, height: 1.35),
+                      style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.45),
                     ),
                     if (_error != null) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       AuthErrorBanner(message: _error!),
                     ],
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _username,
-                      style: GoogleFonts.dmSans(color: Colors.white),
+                      style: GoogleFonts.dmSans(color: digiInk),
                       textInputAction: isSignIn ? TextInputAction.next : TextInputAction.done,
                       decoration: authFieldDeco(
                         isSignIn ? 'Username or phone' : 'Username',
@@ -176,13 +176,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _password,
                         obscureText: _obscure,
-                        style: GoogleFonts.dmSans(color: Colors.white),
+                        style: GoogleFonts.dmSans(color: digiInk),
                         onFieldSubmitted: (_) => _submit(),
                         decoration: authFieldDeco('Password', Icons.lock_outline).copyWith(
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: Colors.white60,
+                              color: digiSlate,
                               size: 20,
                             ),
                             onPressed: () => setState(() => _obscure = !_obscure),
@@ -196,20 +196,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _otpCode,
                         keyboardType: TextInputType.number,
-                        style: GoogleFonts.dmSans(color: Colors.white),
-                        decoration: authFieldDeco('OTP from SMS', Icons.lock_clock_outlined),
+                        style: GoogleFonts.dmSans(color: digiInk),
+                        decoration: authFieldDeco('Code from SMS', Icons.lock_clock_outlined),
                         validator: (v) => v == null || v.trim().isEmpty ? 'Enter verification code' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _newPassword,
                         obscureText: _obscure,
-                        style: GoogleFonts.dmSans(color: Colors.white),
+                        style: GoogleFonts.dmSans(color: digiInk),
                         decoration: authFieldDeco('New password', Icons.lock_outline).copyWith(
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: Colors.white60,
+                              color: digiSlate,
                               size: 20,
                             ),
                             onPressed: () => setState(() => _obscure = !_obscure),
@@ -218,65 +218,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         validator: (v) => v == null || v.length < 5 ? 'Min 5 characters required' : null,
                       ),
                     ],
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 20),
                     AuthPrimaryButton(label: _primaryLabel, onPressed: _submit, loading: _loading),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 4),
                     if (isSignIn) ...[
-                      TextButton(
-                        onPressed: () => _setMode(_AuthMode.forgot),
-                        child: Text(
-                          'Forgot password?',
-                          style: GoogleFonts.dmSans(color: AdminPalette.violet, fontSize: 13, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text('New patient?', style: GoogleFonts.dmSans(color: AdminPalette.mute, fontSize: 12)),
-                          ),
-                          Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () => context.go('/signup'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AdminPalette.cyan,
-                            side: BorderSide(color: AdminPalette.cyan.withValues(alpha: 0.55)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                          child: Text('Create an account', style: GoogleFonts.dmSans(fontWeight: FontWeight.w800, fontSize: 15)),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () => context.go('/join'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AdminPalette.gold,
-                            side: BorderSide(color: AdminPalette.gold.withValues(alpha: 0.7)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
+                      Align(
+                        alignment: Alignment.center,
+                        child: TextButton(
+                          onPressed: () => _setMode(_AuthMode.forgot),
                           child: Text(
-                            'Join as a doctor or agency',
-                            style: GoogleFonts.dmSans(fontWeight: FontWeight.w800, fontSize: 15),
+                            'Forgot password?',
+                            style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      ClinicalSecondaryButton(
+                        label: 'Create a patient account',
+                        onPressed: () => context.go('/signup'),
                       ),
                     ] else ...[
                       TextButton(
                         onPressed: () => _setMode(_AuthMode.signIn),
                         child: Text(
                           'Back to sign in',
-                          style: GoogleFonts.dmSans(color: AdminPalette.mute, fontSize: 13),
+                          style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
                       if (_mode == _AuthMode.forgot)
@@ -284,13 +250,23 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: () => _setMode(_AuthMode.reset),
                           child: Text(
                             'I already have a code',
-                            style: GoogleFonts.dmSans(color: AdminPalette.violet, fontSize: 13, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.dmSans(color: digiForest, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                         ),
                     ],
                   ],
                 ),
               ),
+              if (isSignIn) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.go('/join'),
+                  child: Text(
+                    'Join as a doctor or nurse agency',
+                    style: GoogleFonts.dmSans(color: digiForest, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

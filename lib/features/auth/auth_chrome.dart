@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/brand.dart';
 import '../../core/env.dart';
-import '../admin/admin_chrome.dart';
+import '../../shared/widgets/clinical_ui.dart';
 
 void goHomeForRole(BuildContext context, String role) {
   switch (role) {
@@ -46,30 +44,126 @@ class AuthScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AdminPalette.bg,
-      body: AdminMeshBackdrop(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Opacity(
-              opacity: 0.28,
-              child: Image.asset('assets/branding/hero_login.png', fit: BoxFit.cover),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AdminPalette.bg.withValues(alpha: 0.35),
-                    AdminPalette.bg.withValues(alpha: 0.92),
-                  ],
-                ),
+      backgroundColor: digiPaper,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 960;
+            final width = constraints.maxWidth > clinicalMaxWidth ? clinicalMaxWidth : constraints.maxWidth;
+            final frame = wide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Expanded(child: _AuthAside()),
+                      Container(width: 1, color: digiLine),
+                      Expanded(child: child),
+                    ],
+                  )
+                : child;
+            return Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: width,
+                height: constraints.maxHeight,
+                child: frame,
               ),
-            ),
-            SafeArea(child: child),
-          ],
+            );
+          },
         ),
+      ),
+    );
+  }
+}
+
+class _AuthAside extends StatelessWidget {
+  const _AuthAside();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(40, 48, 40, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Image.asset(
+            AppBrand.logoLockupAsset,
+            width: 196,
+            fit: BoxFit.contain,
+          ).animate().fadeIn(duration: 240.ms),
+          const SizedBox(height: 32),
+          Text(
+            'Care that stays with you.',
+            style: GoogleFonts.sourceSerif4(
+              fontSize: 36,
+              fontWeight: FontWeight.w600,
+              color: digiInk,
+              height: 1.15,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Consult a clinician, collect a prescription, and follow the visit — from Accra to the regions.',
+            style: GoogleFonts.dmSans(fontSize: 15, color: digiSlate, height: 1.5),
+          ),
+          const SizedBox(height: 28),
+          const _AsideNote(
+            title: 'Patients',
+            body: 'Book a visit, join a consult, and see what the pharmacy has ready.',
+          ),
+          const _AsideNote(
+            title: 'Clinicians',
+            body: 'Work the floor, the queue, and the chart from one desk.',
+          ),
+          const _AsideNote(
+            title: 'Agencies',
+            body: 'Register a nurse agency. Healynks reviews the profile before it goes live.',
+          ),
+          if (AppEnv.debugHostHint.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(
+              AppEnv.debugHostHint,
+              style: GoogleFonts.dmSans(fontSize: 11, color: digiSlate),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AsideNote extends StatelessWidget {
+  const _AsideNote({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 2,
+            height: 36,
+            margin: const EdgeInsets.only(top: 2, right: 12),
+            color: digiGold,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: digiInk),
+                ),
+                const SizedBox(height: 2),
+                Text(body, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -82,49 +176,27 @@ class AuthBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = compact ? 176.0 : 232.0;
+    final wide = MediaQuery.sizeOf(context).width >= 960;
+    if (wide) return const SizedBox.shrink();
     return Column(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(compact ? 22 : 28),
-            boxShadow: [
-              BoxShadow(color: AdminPalette.cyan.withValues(alpha: 0.4), blurRadius: 28),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(compact ? 22 : 28),
-            child: Image.asset(
-              AppBrand.logoLockupAsset,
-              width: width,
-              fit: BoxFit.contain,
-            ),
-          ),
-        ).animate().fadeIn(duration: 420.ms).scale(begin: const Offset(0.86, 0.86), curve: Curves.easeOutBack),
-        SizedBox(height: compact ? 12 : 16),
+        Image.asset(
+          AppBrand.logoLockupAsset,
+          width: compact ? 148 : 176,
+          fit: BoxFit.contain,
+        ).animate().fadeIn(duration: 240.ms),
+        const SizedBox(height: 12),
         Text(
           AppBrand.tagline,
-          style: GoogleFonts.dmSans(
-            fontSize: 13,
-            color: AdminPalette.gold,
-            fontWeight: FontWeight.w500,
-          ),
-        ).animate().fadeIn(delay: 80.ms),
-        const SizedBox(height: 6),
-        Text(
-          AppEnv.isLocalOverride ? 'Local clinic API' : 'Live clinic · Ghana',
-          style: GoogleFonts.dmSans(fontSize: 11, color: Colors.white54),
+          textAlign: TextAlign.center,
+          style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4),
         ),
         if (AppEnv.debugHostHint.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             AppEnv.debugHostHint,
             textAlign: TextAlign.center,
-            style: GoogleFonts.dmSans(
-              fontSize: 10,
-              color: AdminPalette.cyan.withValues(alpha: 0.85),
-              fontWeight: FontWeight.w600,
-            ),
+            style: GoogleFonts.dmSans(fontSize: 11, color: digiSlate),
           ),
         ],
       ],
@@ -139,51 +211,24 @@ class AuthGlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-          decoration: BoxDecoration(
-            color: const Color(0xCC101826),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            boxShadow: [
-              BoxShadow(color: AdminPalette.cyan.withValues(alpha: 0.12), blurRadius: 28, offset: const Offset(0, 12)),
-            ],
-          ),
-          child: child,
-        ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(clinicalRadius),
+        border: Border.all(color: digiLine),
+        boxShadow: clinicalShadow,
       ),
-    ).animate().fadeIn(delay: 160.ms, duration: 420.ms).slideY(begin: 0.06, curve: Curves.easeOutCubic);
+      child: child,
+    ).animate().fadeIn(duration: 240.ms);
   }
 }
 
 InputDecoration authFieldDeco(String hint, IconData icon) {
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: GoogleFonts.dmSans(color: Colors.white38, fontSize: 14),
-    prefixIcon: Icon(icon, color: AdminPalette.cyan, size: 20),
-    filled: true,
-    fillColor: Colors.white.withValues(alpha: 0.06),
-    contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: AdminPalette.cyan, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: AdminPalette.rose.withValues(alpha: 0.5)),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: AdminPalette.rose, width: 1.5),
-    ),
+  return clinicalFieldDecoration(
+    hint,
+    prefixIcon: Icon(icon, color: digiForest, size: 20),
   );
 }
 
@@ -197,12 +242,20 @@ class AuthErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AdminPalette.rose.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminPalette.rose.withValues(alpha: 0.35)),
+        color: const Color(0xFFF6E8E4),
+        borderRadius: BorderRadius.circular(clinicalRadius),
+        border: Border.all(color: const Color(0xFFE4C8C2)),
       ),
-      child: Text(message, style: GoogleFonts.dmSans(color: const Color(0xFFFCA5A5), fontSize: 12, fontWeight: FontWeight.w600)),
-    ).animate().shake();
+      child: Text(
+        message,
+        style: GoogleFonts.dmSans(
+          color: const Color(0xFF8C3A2F),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          height: 1.35,
+        ),
+      ),
+    ).animate().fadeIn(duration: 180.ms);
   }
 }
 
@@ -215,21 +268,6 @@ class AuthPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: loading ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: AdminPalette.cyan,
-          foregroundColor: Colors.black,
-          disabledBackgroundColor: AdminPalette.cyan.withValues(alpha: 0.4),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: loading
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-            : Text(label, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800)),
-      ),
-    );
+    return ClinicalPrimaryButton(label: label, onPressed: onPressed, loading: loading);
   }
 }
