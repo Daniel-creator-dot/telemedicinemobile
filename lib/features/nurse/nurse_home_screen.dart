@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api_client.dart';
 import '../../core/session.dart';
 import '../auth/pending_review_banner.dart';
 import '../../models/appointment.dart';
@@ -23,6 +25,7 @@ class NurseHomeScreen extends StatefulWidget {
 class _NurseHomeScreenState extends State<NurseHomeScreen> {
   List<Map<String, dynamic>> _triage = [];
   List<DoctorProfile> _doctors = [];
+  Map<String, dynamic>? _agency;
   bool _loading = true;
   Timer? _poll;
 
@@ -43,6 +46,20 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
 
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
+    Map<String, dynamic>? agency = _agency;
+    var agencyKnown = false;
+    try {
+      final res = await context.read<ApiClient>().dio.get<Map<String, dynamic>>('/api/agency/me');
+      agency = res.data;
+      agencyKnown = true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        agency = null;
+        agencyKnown = true;
+      }
+    } catch (_) {}
+    if (!mounted) return;
+
     try {
       final care = context.read<CareRepository>();
       final list = await care.getTriage();
@@ -54,10 +71,16 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
       setState(() {
         _triage = list;
         _doctors = docs;
+        if (agencyKnown) _agency = agency;
         _loading = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          if (agencyKnown) _agency = agency;
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -127,15 +150,10 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (session.user?.verificationStatus == 'pending') const PendingReviewBanner(),
-          if ((session.user?.agencyName ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Text(
-                session.user!.agencyName!,
-                style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, fontWeight: FontWeight.w600),
-              ),
-            ),
+          PendingReviewBanner(
+            status: _agency?['verification_status']?.toString() ?? session.user?.verificationStatus,
+          ),
+          if (_agency != null) _agencyCard(_agency!),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -225,6 +243,57 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
                 ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _agencyCard(Map<String, dynamic> agency) {
+    final region = agency['region']?.toString().trim() ?? '';
+    final town = agency['town']?.toString().trim() ?? '';
+    final place = [region, town].where((part) => part.isNotEmpty).join(' · ');
+    final phone = agency['phone']?.toString().trim() ?? '';
+    final status = agency['verification_status']?.toString();
+    final statusLabel = switch (status) {
+      'approved' => 'Approved',
+      'rejected' => 'Not approved',
+      _ => 'Pending review',
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: DigiCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Agency',
+              style: GoogleFonts.dmSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: digiForest,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              agency['name']?.toString().trim().isNotEmpty == true ? agency['name'].toString() : 'Agency',
+              style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600, color: digiInk),
+            ),
+            if (place.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(place, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate)),
+            ],
+            if (phone.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(phone, style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate)),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              statusLabel,
+              style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: digiForest),
+            ),
+          ],
+        ),
       ),
     );
   }

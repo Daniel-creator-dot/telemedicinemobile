@@ -411,7 +411,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           child: Column(
             children: [
               _buildTopBar(session, isDesktop),
-              if (session.user?.verificationStatus == 'pending') const PendingReviewBanner(),
+              PendingReviewBanner(status: session.user?.verificationStatus),
               Expanded(
                 child: _loading
                     ? const AdminOrbitLoader(message: 'Opening clinic floor…')

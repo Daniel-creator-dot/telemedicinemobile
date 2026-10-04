@@ -4,10 +4,80 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/auth_user.dart';
 import 'admin_chrome.dart';
 
+class PendingSignup {
+  const PendingSignup({
+    required this.userId,
+    required this.kind,
+    required this.name,
+    required this.phone,
+    required this.detail,
+    this.region,
+    this.town,
+    this.createdAt,
+  });
+
+  final int userId;
+  final String kind;
+  final String name;
+  final String phone;
+  final String detail;
+  final String? region;
+  final String? town;
+  final String? createdAt;
+}
+
+List<PendingSignup> parsePendingSignups(Map<String, dynamic>? data) {
+  if (data == null) return const [];
+  final out = <PendingSignup>[];
+
+  void addAll(dynamic rawList, String kind) {
+    if (rawList is! List) return;
+    for (final raw in rawList) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      final id = int.tryParse(map['user_id']?.toString() ?? '');
+      if (id == null) continue;
+      final detail = kind == 'agency'
+          ? (map['agency_name']?.toString() ?? 'Nurse agency')
+          : (map['specialty']?.toString() ?? 'Doctor');
+      out.add(
+        PendingSignup(
+          userId: id,
+          kind: kind,
+          name: map['name']?.toString() ?? '',
+          phone: map['phone']?.toString() ?? '',
+          detail: detail,
+          region: map['region']?.toString(),
+          town: map['town']?.toString(),
+          createdAt: map['created_at']?.toString(),
+        ),
+      );
+    }
+  }
+
+  addAll(data['doctors'], 'doctor');
+  addAll(data['agencies'], 'agency');
+  return out;
+}
+
+String formatSignupWhen(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  final dt = DateTime.tryParse(raw);
+  if (dt == null) return raw;
+  final local = dt.toLocal();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mm = local.minute.toString().padLeft(2, '0');
+  return '${local.day} ${months[local.month - 1]} ${local.year}, $hh:$mm';
+}
+
 class AdminUsersTab extends StatelessWidget {
   const AdminUsersTab({
     super.key,
     required this.users,
+    required this.signups,
+    required this.decidingUserId,
+    required this.onDecide,
     required this.name,
     required this.username,
     required this.password,
@@ -19,6 +89,9 @@ class AdminUsersTab extends StatelessWidget {
   });
 
   final List<AuthUser> users;
+  final List<PendingSignup> signups;
+  final int? decidingUserId;
+  final void Function(int userId, String decision) onDecide;
   final TextEditingController name;
   final TextEditingController username;
   final TextEditingController password;
@@ -35,6 +108,8 @@ class AdminUsersTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _pendingReview(),
+          const SizedBox(height: 20),
           AdminGlass(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -110,7 +185,7 @@ class AdminUsersTab extends StatelessWidget {
                     ),
                     title: Text(u.name, style: adminSans(size: 14, weight: FontWeight.w800)),
                     subtitle: Text(
-                      '${u.username} · ${u.role.label}${u.verificationStatus == 'pending' ? ' · Pending review' : ''}',
+                      '${u.username} · ${u.role.label}${_reviewFlag(u.verificationStatus)}',
                       style: adminSans(size: 11, color: AdminPalette.mute),
                     ),
                   ),
@@ -118,6 +193,113 @@ class AdminUsersTab extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  String _reviewFlag(String? status) {
+    switch (status) {
+      case 'pending':
+        return ' · Pending review';
+      case 'rejected':
+        return ' · Not approved';
+      default:
+        return '';
+    }
+  }
+
+  Widget _pendingReview() {
+    final doctors = signups.where((s) => s.kind == 'doctor').toList();
+    final agencies = signups.where((s) => s.kind == 'agency').toList();
+    return AdminGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Pending review', style: adminSerif(size: 20)),
+          const SizedBox(height: 6),
+          Text(
+            'Self-registered doctors and nurse agencies waiting for a decision.',
+            style: adminSans(size: 12, color: AdminPalette.mute),
+          ),
+          if (signups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Text('Nobody is waiting for review.', style: adminSans(color: AdminPalette.mute)),
+            )
+          else ...[
+            if (doctors.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text('Doctors', style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold)),
+              ...doctors.map(_signupTile),
+            ],
+            if (agencies.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text('Nurse agencies', style: adminSans(size: 12, weight: FontWeight.w800, color: AdminPalette.gold)),
+              ...agencies.map(_signupTile),
+            ],
+          ],
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms);
+  }
+
+  Widget _signupTile(PendingSignup signup) {
+    final busy = decidingUserId == signup.userId;
+    final place = [signup.region, signup.town].where((part) => part != null && part.trim().isNotEmpty).join(' · ');
+    final when = formatSignupWhen(signup.createdAt);
+    final headline = signup.kind == 'agency' && signup.detail.isNotEmpty ? signup.detail : signup.name;
+    final bits = <String>[
+      if (signup.kind == 'agency' && signup.name.isNotEmpty) signup.name,
+      if (signup.kind == 'doctor' && signup.detail.isNotEmpty) signup.detail,
+      if (place.isNotEmpty) place,
+      if (signup.phone.isNotEmpty) signup.phone,
+      if (when.isNotEmpty) when,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        decoration: BoxDecoration(
+          color: AdminPalette.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AdminPalette.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(headline.isEmpty ? 'Signup' : headline, style: adminSans(size: 14, weight: FontWeight.w800)),
+            if (bits.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(bits.join(' · '), style: adminSans(size: 11, color: AdminPalette.mute)),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: busy ? null : () => onDecide(signup.userId, 'approve'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AdminPalette.lime,
+                    foregroundColor: Colors.black,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Text(busy ? 'Saving…' : 'Approve'),
+                ),
+                OutlinedButton(
+                  onPressed: busy ? null : () => onDecide(signup.userId, 'reject'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AdminPalette.rose,
+                    side: const BorderSide(color: AdminPalette.rose),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Decline'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

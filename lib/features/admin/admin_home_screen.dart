@@ -31,6 +31,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   List<Appointment> _appointments = [];
   List<AuthUser> _users = [];
+  List<PendingSignup> _pendingSignups = [];
+  int? _decidingSignupId;
   List<dynamic> _doctors = [];
   Map<String, dynamic> _settings = {};
   Map<String, dynamic> _stats = {
@@ -122,6 +124,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         final ops = await api.dio.get<Map<String, dynamic>>('/api/admin/ops-summary');
         _opsSummary = ops.data;
       } catch (_) {}
+      try {
+        final signups = await api.dio.get<Map<String, dynamic>>('/api/admin/signups');
+        _pendingSignups = parsePendingSignups(signups.data);
+      } catch (_) {
+        _pendingSignups = [];
+      }
     } catch (e) {
       setState(() => _error = 'Failed to sync database details: ${e.toString()}');
     } finally {
@@ -203,6 +211,44 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to create account: ${e.toString()}')),
       );
+    }
+  }
+
+  Future<void> _refreshSignupLists() async {
+    final api = context.read<ApiClient>();
+    final signups = await api.dio.get<Map<String, dynamic>>('/api/admin/signups');
+    final users = await api.dio.get<List<dynamic>>('/api/users');
+    if (!mounted) return;
+    setState(() {
+      _pendingSignups = parsePendingSignups(signups.data);
+      if (users.data != null) {
+        _users = users.data!.map((json) => AuthUser.fromJson(json as Map<String, dynamic>)).toList();
+      }
+    });
+  }
+
+  Future<void> _decideSignup(int userId, String decision) async {
+    if (_decidingSignupId != null) return;
+    setState(() => _decidingSignupId = userId);
+    try {
+      final api = context.read<ApiClient>();
+      await api.dio.post<Map<String, dynamic>>(
+        '/api/admin/signups/$userId',
+        data: {'decision': decision},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(decision == 'approve' ? 'Profile approved.' : 'Profile declined.')),
+      );
+      await _refreshSignupLists();
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is DioException
+          ? ApiClient.messageFromDio(e, 'Could not update this signup')
+          : 'Could not update this signup';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _decidingSignupId = null);
     }
   }
 
@@ -1112,6 +1158,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget _buildUsersTab() {
     return AdminUsersTab(
       users: _users,
+      signups: _pendingSignups,
+      decidingUserId: _decidingSignupId,
+      onDecide: _decideSignup,
       name: _regName,
       username: _regUsername,
       password: _regPassword,

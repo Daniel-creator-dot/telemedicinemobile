@@ -1,9 +1,9 @@
-import type { Express } from 'express';
+import type { Express, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { PoolClient, QueryResult } from 'pg';
 import { pool, query } from './db';
-import { authenticate, requireRoles } from './authz';
+import { authenticate, requireRoles, type AuthedRequest } from './authz';
 import { GHANA_REGIONS } from './phase5';
 
 type Sql = (text: string, params?: unknown[]) => Promise<QueryResult>;
@@ -112,6 +112,12 @@ function issueSession(
       ...extras,
     },
   };
+}
+
+function httpError(status: number, message: string): Error & { status?: number } {
+  const error = new Error(message) as Error & { status?: number };
+  error.status = status;
+  return error;
 }
 
 function rejectSignupError(res: { status: (code: number) => { json: (body: unknown) => void } }, err: unknown) {
@@ -231,16 +237,19 @@ export function registerProfessionalSignupRoutes(app: Express) {
   app.get('/api/admin/signups', authenticate, requireRoles('admin'), async (_req, res) => {
     try {
       const doctors = await query(
-        `SELECT u.name, u.phone_number AS phone, d.specialization AS specialty, u.created_at
+        `SELECT u.id AS user_id, u.name, u.phone_number AS phone, d.specialization AS specialty, u.created_at
          FROM users u
          JOIN doctors d ON d.user_id = u.id
          WHERE u.role = 'doctor' AND u.verification_status = 'pending'
          ORDER BY u.created_at DESC NULLS LAST, u.id DESC`
       );
       const agencies = await query(
-        `SELECT u.name,
+        `SELECT u.id AS user_id,
+                u.name,
                 u.phone_number AS phone,
                 a.name AS agency_name,
+                a.region,
+                a.town,
                 COALESCE(a.created_at, u.created_at) AS created_at
          FROM nurse_agencies a
          JOIN users u ON u.id = a.owner_user_id
@@ -249,20 +258,124 @@ export function registerProfessionalSignupRoutes(app: Express) {
       );
       res.json({
         doctors: doctors.rows.map((row) => ({
+          user_id: row.user_id,
           name: row.name,
           phone: row.phone,
           specialty: row.specialty,
+          region: null,
+          town: null,
           created_at: row.created_at,
         })),
         agencies: agencies.rows.map((row) => ({
+          user_id: row.user_id,
           name: row.name,
           phone: row.phone,
           agency_name: row.agency_name,
+          region: row.region,
+          town: row.town,
           created_at: row.created_at,
         })),
       });
     } catch (err) {
       console.error('admin signups failed', (err as { code?: string })?.code || 'error');
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+
+  const decideSignup = async (req: AuthedRequest, res: Response) => {
+    const userId = Number(req.params.userId);
+    const decision = String(req.body?.decision || '').trim().toLowerCase();
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(400).json({ message: 'A valid user id is required' });
+    }
+    if (decision !== 'approve' && decision !== 'reject') {
+      return res.status(400).json({ message: 'Decision must be approve or reject' });
+    }
+
+    const approved = decision === 'approve';
+    const status = approved ? 'approved' : 'rejected';
+    const title = approved
+      ? 'Healynks approved your profile'
+      : 'Healynks did not approve your profile';
+    const message = approved
+      ? 'Healynks approved your profile'
+      : 'Your Healynks profile was not approved. Contact Healynks support.';
+
+    try {
+      const result = await withTransaction(async (q) => {
+        const userRes = await q(
+          `SELECT id, role, verification_status FROM users WHERE id = $1 FOR UPDATE`,
+          [userId]
+        );
+        const user = userRes.rows[0];
+        if (!user) throw httpError(404, 'No signup found for this account');
+
+        const doctor = await q(`SELECT id FROM doctors WHERE user_id = $1 LIMIT 1`, [userId]);
+        const agency = await q(`SELECT id FROM nurse_agencies WHERE owner_user_id = $1 LIMIT 1`, [userId]);
+        const isDoctor = user.role === 'doctor' && Boolean(doctor.rows[0]);
+        const isAgency = user.role === 'nurse' && Boolean(agency.rows[0]);
+        if (!isDoctor && !isAgency) throw httpError(404, 'No signup found for this account');
+        if (user.verification_status !== 'pending') {
+          throw httpError(409, 'This signup has already been reviewed');
+        }
+
+        await q(`UPDATE users SET verification_status = $1 WHERE id = $2`, [status, userId]);
+        if (isDoctor) {
+          await q(
+            `UPDATE doctors
+             SET verification_status = $1,
+                 is_active = $2,
+                 is_online = CASE WHEN $2 THEN is_online ELSE FALSE END
+             WHERE user_id = $3`,
+            [status, approved, userId]
+          );
+        }
+        await q(
+          `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, 'verification')`,
+          [userId, title, message]
+        );
+        return {
+          user_id: userId,
+          role: user.role,
+          decision,
+          verification_status: status,
+          is_active: isDoctor ? approved : null,
+        };
+      });
+      res.json(result);
+    } catch (err) {
+      const statusCode = (err as { status?: number })?.status;
+      if (statusCode) return res.status(statusCode).json({ message: (err as Error).message });
+      console.error('signup decision failed', (err as { code?: string })?.code || 'error');
+      res.status(500).json({ message: 'Server error' });
+    }
+  };
+
+  app.post('/api/admin/signups/:userId', authenticate, requireRoles('admin'), decideSignup);
+  app.patch('/api/admin/signups/:userId', authenticate, requireRoles('admin'), decideSignup);
+
+  app.get('/api/agency/me', authenticate, requireRoles('nurse'), async (req: AuthedRequest, res) => {
+    try {
+      const result = await query(
+        `SELECT a.name, a.region, a.town, a.address, a.phone, u.verification_status
+         FROM nurse_agencies a
+         JOIN users u ON u.id = a.owner_user_id
+         WHERE a.owner_user_id = $1
+         LIMIT 1`,
+        [req.user!.id]
+      );
+      const row = result.rows[0];
+      if (!row) return res.status(404).json({ message: 'No agency for this account' });
+      res.json({
+        name: row.name,
+        region: row.region,
+        town: row.town,
+        address: row.address,
+        phone: row.phone,
+        verification_status: row.verification_status || 'pending',
+      });
+    } catch (err) {
+      console.error('agency profile failed', (err as { code?: string })?.code || 'error');
       res.status(500).json({ message: 'Server error' });
     }
   });
