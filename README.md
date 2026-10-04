@@ -161,7 +161,7 @@ Open **Patient → Care phases** for live counts on all five.
 - **Vault:** Rx, labs, imaging, letters from visits, plus photos/PDFs you attach (up to 2 MB). Files are stored in Postgres so they survive Render’s ephemeral disk.
 - **Hospital network desk:** see Phase 4 section above (`hospital` / `hosp123`).
 
-Video rooms use unguessable Jitsi names (`digihealth-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, GHS, card / MoMo / bank). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
+Video rooms use unguessable Jitsi names (`healynks-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, GHS, card / MoMo / bank). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
 
 This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRET` private, and treat all clinical data as confidential.
 

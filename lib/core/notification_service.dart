@@ -222,8 +222,8 @@ class NotificationService {
     if (notification != null && android != null) {
       final androidDetails = AndroidNotificationDetails(
         'telemedicine_channel',
-        'Telemedicine Notifications',
-        channelDescription: 'Notifications from Telemedicine app',
+        'Healynks',
+        channelDescription: 'Visit reminders and messages from Healynks',
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
@@ -342,8 +342,8 @@ class NotificationService {
     try {
       final androidDetails = AndroidNotificationDetails(
         'telemedicine_channel',
-        'Telemedicine Notifications',
-        channelDescription: 'Notifications from Telemedicine app',
+        'Healynks',
+        channelDescription: 'Visit reminders and messages from Healynks',
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
@@ -444,7 +444,7 @@ class NotificationService {
 
         await scheduleNotification(
           id: notificationId,
-          title: 'Upcoming Telemedicine Appointment',
+          title: 'Upcoming Healynks visit',
           body: 'Your appointment with ${appointment.doctorName ?? "your doctor"} starts in 30 minutes.',
           scheduledTime: reminderTime,
           payload: jsonEncode({
@@ -495,7 +495,7 @@ class NotificationService {
 
         await scheduleNotification(
           id: notificationId,
-          title: 'Your Telemedicine Appointment is Due',
+          title: 'Your Healynks visit is starting',
           body: 'Your appointment with ${appointment.doctorName ?? "your doctor"} is starting now. Tap to join the meeting.',
           scheduledTime: appointmentDateTime,
           payload: jsonEncode({

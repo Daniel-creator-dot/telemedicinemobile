@@ -96,7 +96,7 @@ When a doctor is assigned, they receive:
 
 **Display Notification**:
 - Title: "New Appointment Assigned"
-- Body: "You have been assigned to Telemedicine appointment APT-XYZ for John Doe on 2025-06-23 at 14:30"
+- Body: "You have been assigned to a Healynks appointment APT-XYZ for John Doe on 2025-06-23 at 14:30"
 
 **Data Payload** (for app navigation/logic):
 ```json

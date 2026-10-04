@@ -109,10 +109,10 @@ app.use(express.json({ limit: '4mb' }));
 registerAuditMiddleware(app);
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'digihealth' });
+  res.json({ ok: true, service: 'healynks' });
 });
 app.get('/', (_req, res) => {
-  res.json({ ok: true, service: 'digihealth' });
+  res.json({ ok: true, service: 'healynks' });
 });
 
 // Auth middleware lives in ./authz (no token / JWT payload logging).

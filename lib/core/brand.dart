@@ -2,5 +2,5 @@
 class AppBrand {
   static const name = 'Healynks';
   static const tagline = 'Connected care for Ghana';
-  static const logoAsset = 'assets/logo/medilynks.png';
+  static const logoAsset = 'assets/logo/healynks.png';
 }
