@@ -2540,13 +2540,18 @@ class _TodayStrip extends StatelessWidget {
 
   String _visitLine(Appointment apt) {
     final who = (apt.doctorName ?? '').trim();
-    final when = [apt.preferredDate, apt.preferredTime].where((part) => part.trim().isNotEmpty).join(' · ');
+    final when = [apt.preferredDate, _clock(apt.preferredTime)].where((part) => part.trim().isNotEmpty).join(' · ');
     if (who.isNotEmpty && when.isNotEmpty) return '$who · $when';
     if (when.isNotEmpty) return when;
     if (who.isNotEmpty) return who;
     final service = (apt.service ?? '').trim();
     if (service.isNotEmpty) return service;
     return 'Upcoming visit';
+  }
+
+  String _clock(String raw) {
+    final match = RegExp(r'^(\d{1,2}:\d{2})').firstMatch(raw.trim());
+    return match?.group(1) ?? raw.trim();
   }
 }
 
