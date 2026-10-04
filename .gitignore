@@ -46,3 +46,5 @@ app.*.map.json
 server/.env
 server/node_modules/
 agent-tools/
+Healynks.apk
+*.apk
