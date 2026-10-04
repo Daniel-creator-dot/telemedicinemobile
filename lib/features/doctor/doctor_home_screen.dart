@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
+import '../auth/pending_review_banner.dart';
 import '../../models/appointment.dart';
 import '../admin/admin_chrome.dart';
 import '../consult/open_video_consult.dart';
@@ -410,6 +411,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           child: Column(
             children: [
               _buildTopBar(session, isDesktop),
+              if (session.user?.verificationStatus == 'pending') const PendingReviewBanner(),
               Expanded(
                 child: _loading
                     ? const AdminOrbitLoader(message: 'Opening clinic floor…')

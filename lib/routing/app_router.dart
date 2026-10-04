@@ -6,6 +6,7 @@ import '../core/session.dart';
 import '../features/admin/admin_analytics_screen.dart';
 import '../features/admin/admin_home_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/professional_signup_screen.dart';
 import '../features/auth/signup_screen.dart';
 import '../features/clinical/care_programs_roster_screen.dart';
 import '../features/doctor/doctor_home_screen.dart';
@@ -56,7 +57,7 @@ GoRouter createAppRouter(Session session) {
       if (session.isRestoring) return null;
       final loggedIn = session.isAuthenticated;
       final loc = state.matchedLocation;
-      final onAuth = loc == '/login' || loc == '/signup';
+      final onAuth = loc == '/login' || loc == '/signup' || loc == '/join';
 
       if (!loggedIn) {
         return onAuth ? null : '/login';
@@ -110,6 +111,7 @@ GoRouter createAppRouter(Session session) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+      GoRoute(path: '/join', builder: (context, state) => const ProfessionalSignupScreen()),
       GoRoute(
         path: '/patient',
         builder: (context, state) => const MainNavigationScreen(),

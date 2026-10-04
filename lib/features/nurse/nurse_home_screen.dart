@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
+import '../auth/pending_review_banner.dart';
 import '../../models/appointment.dart';
 import '../../models/doctor_profile.dart';
 import '../../shared/widgets/clinical_ui.dart';
@@ -123,15 +124,28 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
         icon: const Icon(Icons.favorite_outline),
         label: const Text('Care programs'),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _triage.isEmpty
-              ? const ClinicalEmptyState(
-                  icon: Icons.monitor_heart_outlined,
-                  title: 'Triage queue is clear',
-                  message: 'New Consult Now patients will appear here for vitals, urgency and handover to a doctor.',
-                )
-              : RefreshIndicator(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (session.user?.verificationStatus == 'pending') const PendingReviewBanner(),
+          if ((session.user?.agencyName ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Text(
+                session.user!.agencyName!,
+                style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, fontWeight: FontWeight.w600),
+              ),
+            ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _triage.isEmpty
+                    ? const ClinicalEmptyState(
+                        icon: Icons.monitor_heart_outlined,
+                        title: 'Triage queue is clear',
+                        message: 'New Consult Now patients will appear here for vitals, urgency and handover to a doctor.',
+                      )
+                    : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
@@ -209,6 +223,9 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
                     },
                   ),
                 ),
+          ),
+        ],
+      ),
     );
   }
 

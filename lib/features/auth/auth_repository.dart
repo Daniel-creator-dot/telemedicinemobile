@@ -63,6 +63,52 @@ class AuthRepository {
     return _parseAuthResponse(res.data);
   }
 
+  Future<AuthResult> signupDoctor({
+    required String fullName,
+    required String phone,
+    required String password,
+    required String specialization,
+    String? licenseNumber,
+    String? facility,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/auth/signup/doctor',
+      data: {
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+        'password': password,
+        'specialization': specialization,
+        if (licenseNumber != null && licenseNumber.trim().isNotEmpty) 'licenseNumber': licenseNumber.trim(),
+        if (facility != null && facility.trim().isNotEmpty) 'facility': facility.trim(),
+      },
+    );
+    return _parseAuthResponse(res.data);
+  }
+
+  Future<AuthResult> signupAgency({
+    required String fullName,
+    required String phone,
+    required String password,
+    required String agencyName,
+    required String region,
+    required String town,
+    String? address,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/auth/signup/agency',
+      data: {
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+        'password': password,
+        'agencyName': agencyName.trim(),
+        'region': region,
+        'town': town.trim(),
+        if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
+      },
+    );
+    return _parseAuthResponse(res.data);
+  }
+
   Future<void> forgotPassword(String username) async {
     await _api.dio.post<Map<String, dynamic>>(
       '/api/auth/forgot-password',

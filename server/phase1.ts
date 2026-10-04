@@ -235,6 +235,33 @@ export async function initPhase1Schema() {
   `);
 
   await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='verification_status') THEN
+        ALTER TABLE users ADD COLUMN verification_status VARCHAR(20);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='created_at') THEN
+        ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='doctors' AND column_name='verification_status') THEN
+        ALTER TABLE doctors ADD COLUMN verification_status VARCHAR(20);
+      END IF;
+    END $$;
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS nurse_agencies (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(160) NOT NULL,
+      region VARCHAR(80),
+      town VARCHAR(80),
+      address TEXT,
+      phone VARCHAR(20),
+      owner_user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS triage_records (
       id SERIAL PRIMARY KEY,
       appointment_id INTEGER REFERENCES appointments(id) ON DELETE CASCADE,

@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDb, query } from './db';
 import { registerPhase1Routes, getPatientForUser, buildSlotsForDoctor } from './phase1';
+import { ghanaPhoneVariants, normalizeGhanaPhone, registerProfessionalSignupRoutes } from './professional_signup';
 import {
   registerPhase2Routes,
   assignNearestPartner,
@@ -123,9 +124,16 @@ app.get('/', (_req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
+    const rawName = String(username || '').trim();
+    const localPhone = normalizeGhanaPhone(rawName);
+    const keys = Array.from(new Set([rawName, ...(localPhone ? ghanaPhoneVariants(localPhone) : [])].filter(Boolean)));
     const result = await query(
-      'SELECT * FROM users WHERE LOWER(username) = LOWER($1) OR phone_number = $1',
-      [String(username || '').trim()]
+      `SELECT * FROM users
+       WHERE LOWER(username) = LOWER($1)
+          OR phone_number = $1
+          OR username = ANY($2::text[])
+          OR phone_number = ANY($2::text[])`,
+      [rawName, keys]
     );
     const user = result.rows[0];
 
@@ -135,10 +143,21 @@ app.post('/api/auth/login', async (req, res) => {
         process.env.JWT_SECRET!,
         { expiresIn: '24h' }
       );
-      let extras: Record<string, unknown> = {};
+      const extras: Record<string, unknown> = {};
+      if (user.verification_status) extras.verification_status = user.verification_status;
       if (user.role === 'patient') {
         const patient = await getPatientForUser(user.id);
-        if (patient) extras = { patient_code: patient.patient_code, patient_id: patient.id };
+        if (patient) {
+          extras.patient_code = patient.patient_code;
+          extras.patient_id = patient.id;
+        }
+      }
+      if (user.role === 'nurse') {
+        const agency = await query(
+          'SELECT name FROM nurse_agencies WHERE owner_user_id = $1 LIMIT 1',
+          [user.id]
+        );
+        if (agency.rows[0]?.name) extras.agency_name = agency.rows[0].name;
       }
       res.json({
         token,
@@ -422,7 +441,7 @@ async function notifyPatientDoctorStartedVideo(apt: any) {
 // --- User Management Routes ---
 app.get('/api/users', authenticate, requireRoles('admin', 'medical_ops'), async (_req, res) => {
   try {
-    const result = await query('SELECT id, username, role, name, phone_number FROM users ORDER BY name');
+    const result = await query('SELECT id, username, role, name, phone_number, verification_status FROM users ORDER BY name');
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -1932,6 +1951,7 @@ app.get('/api/analytics/dashboard', authenticate, requireRoles(...CLINICAL_STAFF
   }
 });
 
+registerProfessionalSignupRoutes(app);
 registerPhase1Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerPhase2Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerPhase3Routes(app, { authenticate, sendSMS, sendPushNotification });

@@ -109,7 +109,10 @@ class AdminUsersTab extends StatelessWidget {
                       ),
                     ),
                     title: Text(u.name, style: adminSans(size: 14, weight: FontWeight.w800)),
-                    subtitle: Text('${u.username} · ${u.role.label}', style: adminSans(size: 11, color: AdminPalette.mute)),
+                    subtitle: Text(
+                      '${u.username} · ${u.role.label}${u.verificationStatus == 'pending' ? ' · Pending review' : ''}',
+                      style: adminSans(size: 11, color: AdminPalette.mute),
+                    ),
                   ),
                 ),
               ),

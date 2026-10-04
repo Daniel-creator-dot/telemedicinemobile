@@ -10,6 +10,8 @@ class AuthUser {
     this.email,
     this.patientCode,
     this.patientId,
+    this.verificationStatus,
+    this.agencyName,
   });
 
   final String id;
@@ -20,6 +22,8 @@ class AuthUser {
   final String? email;
   final String? patientCode;
   final int? patientId;
+  final String? verificationStatus;
+  final String? agencyName;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
@@ -29,6 +33,8 @@ class AuthUser {
       role: AppRole.fromString(json['role']?.toString()),
       phoneNumber: json['phone_number']?.toString(),
       email: json['email']?.toString(),
+      verificationStatus: json['verification_status']?.toString(),
+      agencyName: json['agency_name']?.toString(),
       patientCode: json['patient_code']?.toString(),
       patientId: json['patient_id'] is int
           ? json['patient_id'] as int
@@ -43,6 +49,8 @@ class AuthUser {
         'role': role.name,
         if (phoneNumber != null) 'phone_number': phoneNumber,
         if (email != null) 'email': email,
+        if (verificationStatus != null) 'verification_status': verificationStatus,
+        if (agencyName != null) 'agency_name': agencyName,
         if (patientCode != null) 'patient_code': patientCode,
         if (patientId != null) 'patient_id': patientId,
       };
@@ -53,6 +61,8 @@ class AuthUser {
     String? email,
     String? patientCode,
     int? patientId,
+    String? verificationStatus,
+    String? agencyName,
   }) {
     return AuthUser(
       id: id,
@@ -63,6 +73,8 @@ class AuthUser {
       email: email ?? this.email,
       patientCode: patientCode ?? this.patientCode,
       patientId: patientId ?? this.patientId,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      agencyName: agencyName ?? this.agencyName,
     );
   }
 

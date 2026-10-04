@@ -254,6 +254,23 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Text('Create an account', style: GoogleFonts.dmSans(fontWeight: FontWeight.w800, fontSize: 15)),
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () => context.go('/join'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AdminPalette.gold,
+                            side: BorderSide(color: AdminPalette.gold.withValues(alpha: 0.7)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: Text(
+                            'Join as a doctor or agency',
+                            style: GoogleFonts.dmSans(fontWeight: FontWeight.w800, fontSize: 15),
+                          ),
+                        ),
+                      ),
                     ] else ...[
                       TextButton(
                         onPressed: () => _setMode(_AuthMode.signIn),
