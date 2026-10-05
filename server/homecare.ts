@@ -9,6 +9,7 @@ import {
   isHomeCareShareToken,
   newHomeCareShareToken,
   notifyApprovedNursesOfHomeCare,
+  reshareHomeCareToNurses,
   type HomeCareNurseCandidate,
   type HomeCarePushSender,
 } from './homecare_notify';
@@ -24,7 +25,7 @@ import {
  * Home-care request board.
  * Admins and doctors post a visit. Approved nurses and nurse-agency owners claim it.
  * A successful create texts each approved nurse once and writes one in-app notification.
- * Claim, close, chat, and edits do not notify again.
+ * Reshare sends that same alert again. Claim, close, chat, and edits do not notify.
  */
 
 type Viewer = {
@@ -566,16 +567,39 @@ async function deliverHomeCareNurseAlerts(
     token: job.token,
     sendSMS,
     sendPush,
-    writeNotification: async (userId, title, message) => {
-      await query(
-        `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, 'homecare')`,
-        [userId, title, message]
-      );
-    },
+    writeNotification: writeHomeCareInAppNotification,
   });
   console.log(
     `[HOME CARE] Alerts for ${homeCareJobUrl(job.token)}: ${summary.inApp} in-app, ${summary.sms} sms, ${summary.skippedNoPhone} without a phone`
   );
+}
+
+async function writeHomeCareInAppNotification(userId: number, title: string, message: string) {
+  await query(
+    `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, 'homecare')`,
+    [userId, title, message]
+  );
+}
+
+/** Same nurse list and alert text as the original post. Returns how many in-app rows were written. */
+async function reshareOpenHomeCareRequest(
+  job: { title: string; location: string; token: string },
+  sendPush?: HomeCarePushSender
+) {
+  const nurses = await loadApprovedHomeCareNurses();
+  const summary = await reshareHomeCareToNurses({
+    nurses,
+    title: job.title,
+    location: job.location,
+    token: job.token,
+    sendSMS,
+    sendPush,
+    writeNotification: writeHomeCareInAppNotification,
+  });
+  console.log(
+    `[HOME CARE] Reshared ${homeCareJobUrl(job.token)}: ${summary.inApp} in-app, ${summary.sms} sms, ${summary.skippedNoPhone} without a phone`
+  );
+  return summary;
 }
 
 export function registerHomeCareRoutes(
@@ -906,6 +930,55 @@ export function registerHomeCareRoutes(
     } catch (err) {
       console.error('home care close failed', (err as { code?: string })?.code || 'error');
       return res.status(500).json({ message: 'Could not close this home care request' });
+    }
+  });
+
+  // Open jobs only. Does not run on edit, claim, close, or chat.
+  app.post('/api/homecare/requests/:id/reshare', authenticate, async (req: AuthedRequest, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: 'A valid request id is required' });
+    }
+    const role = req.user!.role;
+    if (role !== 'admin' && role !== 'doctor') {
+      return res.status(403).json({ message: 'You do not have access to home care requests.' });
+    }
+    try {
+      const viewer = await loadViewer(req.user!.id);
+      if (!viewer) return res.status(401).json({ message: 'No token provided' });
+      if (viewer.role === 'doctor') {
+        const blocked = doctorReferralBlocked(viewer);
+        if (blocked) return res.status(403).json({ message: blocked });
+      }
+      const existing = await loadOne(id);
+      if (!existing) return res.status(404).json({ message: 'That home care request was not found' });
+      const referrerId = existing.referrer_user_id == null ? null : Number(existing.referrer_user_id);
+      const referringDoctor = viewer.role === 'doctor' && referrerId === viewer.id;
+      if (viewer.role !== 'admin' && !referringDoctor) {
+        return res.status(403).json({
+          message: 'Only an admin, or the doctor who referred this patient, can send this job to nurses again.',
+        });
+      }
+      const open = String(existing.status) === 'open' && existing.claimed_by == null;
+      if (!open) {
+        return res.status(409).json({ message: 'This job is not open.' });
+      }
+      const token = String(existing.share_token || '').trim();
+      if (!isHomeCareShareToken(token)) {
+        return res.status(500).json({ message: 'Could not send this job to nurses again.' });
+      }
+      const summary = await reshareOpenHomeCareRequest(
+        {
+          title: String(existing.title || 'Home care'),
+          location: String(existing.location || ''),
+          token,
+        },
+        deps.sendPushNotification
+      );
+      return res.json({ notified: summary.inApp });
+    } catch (err) {
+      console.error('home care reshare failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not send this job to nurses again.' });
     }
   });
 

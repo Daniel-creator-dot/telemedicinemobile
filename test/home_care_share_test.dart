@@ -6,6 +6,7 @@ import 'package:telemedicinemobile/features/homecare/home_care_link.dart';
 import 'package:telemedicinemobile/features/homecare/home_care_refer.dart';
 import 'package:telemedicinemobile/features/homecare/home_care_repository.dart';
 import 'package:telemedicinemobile/features/homecare/home_care_screen.dart';
+import 'package:telemedicinemobile/features/homecare/home_care_share_actions.dart';
 import 'package:telemedicinemobile/shared/widgets/home_care_commission.dart';
 
 void main() {
@@ -121,6 +122,7 @@ void main() {
 
     expect(find.text('Sent'), findsOneWidget);
     expect(find.text('Copy link'), findsOneWidget);
+    expect(find.text('Reshare'), findsOneWidget);
     expect(find.text('https://healynks.app/homecare/$token'), findsOneWidget);
     expect(find.textContaining('onrender'), findsNothing);
 
@@ -170,7 +172,116 @@ void main() {
 
     expect(find.text('Sent'), findsOneWidget);
     expect(find.text('Copy link'), findsOneWidget);
+    expect(find.text('Reshare'), findsOneWidget);
     expect(find.text('https://healynks.app/homecare/$token'), findsOneWidget);
     expect(find.textContaining('onrender'), findsNothing);
+  });
+
+  testWidgets('Reshare sits next to Copy link and confirms before sending', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HomeCareShareActions(
+            token: token,
+            requestId: 11,
+            canReshare: true,
+            reshare: (id) async {
+              expect(id, 11);
+              calls += 1;
+              return 3;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Copy link'), findsOneWidget);
+    expect(find.text('Reshare'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Reshare'));
+    await tester.pumpAndSettle();
+    expect(find.text('Send this job to nurses again?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Not now'));
+    await tester.pumpAndSettle();
+    expect(calls, 0);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Reshare'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Send again'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(find.text('Sent to nurses again.'), findsOneWidget);
+  });
+
+  testWidgets('a taken or closed job hides Reshare and keeps Copy link', (tester) async {
+    const taken = HomeCareRequest(
+      id: 11,
+      title: 'Wound dressing',
+      status: 'claimed',
+      mine: false,
+      taken: true,
+      postedByMe: true,
+      location: 'Osu, Accra',
+      shareToken: token,
+    );
+    const closed = HomeCareRequest(
+      id: 12,
+      title: 'Wound dressing',
+      status: 'closed',
+      mine: false,
+      taken: false,
+      referredByMe: true,
+      location: 'East Legon',
+      shareToken: token,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              HomeCareRequestCard(request: taken, admin: true),
+              HomeCareDoctorRequestTile(request: closed),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Copy link'), findsNWidgets(2));
+    expect(find.text('Reshare'), findsNothing);
+    expect(find.text('Taken'), findsOneWidget);
+    expect(find.text('Closed'), findsOneWidget);
+  });
+
+  testWidgets('a nurse does not see Reshare', (tester) async {
+    const request = HomeCareRequest(
+      id: 11,
+      title: 'Wound dressing',
+      status: 'open',
+      mine: false,
+      taken: false,
+      location: 'Osu, Accra',
+      shareToken: token,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: HomeCareRequestCard(request: request, admin: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Reshare'), findsNothing);
+    expect(find.text('Copy link'), findsNothing);
+    expect(find.text('Open'), findsOneWidget);
   });
 }

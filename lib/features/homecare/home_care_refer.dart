@@ -434,7 +434,12 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
             const SizedBox(height: 8),
             Text(request.note!, style: GoogleFonts.plusJakartaSans(fontSize: 13.5, height: 1.4, color: healynksMuted)),
           ],
-          if (request.referredByMe) HomeCareShareActions(token: request.shareToken ?? ''),
+          if (request.referredByMe)
+            HomeCareShareActions(
+              token: request.shareToken ?? '',
+              requestId: request.id,
+              canReshare: request.isOpen && !request.taken,
+            ),
           if (onEdit != null || onAddNote != null || onClose != null)
             busy
                 ? const Padding(

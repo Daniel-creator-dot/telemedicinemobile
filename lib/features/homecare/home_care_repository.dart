@@ -463,6 +463,23 @@ class HomeCareRepository {
     }
   }
 
+  /// Sends the original nurse alert again. Does not run on edit, claim, close, or chat.
+  Future<int> reshare(int id) async {
+    try {
+      final res = await _api.dio.post<Map<String, dynamic>>(
+        '/api/homecare/requests/$id/reshare',
+      );
+      final raw = res.data?['notified'];
+      if (raw is int) return raw;
+      return int.tryParse('$raw') ?? 0;
+    } on DioException catch (err) {
+      throw HomeCareFailure(
+        ApiClient.messageFromDio(err, 'Could not send this job to nurses again.'),
+        statusCode: err.response?.statusCode,
+      );
+    }
+  }
+
   /// Saves the same request. Does not post a new one and does not text nurses.
   Future<HomeCareRequest> update({
     required int id,

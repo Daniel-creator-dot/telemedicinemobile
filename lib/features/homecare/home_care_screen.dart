@@ -797,7 +797,12 @@ class HomeCareRequestCard extends StatelessWidget {
               ),
             ),
           ],
-          if (admin) HomeCareShareActions(token: request.shareToken ?? ''),
+          if (admin)
+            HomeCareShareActions(
+              token: request.shareToken ?? '',
+              requestId: request.id,
+              canReshare: request.isOpen && !request.taken,
+            ),
           if (!admin) ...[
             const SizedBox(height: 10),
             const HealynksHomeCareCommissionNote(compact: true),

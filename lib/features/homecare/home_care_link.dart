@@ -481,7 +481,12 @@ class HomeCareShareReviewCard extends StatelessWidget {
             const SizedBox(height: 12),
             const HealynksHomeCareCommissionNote(),
           ],
-          if (showShareLink) HomeCareShareActions(token: shareToken),
+          if (showShareLink)
+            HomeCareShareActions(
+              token: shareToken,
+              requestId: request.id,
+              canReshare: request.isOpen && !request.taken,
+            ),
           if ((error ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(

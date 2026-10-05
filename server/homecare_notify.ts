@@ -138,3 +138,46 @@ export async function notifyApprovedNursesOfHomeCare(input: {
 
   return result;
 }
+
+/**
+ * Sends the same home-care alert again.
+ * Calls the notifier once for each approved nurse. That notifier owns the SMS
+ * and in-app rules. Pending, rejected, and non-nurse accounts are not included.
+ */
+export async function reshareHomeCareToNurses(
+  input: {
+    nurses: HomeCareNurseCandidate[];
+    title: string;
+    location: string;
+    token: string;
+    sendSMS: HomeCareSmsSender;
+    writeNotification: HomeCareNotificationWriter;
+    sendPush?: HomeCarePushSender;
+  },
+  notify: typeof notifyApprovedNursesOfHomeCare = notifyApprovedNursesOfHomeCare
+): Promise<HomeCareAlertResult> {
+  const totals: HomeCareAlertResult = { sms: 0, inApp: 0, skippedNoPhone: 0 };
+  const seen = new Set<number>();
+
+  for (const nurse of input.nurses) {
+    if (!isApprovedHomeCareNurse(nurse)) continue;
+    const userId = Number(nurse.id);
+    if (!Number.isFinite(userId) || userId <= 0 || seen.has(userId)) continue;
+    seen.add(userId);
+
+    const one = await notify({
+      nurses: [nurse],
+      title: input.title,
+      location: input.location,
+      token: input.token,
+      sendSMS: input.sendSMS,
+      writeNotification: input.writeNotification,
+      sendPush: input.sendPush,
+    });
+    totals.sms += one.sms;
+    totals.inApp += one.inApp;
+    totals.skippedNoPhone += one.skippedNoPhone;
+  }
+
+  return totals;
+}
