@@ -379,15 +379,20 @@ async function sendSMS(recipient: string, message: string) {
       formattedRecipient = formattedRecipient.substring(1);
     }
 
-    console.log(`[SMS SEND] Attempting to send to ${formattedRecipient} via ${sms_base_url}`);
+    // Settings store the Intek API root (/api/v1). Sends are POST /messages/send.
+    const base = String(sms_base_url).trim().replace(/\/+$/, '');
+    const sendUrl = /\/messages\/send$/i.test(base) ? base : `${base}/messages/send`;
 
-    await axios.post(sms_base_url, {
+    console.log(`[SMS SEND] Attempting to send to ${formattedRecipient} via ${sendUrl}`);
+
+    await axios.post(sendUrl, {
       sender: sms_sender_id,
       recipients: [formattedRecipient],
       message: message
     }, {
       headers: {
-        'Authorization': `Bearer ${sms_api_key}`
+        'Authorization': `Bearer ${sms_api_key}`,
+        'Content-Type': 'application/json'
       }
     }).then(res => {
       console.log('[SMS SUCCESS]', res.data);
