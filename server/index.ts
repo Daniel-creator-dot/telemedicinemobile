@@ -30,6 +30,7 @@ import { registerMembershipRoutes } from './membership';
 import { registerPhaseOverviewRoutes } from './phases';
 import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import { applyRouteSeo, robotsTxt, sitemapXml } from './seo';
+import { registerHomeCareRoutes } from './homecare';
 import {
   authenticate,
   requireRoles,
@@ -1993,6 +1994,7 @@ registerPhase5Routes(app);
 registerCompleteRoutes(app);
 registerMembershipRoutes(app, authenticate);
 registerPhaseOverviewRoutes(app);
+registerHomeCareRoutes(app);
 
 // Crawl files are generated from HEALYNK_CANONICAL_ORIGIN so they are not the SPA shell.
 app.get('/robots.txt', (_req, res) => {

@@ -372,6 +372,8 @@ export const initDb = async () => {
     await initCompleteSchema();
     const { initMembershipSchema } = require('./membership') as typeof import('./membership');
     await initMembershipSchema();
+    const { initHomeCareSchema } = require('./homecare') as typeof import('./homecare');
+    await initHomeCareSchema();
 
     await query(`
       UPDATE prescriptions p SET patient_id = a.patient_id

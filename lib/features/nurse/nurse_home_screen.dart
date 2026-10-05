@@ -10,6 +10,8 @@ import '../../core/api_client.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../auth/pending_review_banner.dart';
+import '../homecare/home_care_screen.dart';
+import '../../models/role.dart';
 import '../../models/appointment.dart';
 import '../../models/doctor_profile.dart';
 import '../../shared/widgets/clinical_ui.dart';
@@ -28,6 +30,7 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
   List<DoctorProfile> _doctors = [];
   Map<String, dynamic>? _agency;
   bool _loading = true;
+  int _homeCareToken = 0;
   Timer? _poll;
 
   @override
@@ -74,12 +77,14 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
         _doctors = docs;
         if (agencyKnown) _agency = agency;
         _loading = false;
+        _homeCareToken++;
       });
     } catch (_) {
       if (mounted) {
         setState(() {
           if (agencyKnown) _agency = agency;
           _loading = false;
+          _homeCareToken++;
         });
       }
     }
@@ -158,21 +163,44 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _triage.isEmpty
-                    ? const ClinicalEmptyState(
-                        icon: Icons.monitor_heart_outlined,
-                        title: 'Triage queue is clear',
-                        message: 'New Consult Now patients will appear here for vitals, urgency and handover to a doctor.',
-                      )
-                    : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _triage.length,
-                    itemBuilder: (_, i) {
-                      final t = _triage[i];
-                      final urgency = t['urgency']?.toString() ?? 'routine';
-                      return Card(
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        if (session.user?.role == AppRole.nurse) ...[
+                          HomeCareNurseSection(reloadToken: _homeCareToken),
+                          const SizedBox(height: 8),
+                        ],
+                        if (_triage.isEmpty)
+                          DigiCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Triage queue is clear', style: clinicalDisplay(18)),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'New Consult Now patients will appear here for vitals, urgency and handover to a doctor.',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 14, height: 1.45, color: digiSlate),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          for (final t in _triage) _triageCard(t),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _triageCard(Map<String, dynamic> t) {
+    final urgency = t['urgency']?.toString() ?? 'routine';
+    return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: Padding(
                           padding: const EdgeInsets.all(14),
@@ -237,14 +265,7 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
                               ),
                             ],
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-          ),
-        ],
-      ),
+        ),
     );
   }
 

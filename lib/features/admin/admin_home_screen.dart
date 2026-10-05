@@ -699,6 +699,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               _quickActionCard('Nation', 'Coverage', Icons.public_rounded, AdminPalette.gold, () => context.push('/admin/network')),
               _quickActionCard('Nation Pulse', 'Visits · claims · queue', Icons.analytics_rounded, AdminPalette.cyan, () => context.push('/admin/analytics')),
               _quickActionCard('Care programs', 'NCD · antenatal roster', Icons.favorite_outline_rounded, AdminPalette.lime, () => context.push('/admin/programs')),
+              _quickActionCard('Home care', 'Post a request', Icons.home_work_outlined, AdminPalette.cyan, () => context.push('/admin/homecare')),
             ],
           ).animate().fadeIn(duration: 420.ms, delay: 140.ms).slideY(begin: 0.06, end: 0),
           const SizedBox(height: 22),

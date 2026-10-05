@@ -11,6 +11,7 @@ import '../features/auth/signup_screen.dart';
 import '../features/clinical/care_programs_roster_screen.dart';
 import '../features/doctor/doctor_home_screen.dart';
 import '../features/lab_technician/lab_technician_home_screen.dart';
+import '../features/homecare/home_care_screen.dart';
 import '../features/nurse/nurse_home_screen.dart';
 import '../features/ops/ops_home_screen.dart';
 import '../features/pharmacy/pharmacy_home_screen.dart';
@@ -194,6 +195,7 @@ GoRouter createAppRouter(Session session) {
           GoRoute(path: 'network', builder: (context, state) => const NationalCoverageScreen()),
           GoRoute(path: 'analytics', builder: (context, state) => const AdminAnalyticsScreen()),
           GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
+          GoRoute(path: 'homecare', builder: (context, state) => const HomeCareScreen(admin: true)),
         ],
       ),
       GoRoute(
@@ -205,6 +207,7 @@ GoRouter createAppRouter(Session session) {
         builder: (context, state) => const NurseHomeScreen(),
         routes: [
           GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
+          GoRoute(path: 'homecare', builder: (context, state) => const HomeCareScreen(admin: false)),
         ],
       ),
       GoRoute(
