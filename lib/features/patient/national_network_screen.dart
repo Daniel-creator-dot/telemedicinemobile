@@ -73,7 +73,7 @@ class _NationalNetworkScreenState extends State<NationalNetworkScreen> {
     return Scaffold(
       backgroundColor: digiCanvas,
       appBar: AppBar(
-        title: Text('Ghana care network', style: GoogleFonts.roboto(fontWeight: FontWeight.w800)),
+        title: Text('Care network', style: GoogleFonts.roboto(fontWeight: FontWeight.w800)),
         backgroundColor: Colors.white,
         foregroundColor: digiInk,
         actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],

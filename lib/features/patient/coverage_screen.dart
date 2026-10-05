@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/money.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import 'care_repository.dart';
 
@@ -152,7 +153,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
         SnackBar(
           content: Text(
             elig['eligible'] == true
-                ? 'Covered · ${elig['payer_name']} · copay GHS ${elig['copay']}'
+                ? 'Covered · ${elig['payer_name']} · copay ${moneyLabel(elig, 'copay')}'
                 : 'Coverage updated',
           ),
         ),
@@ -233,7 +234,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                                   ),
                                 ),
                                 Text(
-                                  'GHS ${_eligibility['copay'] ?? 120}',
+                                  moneyLabel(_eligibility, 'copay', fallbackAmount: 120),
                                   style: GoogleFonts.sourceSerif4(fontSize: 22, fontWeight: FontWeight.w600),
                                 ),
                               ],
@@ -255,7 +256,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                             if (covered) ...[
                               const SizedBox(height: 6),
                               Text(
-                                'Covered amount GHS ${_eligibility['covered_amount'] ?? 0} · ${_eligibility['coverage_percent'] ?? 0}%',
+                                'Covered amount ${moneyLabel(_eligibility, 'covered_amount', fallbackAmount: 0)} · ${_eligibility['coverage_percent'] ?? 0}%',
                                 style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate),
                               ),
                             ],
@@ -402,7 +403,7 @@ class _CoverageScreenState extends State<CoverageScreen> {
                                   style: GoogleFonts.dmSans(fontWeight: FontWeight.w700),
                                 ),
                                 Text(
-                                  'Copay GHS ${preview['copay']} · cover ${preview['coverage_percent']}% · covered GHS ${preview['covered_amount']}',
+                                  'Copay ${moneyLabel(preview, 'copay')} · cover ${preview['coverage_percent']}% · covered ${moneyLabel(preview, 'covered_amount', fallbackAmount: 0)}',
                                   style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13),
                                 ),
                                 if ((preview['member_name'] ?? '').toString().isNotEmpty)
@@ -436,8 +437,8 @@ class _CoverageScreenState extends State<CoverageScreen> {
                           children: [
                             Text(
                               covered
-                                  ? 'Your next consult will collect copay GHS ${_eligibility['copay']} via Paystack (MoMo or card).'
-                                  : 'Without attached cover, the full GHS ${_eligibility['consult_fee'] ?? 120} consult fee applies.',
+                                  ? 'Your next consult will collect copay ${moneyLabel(_eligibility, 'copay')} via Paystack (MoMo or card).'
+                                  : 'Without attached cover, the full ${moneyLabel(_eligibility, 'consult_fee', fallbackAmount: 120)} consult fee applies.',
                               style: GoogleFonts.dmSans(color: digiSlate, height: 1.4),
                             ),
                             const SizedBox(height: 12),

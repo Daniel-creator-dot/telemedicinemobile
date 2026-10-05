@@ -5,7 +5,8 @@ import fs from 'fs';
 import path from 'path';
 import { initDb, query } from './db';
 import { registerPhase1Routes, getPatientForUser, buildSlotsForDoctor } from './phase1';
-import { ghanaPhoneVariants, normalizeGhanaPhone, registerProfessionalSignupRoutes } from './professional_signup';
+import { phoneMatchKeys, registerProfessionalSignupRoutes } from './professional_signup';
+import { localePayload, sendCurrencyJson } from './locale';
 import {
   registerPhase2Routes,
   assignNearestPartner,
@@ -135,6 +136,12 @@ registerAuditMiddleware(app);
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'healynks' });
 });
+
+app.get('/api/locale', (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Vary', 'CF-IPCountry');
+  res.json(localePayload(req));
+});
 app.get('/', (req, res) => {
   if (healynksWebReady()) {
     sendHealynksPage(req, res);
@@ -158,8 +165,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const rawName = String(username || '').trim();
-    const localPhone = normalizeGhanaPhone(rawName);
-    const keys = Array.from(new Set([rawName, ...(localPhone ? ghanaPhoneVariants(localPhone) : [])].filter(Boolean)));
+    const keys = phoneMatchKeys(rawName);
     const result = await query(
       `SELECT * FROM users
        WHERE LOWER(username) = LOWER($1)
@@ -229,7 +235,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       return res.status(429).json({ message: 'Too many reset attempts. Try again later.' });
     }
 
-    const userResult = await query('SELECT * FROM users WHERE username = $1 OR phone_number = $1', [username]);
+    const keys = phoneMatchKeys(username);
+    const userResult = await query(
+      'SELECT * FROM users WHERE username = ANY($1::text[]) OR phone_number = ANY($1::text[])',
+      [keys]
+    );
     const user = userResult.rows[0];
 
     if (user?.phone_number) {
@@ -259,9 +269,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
     if (!limit.ok) {
       return res.status(429).json({ message: 'Too many attempts. Try again later.' });
     }
+    const keys = phoneMatchKeys(username);
     const otpResult = await query(
-      `SELECT * FROM otps WHERE (username = $1 OR phone_number = $1) AND code = $2 AND expires_at > NOW()`,
-      [username, code]
+      `SELECT * FROM otps WHERE (username = ANY($1::text[]) OR phone_number = ANY($1::text[])) AND code = $2 AND expires_at > NOW()`,
+      [keys, code]
     );
     
     if (otpResult.rows.length === 0) {
@@ -270,8 +281,11 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await query('UPDATE users SET password = $1 WHERE username = $2 OR phone_number = $2', [hashedPassword, username]);
-    await query('DELETE FROM otps WHERE username = $1 OR phone_number = $1', [username]);
+    await query(
+      'UPDATE users SET password = $1 WHERE username = ANY($2::text[]) OR phone_number = ANY($2::text[])',
+      [hashedPassword, keys]
+    );
+    await query('DELETE FROM otps WHERE username = ANY($1::text[]) OR phone_number = ANY($1::text[])', [keys]);
     clearOtpFailures(`reset-verify:${username}`);
 
     res.json({ message: 'Password reset successful.' });
@@ -413,12 +427,12 @@ async function notifyPatientDoctorStartedVideo(apt: any) {
         const elig = await getEligibility(Number(apt.patient_id) || 0);
         const due = Number(elig.copay);
         if (Number.isFinite(due) && due >= 1) {
-          payHint = ` If unpaid, pay GHS ${due} in the app, then tap Join Room.`;
+          payHint = ' If unpaid, pay the visit fee in the app, then tap Join Room.';
         } else {
           payHint = ' Open the app and tap Join Room.';
         }
       } catch {
-        payHint = ` If unpaid, pay GHS ${CONSULT_FEE} in the app, then tap Join Room.`;
+        payHint = ` If unpaid, pay the visit fee in the app, then tap Join Room.`;
       }
     } else {
       payHint = ' Open the app and tap Join Room.';
@@ -449,7 +463,7 @@ async function notifyPatientDoctorStartedVideo(apt: any) {
     const title = 'Doctor started video';
     const notifBody = `${doctorName} is ready for your visit${when ? ` (${when})` : ''}. Join Room in the app.${
       String(apt.payment_status || '').toLowerCase() !== 'paid'
-        ? ` Pay GHS ${CONSULT_FEE} if still unpaid.`
+        ? ' Pay the visit fee in the app if it is still unpaid.'
         : ''
     }`;
 
@@ -1020,7 +1034,7 @@ app.post('/api/appointments/:id/pay/initialize', authenticate, async (req: any, 
       userId: Number(req.user.id),
     });
 
-    res.json({
+    sendCurrencyJson(res, req, {
       reference: checkout.reference,
       authorization_url: checkout.authorizationUrl,
       access_code: checkout.accessCode,
@@ -1784,7 +1798,7 @@ app.get('/api/appointments/:id/history', authenticate, async (req: any, res) => 
 app.get('/api/doctors', authenticate, async (req, res) => {
   try {
     const result = await query('SELECT * FROM doctors ORDER BY name');
-    res.json(result.rows);
+    sendCurrencyJson(res, req, result.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -2012,7 +2026,14 @@ if (healynksWebReady()) {
   app.use(express.static(healynksWebRoot, {
     index: false,
     setHeaders(res, filePath) {
-      if (filePath.endsWith(`${path.sep}index.html`) || filePath.endsWith(`${path.sep}flutter_bootstrap.js`)) {
+      // index, bootstrap, the app bundle, and the service worker must
+      // revalidate. A cached main.dart.js kept painting the API host.
+      if (
+        filePath.endsWith(`${path.sep}index.html`) ||
+        filePath.endsWith(`${path.sep}flutter_bootstrap.js`) ||
+        filePath.endsWith(`${path.sep}flutter_service_worker.js`) ||
+        filePath.endsWith(`${path.sep}main.dart.js`)
+      ) {
         res.setHeader('Cache-Control', 'no-cache');
       }
       if (filePath.endsWith(`${path.sep}robots.txt`)) {

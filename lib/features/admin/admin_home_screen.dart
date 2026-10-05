@@ -654,7 +654,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           style: adminSerif(size: 30, weight: FontWeight.w700, letterSpacing: -0.6),
                         ),
                         const SizedBox(height: 6),
-                        Text('Ghana network Â· clinic, partners, cover', style: adminSans(size: 12, color: AdminPalette.mute)),
+                        Text('Care network · clinic, partners, cover', style: adminSans(size: 12, color: AdminPalette.mute)),
                       ],
                     ),
                   ),

@@ -12,6 +12,8 @@ import {
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import { getActiveMembership } from './membership';
+import { sendCurrencyJson } from './locale';
+import { normalizeAccountPhone, phoneMatchKeys, PHONE_INVALID_MESSAGE } from './professional_signup';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -622,27 +624,29 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
   });
 
   app.post('/api/auth/request-otp', async (req, res) => {
-    const { phone, purpose } = req.body as { phone?: string; purpose?: string };
+    const { purpose } = req.body as { phone?: string; purpose?: string };
+    const phone = normalizeAccountPhone(req.body?.phone);
     const usePurpose = purpose === 'register' ? 'register' : 'reset';
-    if (!phone) return res.status(400).json({ message: 'Phone number is required' });
+    if (!phone) return res.status(400).json({ message: PHONE_INVALID_MESSAGE });
 
     try {
       const limited = checkOtpRateLimit(`otp:${phone}:${usePurpose}`, 'request');
       if (!limited.ok) {
         return res.status(429).json({ message: 'Too many OTP requests. Try again later.' });
       }
+      const keys = phoneMatchKeys(phone);
       if (usePurpose === 'register') {
         const exists = await query(
-          'SELECT id FROM users WHERE phone_number = $1 OR username = $1',
-          [phone]
+          'SELECT id FROM users WHERE phone_number = ANY($1::text[]) OR username = ANY($1::text[])',
+          [keys]
         );
         if (exists.rows.length > 0) {
           return res.status(400).json({ message: 'An account already exists for this phone number' });
         }
       } else {
         const user = await query(
-          'SELECT * FROM users WHERE phone_number = $1 OR username = $1',
-          [phone]
+          'SELECT * FROM users WHERE phone_number = ANY($1::text[]) OR username = ANY($1::text[])',
+          [keys]
         );
         if (!user.rows[0]) {
           return res.json({ message: 'If an account exists for that number, a code has been sent.' });
@@ -690,15 +694,18 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       consents?: { type: string; accepted: boolean }[];
     };
 
-    if (!phone || !code || !password || !name) {
-      return res.status(400).json({ message: 'Phone, OTP, name and password are required' });
+    const normalizedPhone = normalizeAccountPhone(phone);
+    if (!normalizedPhone || !code || !password || !name) {
+      return res.status(400).json({
+        message: normalizedPhone ? 'Phone, OTP, name and password are required' : PHONE_INVALID_MESSAGE,
+      });
     }
 
     try {
       const otpResult = await query(
         `SELECT * FROM otps
          WHERE phone_number = $1 AND code = $2 AND purpose = 'register' AND expires_at > NOW()`,
-        [phone, code]
+        [normalizedPhone, code]
       );
       if (otpResult.rows.length === 0) {
         recordOtpFailure(`otp-verify:${phone}`);
@@ -706,8 +713,8 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       }
 
       const exists = await query(
-        'SELECT id FROM users WHERE username = $1 OR phone_number = $1',
-        [phone]
+        'SELECT id FROM users WHERE username = ANY($1::text[]) OR phone_number = ANY($1::text[])',
+        [phoneMatchKeys(normalizedPhone)]
       );
       if (exists.rows.length > 0) {
         return res.status(400).json({ message: 'An account already exists for this phone number' });
@@ -718,7 +725,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         `INSERT INTO users (username, password, role, name, phone_number, email)
          VALUES ($1, $2, 'patient', $3, $4, $5)
          RETURNING id, username, role, name, phone_number, email`,
-        [phone, hashed, name, phone, email || null]
+        [normalizedPhone, hashed, name, normalizedPhone, email || null]
       );
       const user = userResult.rows[0];
       const patientCode = await nextPatientCode();
@@ -726,7 +733,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       const patientResult = await query(
         `INSERT INTO patients (user_id, patient_code, full_name, email, phone_number)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [user.id, patientCode, name, email || null, phone]
+        [user.id, patientCode, name, email || null, normalizedPhone]
       );
       const patient = patientResult.rows[0];
 
@@ -738,7 +745,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         );
       }
 
-      await query('DELETE FROM otps WHERE phone_number = $1 AND purpose = $2', [phone, 'register']);
+      await query('DELETE FROM otps WHERE phone_number = $1 AND purpose = $2', [normalizedPhone, 'register']);
 
       const token = jwt.sign(
         { id: user.id, username: user.username, role: user.role },
@@ -779,15 +786,16 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
 
       const b = req.body;
-      const phone =
-        typeof b.phone_number === 'string' && b.phone_number.trim()
-          ? b.phone_number.trim()
-          : null;
+      const phoneInput = typeof b.phone_number === 'string' ? b.phone_number.trim() : '';
+      const phone = phoneInput ? normalizeAccountPhone(phoneInput) : null;
+      if (phoneInput && !phone) {
+        return res.status(400).json({ message: PHONE_INVALID_MESSAGE });
+      }
 
       if (phone) {
         const clash = await query(
-          'SELECT id FROM users WHERE (phone_number = $1 OR username = $1) AND id <> $2',
-          [phone, req.user!.id]
+          'SELECT id FROM users WHERE (phone_number = ANY($1::text[]) OR username = ANY($1::text[])) AND id <> $2',
+          [phoneMatchKeys(phone), req.user!.id]
         );
         if (clash.rows.length) {
           return res.status(409).json({ message: 'Phone number already in use' });
@@ -893,7 +901,9 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
       sql += ' ORDER BY d.is_online DESC, d.name ASC';
       const result = await query(sql, params);
       const cutoff = Date.now() - 90_000;
-      res.json(
+      sendCurrencyJson(
+        res,
+        req,
         result.rows.map((r: any) => ({
           ...r,
           is_online: Boolean(

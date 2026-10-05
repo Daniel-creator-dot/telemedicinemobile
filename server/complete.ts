@@ -10,6 +10,7 @@ import {
 } from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { getEligibility } from './phase3';
+import { sendCurrencyJson } from './locale';
 
 export async function initCompleteSchema() {
   await query(`
@@ -260,7 +261,7 @@ export function registerCompleteRoutes(app: Express) {
           currency: 'GHS',
         }));
 
-      res.json({
+      sendCurrencyJson(res, req, {
         payments: payments.rows.length ? payments.rows : eligibility.rows,
         receipts,
         outstanding,

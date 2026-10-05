@@ -1,6 +1,6 @@
 # Healynks
 
-Connected digital healthcare for Ghana: patients, doctors, triage, labs, imaging, pharmacies, medical operations, corporate schemes, insurers, finance and administrators — one longitudinal record.
+Connected digital healthcare for people anywhere: patients, doctors, triage, labs, imaging, pharmacies, medical operations, corporate schemes, insurers, finance and administrators — one longitudinal record. Ghana is the home market. Visitors outside Ghana see prices in US dollars.
 
 Built by Bytz Buddiz. Flutter client + Express/Postgres API. Video visits use Jitsi.
 
@@ -195,7 +195,7 @@ Open **Patient → Care phases** for live counts on all five.
 - **Vault:** Rx, labs, imaging, letters from visits, plus photos/PDFs you attach (up to 2 MB). Files are stored in Postgres so they survive Render’s ephemeral disk.
 - **Hospital network desk:** see Phase 4 section above (`hospital` / `hosp123`).
 
-Video rooms use unguessable Jitsi names (`healynks-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, GHS, card / MoMo / bank). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
+Video rooms use unguessable Jitsi names (`healynks-` + random hex). Visit copay uses the same Paystack initialize/verify API as Bytz Go (`PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY`, card / MoMo / bank). Paystack charges **GHS** only. `GET /api/locale` reads Cloudflare `CF-IPCountry` (never the IP address) and returns `USD` outside Ghana, otherwise `GHS`. Dollar amounts are the same GHS prices divided by `GHS_PER_USD` in `server/locale.ts` (an approximate display rate, not a live FX feed — update that constant when the cedi moves). SMS never includes diagnoses. Settings GET never returns a raw SMS or Paystack secret key.
 
 This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRET` private, and treat all clinical data as confidential.
 
@@ -207,7 +207,7 @@ This is not a HIPAA-certified deployment. Use TLS in production, keep `JWT_SECRE
 
 ### Phase 5 — national scale
 
-- **Ghana network:** Patient → Ghana network. Coverage across all 16 regions, nearest pharmacy/lab/imaging/hospital (region centroid or `lat`/`lng` query).
+- **Care network:** Patient → Care network. Ghana's 16 regions stay on the partner map, with the nearest pharmacy/lab/imaging/hospital (region centroid or `lat`/`lng` query).
 - **Medical ops:** National coverage, open risk alerts, append-only audit of mutating API calls.
 - **Matching:** Lab/imaging/pharmacy assignment uses region plus GPS distance when coordinates exist.
 - **Tenant isolation:** Corporate and insurance desks only see their linked organisation (`org_accounts`).
@@ -241,7 +241,7 @@ This is still not a production national deployment: Jitsi is public-hosted with 
 
 ### Completeness pass
 
-- **Payments & cover:** Patient → Payments. Eligibility plus Paystack receipts (GHS). Same initialize + verify flow as Bytz Go.
+- **Payments & cover:** Patient → Payments. Eligibility plus Paystack receipts. Ghana visitors see cedis. Visitors outside Ghana see US dollars converted from the same fees. Paystack still charges GHS. Same initialize + verify flow as Bytz Go.
 - **Membership:** Patient → Membership. Classic, Premium, Gold, Diamond (monthly or yearly). Lowers visit copay, adds household dependents, and shortens the live queue. Paid with the same Paystack API.
 - **Follow-up care:** Closed-loop review dates from SOAP.
 - **Help / support desk:** Patients open tickets; ops and admin resolve them.

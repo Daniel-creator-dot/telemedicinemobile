@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
+import 'ghana_phone.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import 'auth_chrome.dart';
 import 'auth_repository.dart';
@@ -140,7 +141,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     Text(
                       _otpSent
                           ? 'Enter the SMS code we sent to ${_phone.text.trim()}'
-                          : 'A Ghana number, a password, and consent to telemedicine care.',
+                          : 'Your name, a mobile number, and consent to telemedicine care.',
                       style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.45),
                     ),
                     if (_error != null) ...[
@@ -169,8 +170,10 @@ class _SignupScreenState extends State<SignupScreen> {
                         controller: _phone,
                         keyboardType: TextInputType.phone,
                         style: GoogleFonts.dmSans(color: digiInk),
-                        decoration: authFieldDeco('Ghana mobile number', Icons.phone_outlined),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Phone number is required' : null,
+                        decoration: authFieldDeco('Mobile number', Icons.phone_outlined),
+                        validator: (v) => normalizeAccountPhone(v ?? '') == null
+                            ? 'Use a Ghana number, or include a country code such as +1'
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(

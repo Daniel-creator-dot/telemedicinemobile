@@ -45,6 +45,38 @@ export function ghanaPhoneVariants(local: string): string[] {
   return [local, intl, `+${intl}`];
 }
 
+export const PHONE_INVALID_MESSAGE =
+  'Enter a valid mobile number. Ghana numbers can start with 0. Other countries need a country code, such as +1.';
+
+/**
+ * Ghana mobiles stay 0XXXXXXXXX. Anything else must be E.164 (+ and 8–15 digits).
+ * A +233 number that is a real Ghana mobile is stored in the local form.
+ */
+export function normalizeAccountPhone(raw: unknown): string | null {
+  const ghana = normalizeGhanaPhone(raw);
+  if (ghana) return ghana;
+  const text = String(raw ?? '').trim().replace(/[\s\-().]/g, '');
+  if (!text.startsWith('+')) return null;
+  const digits = text.slice(1);
+  if (!/^\d{8,15}$/.test(digits)) return null;
+  if (digits.startsWith('233')) return null;
+  return `+${digits}`;
+}
+
+export function accountPhoneVariants(stored: string): string[] {
+  if (/^0\d{9}$/.test(stored)) return ghanaPhoneVariants(stored);
+  const digits = stored.replace(/\D/g, '');
+  if (!digits) return [stored];
+  return Array.from(new Set([stored, `+${digits}`, digits]));
+}
+
+export function phoneMatchKeys(raw: unknown): string[] {
+  const text = String(raw ?? '').trim();
+  const canonical = normalizeAccountPhone(text);
+  const variants = canonical ? accountPhoneVariants(canonical) : [];
+  return Array.from(new Set([text, canonical, ...variants].filter((v): v is string => Boolean(v && v.length))));
+}
+
 function canonicalRegion(raw: unknown): string | null {
   const text = String(raw ?? '').trim();
   if (!text) return null;
@@ -54,6 +86,25 @@ function canonicalRegion(raw: unknown): string | null {
 
 function clip(raw: unknown, max: number): string {
   return String(raw ?? '').trim().slice(0, max);
+}
+
+const OTHER_COUNTRY = 'Other country';
+
+/** Ghana agencies keep one of the 16 regions. Elsewhere, store the country name. */
+function resolveAgencyRegion(body: { region?: unknown; country?: unknown }): { region: string } | { error: string } {
+  const country = clip(body.country, 80);
+  const regionText = clip(body.region, 80);
+  const ghana = canonicalRegion(regionText);
+  const countryIsOther =
+    country.length > 0 &&
+    country.toLowerCase() !== 'ghana' &&
+    country.toLowerCase() !== OTHER_COUNTRY.toLowerCase();
+  if (ghana && !countryIsOther) return { region: ghana };
+  if (regionText.toLowerCase() === OTHER_COUNTRY.toLowerCase() || countryIsOther) {
+    if (!countryIsOther) return { error: 'Enter the country where the agency operates' };
+    return { region: country };
+  }
+  return { error: "Choose one of Ghana's 16 regions, or Other country" };
 }
 
 async function withTransaction<T>(fn: (q: Sql) => Promise<T>): Promise<T> {
@@ -76,7 +127,7 @@ async function withTransaction<T>(fn: (q: Sql) => Promise<T>): Promise<T> {
 }
 
 async function phoneTaken(q: Sql, local: string): Promise<boolean> {
-  const variants = ghanaPhoneVariants(local);
+  const variants = accountPhoneVariants(local);
   const digits = variants.map((v) => v.replace(/\D/g, ''));
   const found = await q(
     `SELECT id FROM users
@@ -141,14 +192,14 @@ export function registerProfessionalSignupRoutes(app: Express) {
   app.post('/api/auth/signup/doctor', async (req, res) => {
     const body = req.body || {};
     const fullName = clip(body.fullName, 100);
-    const phone = normalizeGhanaPhone(body.phone);
+    const phone = normalizeAccountPhone(body.phone);
     const password = typeof body.password === 'string' ? body.password : '';
     const specialization = String(body.specialization || '').trim();
     const licenseNumber = clip(body.licenseNumber, 80);
     const facility = clip(body.facility, 120) || 'Healynks Virtual Clinic';
 
     if (!fullName) return res.status(400).json({ message: 'Full name is required' });
-    if (!phone) return res.status(400).json({ message: 'Enter a valid Ghana mobile number' });
+    if (!phone) return res.status(400).json({ message: PHONE_INVALID_MESSAGE });
     if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
     if (!SPECIALIZATIONS.includes(specialization as (typeof SPECIALIZATIONS)[number])) {
       return res.status(400).json({ message: 'Choose a specialization' });
@@ -196,14 +247,14 @@ export function registerProfessionalSignupRoutes(app: Express) {
   app.post('/api/auth/signup/nurse', async (req, res) => {
     const body = req.body || {};
     const fullName = clip(body.fullName, 100);
-    const phone = normalizeGhanaPhone(body.phone);
+    const phone = normalizeAccountPhone(body.phone);
     const password = typeof body.password === 'string' ? body.password : '';
     const practiceArea = String(body.practiceArea || '').trim();
     const licenseNumber = clip(body.licenseNumber, 80);
     const facility = clip(body.facility, 120) || 'Healynks Virtual Clinic';
 
     if (!fullName) return res.status(400).json({ message: 'Full name is required' });
-    if (!phone) return res.status(400).json({ message: 'Enter a valid Ghana mobile number' });
+    if (!phone) return res.status(400).json({ message: PHONE_INVALID_MESSAGE });
     if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
     if (!PRACTICE_AREAS.includes(practiceArea as (typeof PRACTICE_AREAS)[number])) {
       return res.status(400).json({ message: 'Choose a unit or area of practice' });
@@ -245,18 +296,19 @@ export function registerProfessionalSignupRoutes(app: Express) {
   app.post('/api/auth/signup/agency', async (req, res) => {
     const body = req.body || {};
     const fullName = clip(body.fullName, 100);
-    const phone = normalizeGhanaPhone(body.phone);
+    const phone = normalizeAccountPhone(body.phone);
     const password = typeof body.password === 'string' ? body.password : '';
     const agencyName = clip(body.agencyName, 160);
-    const region = canonicalRegion(body.region);
+    const place = resolveAgencyRegion(body);
     const town = clip(body.town, 80);
     const address = clip(body.address, 400);
 
     if (!fullName) return res.status(400).json({ message: 'Full name is required' });
-    if (!phone) return res.status(400).json({ message: 'Enter a valid Ghana mobile number' });
+    if (!phone) return res.status(400).json({ message: PHONE_INVALID_MESSAGE });
     if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
     if (!agencyName) return res.status(400).json({ message: 'Agency name is required' });
-    if (!region) return res.status(400).json({ message: "Choose one of Ghana's 16 regions" });
+    if ('error' in place) return res.status(400).json({ message: place.error });
+    const region = place.region;
     if (!town) return res.status(400).json({ message: 'Town is required' });
 
     try {

@@ -63,11 +63,13 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
   final _agencyName = TextEditingController();
   final _town = TextEditingController();
   final _address = TextEditingController();
+  final _country = TextEditingController();
 
   _JoinKind _kind = _JoinKind.doctor;
   String? _specialization;
   String? _practiceArea;
   String? _region;
+  bool _outsideGhana = false;
   bool _loading = false;
   bool _obscure = true;
   String? _error;
@@ -75,7 +77,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
   @override
   void initState() {
     super.initState();
-    for (final c in [_name, _phone, _password, _license, _facility, _agencyName, _town, _address]) {
+    for (final c in [_name, _phone, _password, _license, _facility, _agencyName, _town, _address, _country]) {
       c.addListener(_refresh);
     }
   }
@@ -86,7 +88,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _password, _license, _facility, _agencyName, _town, _address]) {
+    for (final c in [_name, _phone, _password, _license, _facility, _agencyName, _town, _address, _country]) {
       c.removeListener(_refresh);
       c.dispose();
     }
@@ -103,7 +105,9 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
       case _JoinKind.nurse:
         return _practiceArea != null;
       case _JoinKind.agency:
-        return _agencyName.text.trim().isNotEmpty && _region != null && _town.text.trim().isNotEmpty;
+        if (_agencyName.text.trim().isEmpty || _town.text.trim().isEmpty) return false;
+        if (_outsideGhana) return _country.text.trim().isNotEmpty;
+        return _region != null;
     }
   }
 
@@ -113,8 +117,8 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
       setState(() => _error = 'Enter the required details to continue.');
       return;
     }
-    if (normalizeGhanaPhone(_phone.text) == null) {
-      setState(() => _error = 'Enter a valid Ghana mobile number');
+    if (normalizeAccountPhone(_phone.text) == null) {
+      setState(() => _error = 'Use a Ghana number, or include a country code such as +1');
       return;
     }
 
@@ -151,9 +155,10 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
             phone: _phone.text,
             password: _password.text,
             agencyName: _agencyName.text,
-            region: _region!,
+            region: _outsideGhana ? 'Other country' : _region!,
             town: _town.text,
             address: _address.text,
+            country: _outsideGhana ? _country.text : 'Ghana',
           );
       }
       if (!mounted) return;
@@ -211,7 +216,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                 const SizedBox(height: 16),
                 _field(_name, _kind == _JoinKind.agency ? 'Nurse full name' : 'Full name', TextInputType.name),
                 const SizedBox(height: 12),
-                _field(_phone, 'Ghana mobile number', TextInputType.phone),
+                _field(_phone, 'Mobile number', TextInputType.phone),
                 const SizedBox(height: 12),
                 _passwordField(),
                 const SizedBox(height: 12),
@@ -241,11 +246,25 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                   _field(_agencyName, 'Agency name', TextInputType.text),
                   const SizedBox(height: 12),
                   _dropdown(
-                    label: 'Region',
-                    value: _region,
-                    items: _regions,
-                    onChanged: (v) => setState(() => _region = v),
+                    label: 'Where the agency operates',
+                    value: _outsideGhana ? 'Other country' : 'Ghana',
+                    items: const ['Ghana', 'Other country'],
+                    onChanged: (v) => setState(() {
+                      _outsideGhana = v == 'Other country';
+                      if (!_outsideGhana) _country.clear();
+                      if (_outsideGhana) _region = null;
+                    }),
                   ),
+                  const SizedBox(height: 12),
+                  if (_outsideGhana)
+                    _field(_country, 'Country', TextInputType.text)
+                  else
+                    _dropdown(
+                      label: 'Region',
+                      value: _region,
+                      items: _regions,
+                      onChanged: (v) => setState(() => _region = v),
+                    ),
                   const SizedBox(height: 12),
                   _field(_town, 'Town', TextInputType.text),
                   const SizedBox(height: 12),
@@ -272,9 +291,9 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
   String get _kindHint {
     switch (_kind) {
       case _JoinKind.doctor:
-        return 'Your name, a Ghana number, and a specialty. License and facility can wait.';
+        return 'Your name, a mobile number, and a specialty. License and facility can wait.';
       case _JoinKind.nurse:
-        return 'Your name, a Ghana number, and where you practice. License and facility can wait.';
+        return 'Your name, a mobile number, and where you practice. License and facility can wait.';
       case _JoinKind.agency:
         return 'The nurse who will sign in, and the agency they run.';
     }

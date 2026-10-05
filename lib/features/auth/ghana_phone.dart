@@ -11,3 +11,16 @@ String? normalizeGhanaPhone(String raw) {
   if (!RegExp(r'^0\d{9}$').hasMatch(d)) return null;
   return d;
 }
+
+/// Ghana numbers stay in the local 0XXXXXXXXX form.
+/// Any other number must be E.164: a leading + and 8–15 digits.
+String? normalizeAccountPhone(String raw) {
+  final ghana = normalizeGhanaPhone(raw);
+  if (ghana != null) return ghana;
+  final compact = raw.trim().replaceAll(RegExp(r'[\s\-().]'), '');
+  if (!compact.startsWith('+')) return null;
+  final digits = compact.substring(1);
+  if (!RegExp(r'^\d{8,15}$').hasMatch(digits)) return null;
+  if (digits.startsWith('233')) return null;
+  return '+$digits';
+}

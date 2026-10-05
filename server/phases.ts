@@ -4,6 +4,7 @@ import { authenticate, AuthedRequest } from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { getEligibility } from './phase3';
 import { getActiveMembership } from './membership';
+import { currencyForRequest, formatMoneyFromGhs, sendCurrencyJson } from './locale';
 
 async function countWhere(sql: string, params: any[]) {
   const r = await query(sql, params).catch(() => ({ rows: [{ n: 0 }] }));
@@ -104,6 +105,8 @@ export function registerPhaseOverviewRoutes(app: Express) {
         ).catch(() => ({ rows: [] })),
       ]);
 
+      const currency = currencyForRequest(req);
+      const copayLabel = formatMoneyFromGhs(Number(eligibility?.copay ?? 0), currency);
       const phases = [
         {
           id: 1,
@@ -130,8 +133,8 @@ export function registerPhaseOverviewRoutes(app: Express) {
           name: 'Cover',
           title: 'Insurance, corporate & membership',
           summary: eligibility.source === 'self_pay'
-            ? `Self pay · GHS ${eligibility.copay}. Check insurance/corporate or join Classic–Diamond.`
-            : `${eligibility.plan_name || eligibility.payer_name} · copay GHS ${eligibility.copay}`,
+            ? `Self pay · ${copayLabel}. Check insurance/corporate or join Classic–Diamond.`
+            : `${eligibility.plan_name || eligibility.payer_name} · copay ${copayLabel}`,
           route: '/patient/coverage',
           open: 0,
           total: membership || eligibility.eligible ? 1 : 0,
@@ -150,8 +153,8 @@ export function registerPhaseOverviewRoutes(app: Express) {
         {
           id: 5,
           name: 'Nation',
-          title: 'Ghana network and alerts',
-          summary: 'Sixteen regions, follow-up dates, and rule-based risk alerts.',
+          title: 'Care network and alerts',
+          summary: 'Partner sites, follow-up dates, and rule-based risk alerts.',
           route: '/patient/network',
           open: alertsOpen + followups,
           total: alertsOpen,
@@ -159,7 +162,7 @@ export function registerPhaseOverviewRoutes(app: Express) {
         },
       ];
 
-      res.json({
+      sendCurrencyJson(res, req, {
         phases,
         loop: {
           labs: loopLabs.rows,

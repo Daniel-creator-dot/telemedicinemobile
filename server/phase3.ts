@@ -5,6 +5,7 @@ import { getPatientForUser } from './phase1';
 import { commercialOrgId } from './phase5';
 import { GENERAL_CONSULT_FEE, getActiveMembership, membershipEligibilityOverlay } from './membership';
 import { isDemoPaymentReference, refundPaystackTransaction } from './paystack';
+import { currencyForRequest, formatMoneyFromGhs, sendCurrencyJson } from './locale';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -1140,8 +1141,8 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
         const patient = await getPatientForUser(req.user!.id);
         patientId = patient?.id || null;
       }
-      if (!patientId) return res.json(await getEligibility(0));
-      res.json(await getEligibility(patientId));
+      if (!patientId) return sendCurrencyJson(res, req, await getEligibility(0));
+      sendCurrencyJson(res, req, await getEligibility(patientId));
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -1160,7 +1161,7 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
            FROM corporates WHERE is_active = TRUE ORDER BY name`
         ),
       ]);
-      res.json({
+      sendCurrencyJson(res, req, {
         insurers: insurers.rows,
         corporates: corporates.rows,
         demo_hints: [
@@ -1195,7 +1196,7 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
         patientId: patient.id,
       });
       const current = await getEligibility(patient.id);
-      res.json({ ...check, current });
+      sendCurrencyJson(res, req, { ...check, current });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: 'Server error' });
@@ -1226,16 +1227,17 @@ export function registerPhase3Routes(app: Express, deps: Deps) {
       }
 
       const eligibility = await attachCoverageFromDirectory(patient.id, check);
+      const copayLabel = formatMoneyFromGhs(Number(eligibility.copay), currencyForRequest(req));
       await notifyUser(
         deps,
         req.user!.id,
         'Cover attached',
         eligibility.eligible
-          ? `${eligibility.payer_name} · copay GHS ${eligibility.copay} applies to your next visit`
+          ? `${eligibility.payer_name} · copay ${copayLabel} applies to your next visit`
           : 'Coverage updated',
         'billing'
       );
-      res.json({
+      sendCurrencyJson(res, req, {
         message: 'Coverage attached',
         eligibility,
         preview: check.preview,

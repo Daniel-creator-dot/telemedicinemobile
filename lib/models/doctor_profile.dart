@@ -10,6 +10,7 @@ class DoctorProfile {
     this.languages,
     this.biography,
     this.consultationFee,
+    this.consultationFeeLabel,
     this.facility,
     this.isOnline = false,
     this.slotDuration = 15,
@@ -26,6 +27,7 @@ class DoctorProfile {
   final String? languages;
   final String? biography;
   final double? consultationFee;
+  final String? consultationFeeLabel;
   final String? facility;
   final bool isOnline;
   final int slotDuration;
@@ -49,6 +51,7 @@ class DoctorProfile {
       consultationFee: json['consultation_fee'] == null
           ? null
           : double.tryParse(json['consultation_fee'].toString()),
+      consultationFeeLabel: json['consultation_fee_label']?.toString(),
       facility: json['facility']?.toString(),
       isOnline: json['is_online'] == true ||
           json['is_online'] == 1 ||
@@ -76,6 +79,7 @@ class DoctorProfile {
       languages: languages,
       biography: biography,
       consultationFee: consultationFee,
+      consultationFeeLabel: consultationFeeLabel,
       facility: facility,
       isOnline: isOnline ?? this.isOnline,
       slotDuration: slotDuration,

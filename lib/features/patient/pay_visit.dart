@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
+import '../../core/money.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import 'appointments_repository.dart';
 import 'paystack_checkout_screen.dart';
@@ -42,6 +43,8 @@ Future<PayVisitResult> completePaystackFlow(
 
     final reference = init['reference']?.toString() ?? '';
     final amount = init['amount'];
+    final amountLabel = init['amount_label']?.toString() ??
+        (amount != null ? formatMoneyAmount(amount, currency: 'GHS') : null);
     final isDemo = init['demo'] == true;
     final url = init['authorization_url']?.toString() ?? '';
 
@@ -56,7 +59,7 @@ Future<PayVisitResult> completePaystackFlow(
     if (isDemo || url.isEmpty) {
       final confirmed = await _confirmDemoPayment(
         context,
-        amount: amount,
+        amountLabel: amountLabel,
         message: init['message']?.toString(),
       );
       if (!context.mounted) {
@@ -73,8 +76,8 @@ Future<PayVisitResult> completePaystackFlow(
       return PayVisitResult(
         success: true,
         demo: true,
-        message: amount != null
-            ? 'Demo payment confirmed. GHS $amount.'
+        message: amountLabel != null
+            ? 'Demo payment confirmed. $amountLabel.'
             : 'Demo payment confirmed. $successFallback',
       );
     }
@@ -103,7 +106,7 @@ Future<PayVisitResult> completePaystackFlow(
     await verify(useRef);
     return PayVisitResult(
       success: true,
-      message: amount != null ? 'Payment confirmed. GHS $amount.' : successFallback,
+      message: amountLabel != null ? 'Payment confirmed. $amountLabel.' : successFallback,
     );
   } catch (e) {
     final message = e is DioException
@@ -129,10 +132,10 @@ Future<PayVisitResult> payVisitWithPaystack(
 
 Future<bool> _confirmDemoPayment(
   BuildContext context, {
-  Object? amount,
+  String? amountLabel,
   String? message,
 }) async {
-  final amountLabel = amount != null ? 'GHS $amount' : 'the visit copay';
+  final due = (amountLabel != null && amountLabel.isNotEmpty) ? amountLabel : 'the visit copay';
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -145,7 +148,7 @@ Future<bool> _confirmDemoPayment(
           Text(
             message?.isNotEmpty == true
                 ? message!
-                : 'Paystack keys are not configured on this server. Confirm $amountLabel to continue the visit flow.',
+                : 'Paystack keys are not configured on this server. Confirm $due to continue the visit flow.',
             style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, height: 1.45),
           ),
           const SizedBox(height: 12),
@@ -158,7 +161,7 @@ Future<bool> _confirmDemoPayment(
               border: Border.all(color: digiForest.withValues(alpha: 0.25)),
             ),
             child: Text(
-              'Amount due: $amountLabel',
+              'Amount due: $due',
               style: GoogleFonts.dmSans(fontWeight: FontWeight.w700, color: digiInk),
             ),
           ),

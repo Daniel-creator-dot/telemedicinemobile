@@ -115,6 +115,7 @@ class AuthRepository {
     required String region,
     required String town,
     String? address,
+    String? country,
   }) async {
     final res = await _api.dio.post<Map<String, dynamic>>(
       '/api/auth/signup/agency',
@@ -125,6 +126,7 @@ class AuthRepository {
         'agencyName': agencyName.trim(),
         'region': region,
         'town': town.trim(),
+        if (country != null && country.trim().isNotEmpty) 'country': country.trim(),
         if (address != null && address.trim().isNotEmpty) 'address': address.trim(),
       },
     );
@@ -167,10 +169,11 @@ class AuthRepository {
   }
 
   static String errorMessage(Object err) {
-    if (err is DioException) {
-      return ApiClient.messageFromDio(err, 'Authentication failed');
-    }
-    if (err is Exception) return err.toString().replaceFirst('Exception: ', '');
-    return err.toString();
+    final raw = switch (err) {
+      DioException() => ApiClient.messageFromDio(err, 'Authentication failed'),
+      Exception() => err.toString().replaceFirst('Exception: ', ''),
+      _ => err.toString(),
+    };
+    return ApiClient.hideApiOrigin(raw, 'Authentication failed');
   }
 }

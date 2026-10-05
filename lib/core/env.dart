@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 /// default to the Android emulator loopback (`10.0.2.2`) so they never silently
 /// use a broken production host — pass API_URL for a real phone.
 class AppEnv {
+  /// Request base for release builds. Never pass this string to Text,
+  /// RichText, SelectableText, or a user-visible error.
   static const String liveApiUrl = 'https://telemedicine-server-l2bj.onrender.com';
 
   static const String apiUrl = String.fromEnvironment(

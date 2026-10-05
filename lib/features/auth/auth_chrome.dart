@@ -115,7 +115,7 @@ class _AuthAside extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Consult a clinician, collect a prescription, and follow the visit — from Accra to the regions.',
+                  'Consult a clinician, collect a prescription, and follow the visit — wherever you are.',
                   style: GoogleFonts.dmSans(fontSize: 15, color: digiSlate, height: 1.5),
                 ),
                 const SizedBox(height: 28),
@@ -131,6 +131,8 @@ class _AuthAside extends StatelessWidget {
                   title: 'Agencies',
                   body: 'Register the nurse agency you run. This is not a nurse clinician account.',
                 ),
+                // API origin lives in AppEnv.liveApiUrl for requests only.
+                // Do not paint it under this column.
               ],
             ),
           ),
@@ -206,6 +208,7 @@ class AuthBrandHeader extends StatelessWidget {
           textAlign: TextAlign.center,
           style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4),
         ),
+        // Do not print AppEnv.liveApiUrl under the wordmark.
       ],
     );
   }

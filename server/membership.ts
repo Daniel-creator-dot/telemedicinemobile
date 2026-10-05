@@ -6,6 +6,7 @@ import {
   paystackPaymentEmail,
   resolvePaymentVerification,
 } from './paystack';
+import { currencyForRequest, rewriteGhsCopy, sendCurrencyJson, type DisplayCurrency } from './locale';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -172,12 +173,19 @@ export function membershipEligibilityOverlay(membership: Awaited<ReturnType<type
   };
 }
 
+function presentPlan(plan: MembershipPlan, currency: DisplayCurrency) {
+  return {
+    ...plan,
+    benefits: plan.benefits.map((line) => rewriteGhsCopy(line, currency)),
+  };
+}
+
 export function registerMembershipRoutes(app: Express, authenticate: any) {
-  app.get('/api/membership/plans', (_req, res) => {
-    res.json({
-      currency: 'GHS',
+  app.get('/api/membership/plans', (req, res) => {
+    const currency = currencyForRequest(req);
+    sendCurrencyJson(res, req, {
       note: 'Yearly is 10 months — two months with the house.',
-      plans: MEMBERSHIP_PLANS,
+      plans: MEMBERSHIP_PLANS.map((plan) => presentPlan(plan, currency)),
     });
   });
 
@@ -185,10 +193,10 @@ export function registerMembershipRoutes(app: Express, authenticate: any) {
     try {
       const patient = await getPatientForUser(req.user!.id);
       const current = await getActiveMembership(patient?.id);
-      res.json({
+      const currency = currencyForRequest(req);
+      sendCurrencyJson(res, req, {
         current,
-        plans: MEMBERSHIP_PLANS,
-        currency: 'GHS',
+        plans: MEMBERSHIP_PLANS.map((plan) => presentPlan(plan, currency)),
       });
     } catch (err) {
       console.error(err);
@@ -234,7 +242,7 @@ export function registerMembershipRoutes(app: Express, authenticate: any) {
         },
       });
 
-      res.json({
+      sendCurrencyJson(res, req, {
         reference: checkout.reference,
         authorization_url: checkout.authorizationUrl,
         access_code: checkout.accessCode,

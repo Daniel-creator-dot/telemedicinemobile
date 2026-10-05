@@ -19,9 +19,9 @@ const THEME_COLOR = '#1D6BFF';
 const SITEMAP_LASTMOD = '2026-10-04';
 const OG_IMAGE_PATH = '/icons/Icon-512.png';
 
-const HOME_TITLE = 'Healynks — doctors, nurses, and video consults in Ghana';
+const HOME_TITLE = 'Healynks — doctors, nurses, and video consults';
 const HOME_DESCRIPTION =
-  'Healynks is telemedicine for Ghana. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.';
+  'Healynks is telemedicine you can use anywhere. Book a doctor or nurse, join a video consult, and receive prescriptions from your phone.';
 
 export interface PublicPageSeo {
   /** Path beginning with /, or `/` for the home page. */
@@ -65,7 +65,7 @@ const PUBLIC_PAGES: PublicPageSeo[] = [
     path: '/signup',
     title: 'Create a Healynks account',
     description:
-      'Create a Healynks patient account to book doctors and nurses in Ghana, start a video consult, and receive prescriptions.',
+      'Create a Healynks patient account to book a doctor or nurse, start a video consult, and receive prescriptions.',
     robots: 'index,follow',
     changefreq: 'monthly',
     priority: '0.7',
@@ -77,7 +77,7 @@ const PUBLIC_PAGES: PublicPageSeo[] = [
     path: '/join',
     title: 'Join Healynks as a doctor, nurse, or nurse agency',
     description:
-      'Doctors, nurses, and nurse agencies in Ghana can join Healynks to see patients on video and issue prescriptions.',
+      'Doctors, nurses, and nurse agencies can join Healynks to see patients on video and issue prescriptions.',
     robots: 'index,follow',
     changefreq: 'monthly',
     priority: '0.7',
@@ -139,7 +139,7 @@ function jsonLdFor(page: PublicPageSeo): string {
     url: `${origin}/`,
     logo: ogImageUrl(),
     description: HOME_DESCRIPTION,
-    areaServed: { '@type': 'Country', name: 'Ghana' },
+    areaServed: 'Worldwide',
   };
   const website = {
     '@type': 'WebSite',
@@ -182,7 +182,7 @@ export function seoHeadInner(page: PublicPageSeo): string {
     `<meta property="og:type" content="website">`,
     `<meta property="og:image" content="${attr(image)}">`,
     `<meta property="og:site_name" content="Healynks">`,
-    `<meta property="og:locale" content="en_GH">`,
+    `<meta property="og:locale" content="en">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${attr(page.title)}">`,
     `<meta name="twitter:description" content="${attr(page.description)}">`,

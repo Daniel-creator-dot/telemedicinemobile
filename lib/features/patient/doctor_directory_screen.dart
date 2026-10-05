@@ -185,7 +185,10 @@ class _DoctorDirectoryScreenState extends State<DoctorDirectoryScreen> {
                                             d.facility,
                                             if (d.yearsExperience != null) '${d.yearsExperience} yrs',
                                             d.languages,
-                                            if (d.consultationFee != null) 'GHS ${d.consultationFee!.toStringAsFixed(0)}',
+                                            if (d.consultationFeeLabel != null)
+                                              d.consultationFeeLabel!
+                                            else if (d.consultationFee != null)
+                                              'GHS ${d.consultationFee!.toStringAsFixed(0)}',
                                           ].whereType<String>().where((s) => s.isNotEmpty).join(' · '),
                                           style: GoogleFonts.dmSans(color: digiSlate, fontSize: 13, height: 1.35),
                                         ),

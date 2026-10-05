@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/money.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import 'care_repository.dart';
 
@@ -175,7 +176,7 @@ class _PhasesScreenState extends State<PhasesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Cover now: ${elig['source'] ?? 'self_pay'} · copay GHS ${elig['copay'] ?? 120}',
+                                'Cover now: ${elig['source'] ?? 'self_pay'} · copay ${moneyLabel(elig, 'copay', fallbackAmount: 120)}',
                                 style: GoogleFonts.dmSans(color: digiSlate, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 4),

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import 'auth_chrome.dart';
@@ -105,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String get _subtitle {
     switch (_mode) {
       case _AuthMode.signIn:
-        return 'Use the phone or username on your Healynks record.';
+        return AppBrand.tagline;
       case _AuthMode.forgot:
         return 'We will text a code to the number on the account.';
       case _AuthMode.reset:

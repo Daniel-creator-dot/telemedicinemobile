@@ -21,7 +21,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Healynks'), findsOneWidget);
-    expect(find.text('Connected care for Ghana'), findsOneWidget);
+    expect(find.text('Care from doctors and nurses, wherever you are.'), findsOneWidget);
     expect(find.textContaining('onrender'), findsNothing);
     expect(find.textContaining('http://'), findsNothing);
     expect(find.textContaining('https://'), findsNothing);

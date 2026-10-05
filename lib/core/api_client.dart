@@ -63,12 +63,21 @@ class ApiClient {
     final data = err.response?.data;
     if (data is Map) {
       final m = data['message'] ?? data['error'];
-      if (m != null) return m.toString();
+      if (m != null) return hideApiOrigin(m.toString(), fallback);
     }
     if (err.type == DioExceptionType.connectionError ||
         err.type == DioExceptionType.connectionTimeout) {
       return 'Cannot reach the server. Check your connection and try again.';
     }
-    return err.message ?? fallback;
+    return hideApiOrigin(err.message ?? fallback, fallback);
+  }
+
+  /// Dio messages often embed the request URL. Keep that off the screen.
+  static String hideApiOrigin(String message, [String fallback = 'Something went wrong']) {
+    final lower = message.toLowerCase();
+    if (lower.contains('onrender.com') || lower.contains('telemedicine-server')) {
+      return fallback;
+    }
+    return message;
   }
 }

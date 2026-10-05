@@ -163,6 +163,8 @@ export async function initializePaystackCheckout(opts: {
     {
       email: opts.email,
       amount,
+      // Merchant settlement is GHS (Ghana cards and Mobile Money). USD in the
+      // app is display-only via GHS_PER_USD in locale.ts. Do not send USD here.
       currency: 'GHS',
       reference,
       callback_url: callbackUrl,

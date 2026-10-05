@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/money.dart';
 import '../../core/session.dart';
 import '../../core/notification_service.dart';
 import '../admin/admin_chrome.dart';
@@ -676,7 +677,8 @@ class _DashboardViewState extends State<DashboardView> {
 
   Widget _clinicianRow(DoctorProfile doc) {
     final specialty = doc.specialization?.trim().isNotEmpty == true ? doc.specialization! : 'Clinician';
-    final fee = doc.consultationFee == null ? 'Book' : 'GHS ${doc.consultationFee!.toStringAsFixed(0)}';
+    final fee = doc.consultationFeeLabel ??
+        (doc.consultationFee == null ? 'Book' : 'GHS ${doc.consultationFee!.toStringAsFixed(0)}');
     return InkWell(
       onTap: () => _openBook(doc),
       child: Padding(
@@ -734,7 +736,7 @@ class _DashboardViewState extends State<DashboardView> {
     ];
     const find = <(String, IconData, String, bool)>[
       ('Find a doctor', Icons.medical_services_outlined, '/patient/doctors', false),
-      ('Ghana network', Icons.map_outlined, '/patient/network', false),
+      ('Care network', Icons.map_outlined, '/patient/network', false),
       ('Symptom helper', Icons.psychology_outlined, '/patient/symptom-helper', false),
       ('Care programs', Icons.favorite_outline, '/patient/programs', false),
     ];
@@ -1359,8 +1361,8 @@ class _AppointmentsViewState extends State<AppointmentsView> {
               icon: const Icon(Icons.payment, size: 16),
               label: Text(
                 _eligibility['eligible'] == true
-                    ? 'Pay copay GHS ${_eligibility['copay'] ?? 120} (${_eligibility['payer_name'] ?? 'cover'})'
-                    : 'Pay GHS ${_eligibility['consult_fee'] ?? _eligibility['copay'] ?? 120} with MoMo or card',
+                    ? 'Pay copay ${moneyLabel(_eligibility, 'copay', fallbackAmount: 120)} (${_eligibility['payer_name'] ?? 'cover'})'
+                    : 'Pay ${moneyLabel(_eligibility, 'consult_fee', fallbackAmount: _eligibility['copay'] ?? 120)} with MoMo or card',
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00D2C4),
@@ -1757,8 +1759,8 @@ class _ProfileViewState extends State<ProfileView> {
             const SizedBox(height: 6),
             Text(
               _eligibility['eligible'] == true
-                  ? '${_eligibility['payer_name']} · copay GHS ${_eligibility['copay']}'
-                  : 'Self pay · GHS ${_eligibility['consult_fee'] ?? 120}',
+                  ? '${_eligibility['payer_name']} · copay ${moneyLabel(_eligibility, 'copay')}'
+                  : 'Self pay · ${moneyLabel(_eligibility, 'consult_fee', fallbackAmount: 120)}',
               style: GoogleFonts.roboto(fontSize: 11, color: Colors.white70),
             ),
           ],

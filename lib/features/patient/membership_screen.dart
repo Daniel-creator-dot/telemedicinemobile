@@ -226,7 +226,12 @@ class _MembershipScreenState extends State<MembershipScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('GHS $price', style: GoogleFonts.sourceSerif4(fontSize: 28, fontWeight: FontWeight.w600, color: ink)),
+                Text(
+                  _yearly
+                      ? (plan['yearlyGhs_label']?.toString() ?? 'GHS $price')
+                      : (plan['monthlyGhs_label']?.toString() ?? 'GHS $price'),
+                  style: GoogleFonts.sourceSerif4(fontSize: 28, fontWeight: FontWeight.w600, color: ink),
+                ),
                 const SizedBox(width: 6),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
