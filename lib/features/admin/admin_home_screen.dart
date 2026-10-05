@@ -1,4 +1,5 @@
-﻿import 'dart:ui';
+﻿import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -11,6 +12,7 @@ import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import '../homecare/home_care_edit.dart';
+import '../homecare/home_care_repository.dart';
 import '../homecare/home_care_screen.dart';
 import '../homecare/home_care_sent.dart';
 import '../../models/appointment.dart';
@@ -48,6 +50,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   
   bool _loading = true;
   String? _error;
+  Timer? _homeCareWatch;
   Map<String, dynamic>? _opsSummary;
 
   // Settings Controllers
@@ -70,15 +73,53 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     super.initState();
     HomeCareSentNotice.instance.addListener(_onHomeCareSent);
     _loadData();
+    _watchJustPosted();
   }
 
   void _onHomeCareSent() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _watchJustPosted();
+  }
+
+  /// Refreshes the just-posted card so a taken job shows the nurse who claimed it.
+  void _watchJustPosted() {
+    final showing = HomeCareSentNotice.instance.visible &&
+        HomeCareSentNotice.instance.latest != null;
+    if (!showing) {
+      _homeCareWatch?.cancel();
+      _homeCareWatch = null;
+      return;
+    }
+    _homeCareWatch ??= Timer.periodic(const Duration(seconds: 8), (_) {
+      _refreshJustPosted();
+    });
+  }
+
+  Future<void> _refreshJustPosted() async {
+    final latest = HomeCareSentNotice.instance.latest;
+    if (latest == null || !mounted || !HomeCareSentNotice.instance.visible) return;
+    try {
+      final list = await HomeCareRepository(context.read<ApiClient>()).list();
+      if (!mounted) return;
+      for (final row in list) {
+        if (row.id != latest.id) continue;
+        final changed = row.status != latest.status ||
+            row.taken != latest.taken ||
+            row.claimant?.name != latest.claimant?.name ||
+            row.claimant?.phone != latest.claimant?.phone;
+        if (changed) HomeCareSentNotice.instance.replaceLatest(row);
+        return;
+      }
+    } catch (_) {
+      /* The board keeps the last card until the next refresh. */
+    }
   }
 
   @override
   void dispose() {
     HomeCareSentNotice.instance.removeListener(_onHomeCareSent);
+    _homeCareWatch?.cancel();
     _clinicName.dispose();
     _smsBaseUrl.dispose();
     _smsSenderId.dispose();

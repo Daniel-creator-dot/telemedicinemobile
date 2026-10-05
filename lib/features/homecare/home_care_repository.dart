@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
+import 'home_care_claimant.dart';
 import 'home_care_logic.dart';
 import 'home_care_options.dart';
 
@@ -61,6 +62,7 @@ class HomeCareRequest {
     this.shareToken,
     this.careOptions = const [],
     this.customOption,
+    this.claimant,
   });
 
   final int id;
@@ -90,6 +92,9 @@ class HomeCareRequest {
   final String? shareToken;
   final List<String> careOptions;
   final String? customOption;
+
+  /// Set for an admin or the referring doctor after someone takes the job.
+  final HomeCareClaimant? claimant;
 
   String? get shareUrl => homeCarePublicUrl(shareToken);
 
@@ -136,6 +141,7 @@ class HomeCareRequest {
       shareToken: shareToken,
       careOptions: careOptions,
       customOption: customOption,
+      claimant: claimant,
     );
   }
 
@@ -211,6 +217,7 @@ class HomeCareRequest {
       shareToken: _text(json['share_token']),
       careOptions: homeCareOptionsFromJson(json['care_options']),
       customOption: normalizeHomeCareCustomOption(_text(json['custom_option'])),
+      claimant: HomeCareClaimant.tryParse(json['claimant']),
     );
   }
 }
@@ -638,6 +645,40 @@ class HomeCareRepository {
     } on DioException catch (err) {
       throw HomeCareFailure(
         ApiClient.messageFromDio(err, 'Could not update this request.'),
+        statusCode: err.response?.statusCode,
+      );
+    }
+  }
+
+  /// The person who took the job puts it back to open. Does not text nurses.
+  Future<HomeCareRequest> release(int id) async {
+    try {
+      final res = await _api.dio.post<Map<String, dynamic>>(
+        '/api/homecare/requests/$id/release',
+      );
+      final data = res.data;
+      if (data == null) throw HomeCareFailure('Could not release this job.');
+      return HomeCareRequest.fromJson(data);
+    } on DioException catch (err) {
+      throw HomeCareFailure(
+        ApiClient.messageFromDio(err, 'Could not release this job.'),
+        statusCode: err.response?.statusCode,
+      );
+    }
+  }
+
+  /// Admin puts a taken or closed job back to open. Does not text nurses.
+  Future<HomeCareRequest> reactivate(int id) async {
+    try {
+      final res = await _api.dio.post<Map<String, dynamic>>(
+        '/api/homecare/requests/$id/reactivate',
+      );
+      final data = res.data;
+      if (data == null) throw HomeCareFailure('Could not put this job back.');
+      return HomeCareRequest.fromJson(data);
+    } on DioException catch (err) {
+      throw HomeCareFailure(
+        ApiClient.messageFromDio(err, 'Could not put this job back.'),
         statusCode: err.response?.statusCode,
       );
     }

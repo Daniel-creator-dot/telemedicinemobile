@@ -12,7 +12,9 @@ import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
 import '../nurse/nurse_job_alerts.dart';
 import 'home_care_chat.dart';
+import 'home_care_claimant.dart';
 import 'home_care_edit.dart';
+import 'home_care_logic.dart';
 import 'home_care_options.dart';
 import 'home_care_repository.dart';
 import 'home_care_sent.dart';
@@ -60,18 +62,44 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
   void _onSentNotice() {
     if (!mounted) return;
     final latest = HomeCareSentNotice.instance.latest;
-    if (widget.admin && latest != null && HomeCareSentNotice.instance.visible) {
-      _loadGen++;
-      setState(() {
-        _requests = placeNewestHomeCareRequest(_requests, latest.markedSent());
-        _loading = false;
-        _error = null;
-      });
-      _scrollToTop();
-      _load(silent: true);
-      return;
+    final pin = widget.admin && latest != null && HomeCareSentNotice.instance.visible;
+    if (pin) {
+      final already = _requests.any(
+        (row) =>
+            row.id == latest.id &&
+            row.status == latest.status &&
+            row.claimant?.phone == latest.claimant?.phone &&
+            row.claimant?.name == latest.claimant?.name,
+      );
+      if (!already) {
+        _loadGen++;
+        setState(() {
+          _requests = placeNewestHomeCareRequest(_requests, latest.markedSent());
+          _loading = false;
+          _error = null;
+        });
+        _scrollToTop();
+        _load(silent: true);
+        return;
+      }
     }
     setState(() {});
+  }
+
+  /// Keeps the just-posted card current once a nurse takes that job.
+  void _publishClaimedNotice(List<HomeCareRequest> list) {
+    if (!widget.admin) return;
+    final latest = HomeCareSentNotice.instance.latest;
+    if (latest == null) return;
+    for (final row in list) {
+      if (row.id != latest.id) continue;
+      final changed = row.status != latest.status ||
+          row.taken != latest.taken ||
+          row.claimant?.name != latest.claimant?.name ||
+          row.claimant?.phone != latest.claimant?.phone;
+      if (changed) HomeCareSentNotice.instance.replaceLatest(row);
+      return;
+    }
   }
 
   void _scrollToTop() {
@@ -97,6 +125,7 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
     try {
       final list = await _repo.list();
       if (!mounted || gen != _loadGen) return;
+      _publishClaimedNotice(list);
       setState(() {
         _requests = widget.admin
             ? pinJustPostedHomeCareRequest(
@@ -172,6 +201,48 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(err.message)));
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  Future<void> _release(HomeCareRequest request) async {
+    final confirmed = await confirmReleaseHomeCareJob(context);
+    if (!confirmed || !mounted) return;
+    setState(() => _busyId = request.id);
+    try {
+      await _repo.release(request.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You released this job. Someone else can take it.'),
+        ),
+      );
+      await _load(silent: true);
+    } on HomeCareFailure catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.message)));
+      await _load(silent: true);
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  Future<void> _reactivate(HomeCareRequest request) async {
+    final confirmed = await confirmReactivateHomeCareJob(context);
+    if (!confirmed || !mounted) return;
+    setState(() => _busyId = request.id);
+    try {
+      await _repo.reactivate(request.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This job is open again. Nurses can take it.')),
+      );
+      await _load(silent: true);
+    } on HomeCareFailure catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.message)));
+      await _load(silent: true);
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -309,6 +380,12 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
                 : null,
             onClose: widget.admin && request.taken
                 ? () => _close(request, cancel: false)
+                : null,
+            onRelease: !widget.admin && request.mine && request.taken
+                ? () => _release(request)
+                : null,
+            onReactivate: widget.admin && !request.isOpen
+                ? () => _reactivate(request)
                 : null,
             onEdit: widget.admin ? () => _edit(request) : null,
           ),
@@ -509,6 +586,7 @@ class _HomeCareNurseSectionState extends State<HomeCareNurseSection> {
   bool _loading = true;
   String? _error;
   bool _locked = false;
+  int? _busyId;
   Timer? _poll;
 
   HomeCareRepository get _repo => HomeCareRepository(context.read<ApiClient>());
@@ -558,6 +636,28 @@ class _HomeCareNurseSectionState extends State<HomeCareNurseSection> {
         _error = 'Could not load home care requests.';
         _locked = false;
       });
+    }
+  }
+
+  Future<void> _release(HomeCareRequest request) async {
+    final confirmed = await confirmReleaseHomeCareJob(context);
+    if (!confirmed || !mounted) return;
+    setState(() => _busyId = request.id);
+    try {
+      await _repo.release(request.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You released this job. Someone else can take it.'),
+        ),
+      );
+      await _load();
+    } on HomeCareFailure catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err.message)));
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busyId = null);
     }
   }
 
@@ -616,12 +716,16 @@ class _HomeCareNurseSectionState extends State<HomeCareNurseSection> {
             HomeCareRequestCard(
               request: request,
               admin: false,
+              busy: _busyId == request.id,
               onTap: request.canTake
                   ? () => showHomeCareRequestSheet(
                       context,
                       request,
                       onClaimed: _load,
                     )
+                  : null,
+              onRelease: request.mine && request.taken
+                  ? () => _release(request)
                   : null,
             ),
             const SizedBox(height: 12),
@@ -674,6 +778,8 @@ class HomeCareRequestCard extends StatelessWidget {
     this.onTap,
     this.onCancel,
     this.onClose,
+    this.onRelease,
+    this.onReactivate,
     this.onEdit,
     this.busy = false,
   });
@@ -683,12 +789,16 @@ class HomeCareRequestCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onCancel;
   final VoidCallback? onClose;
+  final VoidCallback? onRelease;
+  final VoidCallback? onReactivate;
   final VoidCallback? onEdit;
   final bool busy;
 
   @override
   Widget build(BuildContext context) {
     final showPrivate = admin || request.isOpen || request.mine;
+    final showRelease = onRelease != null && request.mine && request.taken && !request.isOpen;
+    final showReactivate = onReactivate != null && admin && !request.isOpen;
     final label = request.pillLabel(admin: admin);
     final tone = label == 'Sent' || request.mine
         ? ClinicalTone.forest
@@ -763,14 +873,8 @@ class HomeCareRequestCard extends StatelessWidget {
             ),
           ],
           if (admin && request.contactPhone != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              request.contactPhone!,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                color: healynksMuted,
-              ),
-            ),
+            const SizedBox(height: 8),
+            HomeCarePatientContactLine(phone: request.contactPhone!),
           ],
           if (detail != null) ...[
             const SizedBox(height: 8),
@@ -784,7 +888,10 @@ class HomeCareRequestCard extends StatelessWidget {
               ),
             ),
           ],
+          if (admin && request.claimant != null)
+            HomeCareClaimantBlock(claimant: request.claimant!),
           if (admin &&
+              request.claimant == null &&
               person.isNotEmpty &&
               agency.isNotEmpty &&
               person != agency) ...[
@@ -827,7 +934,7 @@ class HomeCareRequestCard extends StatelessWidget {
               label: Text(admin ? 'Messages' : 'Message admin'),
             ),
           ),
-          if (onCancel != null || onClose != null)
+          if (showRelease || showReactivate || onCancel != null || onClose != null)
             Align(
               alignment: Alignment.centerLeft,
               child: busy
@@ -836,11 +943,27 @@ class HomeCareRequestCard extends StatelessWidget {
                       height: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : TextButton(
-                      onPressed: onCancel ?? onClose,
-                      child: Text(
-                        onCancel != null ? 'Cancel request' : 'Mark closed',
-                      ),
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (showRelease)
+                          TextButton(
+                            onPressed: onRelease,
+                            child: const Text('Release this job'),
+                          ),
+                        if (showReactivate)
+                          TextButton(
+                            onPressed: onReactivate,
+                            child: const Text('Reactivate'),
+                          ),
+                        if (onCancel != null || onClose != null)
+                          TextButton(
+                            onPressed: onCancel ?? onClose,
+                            child: Text(
+                              onCancel != null ? 'Cancel request' : 'Mark closed',
+                            ),
+                          ),
+                      ],
                     ),
             ),
         ],
@@ -1137,4 +1260,44 @@ class _TakeRequestSheetState extends State<_TakeRequestSheet> {
       ),
     );
   }
+}
+
+Future<bool> confirmReleaseHomeCareJob(BuildContext context) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text(homeCareReleaseConfirm),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Keep it'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Release this job'),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
+Future<bool> confirmReactivateHomeCareJob(BuildContext context) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text(homeCareReactivateConfirm),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Not now'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Reactivate'),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
 }

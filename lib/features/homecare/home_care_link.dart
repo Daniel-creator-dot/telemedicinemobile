@@ -10,6 +10,7 @@ import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
 import '../nurse/nurse_job_alerts.dart';
 import 'home_care_chat.dart';
+import 'home_care_claimant.dart';
 import 'home_care_edit.dart';
 import 'home_care_logic.dart';
 import 'home_care_options.dart';
@@ -433,25 +434,34 @@ class HomeCareShareReviewCard extends StatelessWidget {
           ],
           if ((request.contactPhone ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              'Contact phone',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: healynksMuted,
+            if (admin || request.referredByMe)
+              HomeCarePatientContactLine(
+                phone: request.contactPhone!,
+                onCall: () => _call(context, request.contactPhone!),
+              )
+            else ...[
+              Text(
+                'Contact phone',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: healynksMuted,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(request.contactPhone!, style: _body),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _call(context, request.contactPhone!),
-                icon: const Icon(Icons.call_outlined, size: 18),
-                label: const Text('Call this number'),
+              const SizedBox(height: 2),
+              Text(request.contactPhone!, style: _body),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _call(context, request.contactPhone!),
+                  icon: const Icon(Icons.call_outlined, size: 18),
+                  label: const Text('Call this number'),
+                ),
               ),
-            ),
+            ],
           ],
+          if ((admin || request.referredByMe) && request.claimant != null)
+            HomeCareClaimantBlock(claimant: request.claimant!),
           if ((request.note ?? '').isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(

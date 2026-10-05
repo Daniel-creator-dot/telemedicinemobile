@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
+import 'home_care_claimant.dart';
 import 'home_care_edit.dart';
 import 'home_care_options.dart';
 import 'home_care_repository.dart';
@@ -413,9 +414,11 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
             ),
           ],
           if ((request.contactPhone ?? '').isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(request.contactPhone!, style: GoogleFonts.plusJakartaSans(fontSize: 14, color: healynksMuted)),
+            const SizedBox(height: 8),
+            HomeCarePatientContactLine(phone: request.contactPhone!),
           ],
+          if (request.referredByMe && request.claimant != null)
+            HomeCareClaimantBlock(claimant: request.claimant!),
           if (request.taken && takenName.isNotEmpty && !pill.contains(takenName)) ...[
             const SizedBox(height: 8),
             Text(

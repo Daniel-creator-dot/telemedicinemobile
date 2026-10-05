@@ -26,6 +26,8 @@ import {
  * Admins and doctors post a visit. Approved nurses and nurse-agency owners claim it.
  * A successful create texts each approved nurse once and writes one in-app notification.
  * Reshare sends that same alert again. Claim, close, chat, and edits do not notify.
+ * Release writes one in-app note for each admin and does not text anyone.
+ * Reactivate is admin-only and does not notify.
  */
 
 type Viewer = {
@@ -44,13 +46,22 @@ const LIST_SQL = `
   SELECT r.*,
          creator.name AS created_by_name,
          claimer.name AS claimed_name,
+         NULLIF(BTRIM(claimer.phone_number), '') AS claimed_phone,
          agency.name AS claimed_agency_name,
+         NULLIF(BTRIM(agency.region), '') AS claimed_agency_region,
+         NULLIF(BTRIM(agency.town), '') AS claimed_agency_town,
+         NULLIF(BTRIM(agency.phone), '') AS claimed_agency_phone,
+         NULLIF(BTRIM(claim_nurse.name), '') AS claimed_nurse_name,
+         NULLIF(BTRIM(claim_nurse.practice_area), '') AS claimed_practice_area,
+         NULLIF(BTRIM(claim_nurse.facility), '') AS claimed_facility,
+         NULLIF(BTRIM(claim_nurse.registration_number), '') AS claimed_license_number,
          patient.full_name AS patient_name,
          referrer.name AS referrer_name
   FROM home_care_requests r
   LEFT JOIN users creator ON creator.id = r.created_by
   LEFT JOIN users claimer ON claimer.id = r.claimed_by
   LEFT JOIN nurse_agencies agency ON agency.owner_user_id = r.claimed_by
+  LEFT JOIN nurses claim_nurse ON claim_nurse.user_id = r.claimed_by
   LEFT JOIN patients patient ON patient.id = r.patient_id
   LEFT JOIN users referrer ON referrer.id = r.referrer_user_id
 `;
@@ -310,7 +321,53 @@ function claimedLabel(row: Record<string, unknown>): string | null {
   return name || 'A caregiver';
 }
 
-function serialize(row: Record<string, unknown>, viewer: { id: number; role: string; town?: string | null }) {
+function cleanText(value: unknown): string | null {
+  const text = String(value ?? '').trim();
+  return text ? text : null;
+}
+
+/**
+ * Who took a claimed job. Phone comes from the user, then the agency phone.
+ * License is nurses.registration_number. No password, user id, or clinical notes.
+ */
+export function homeCareClaimant(row: Record<string, unknown>): Record<string, string> | null {
+  if (row.claimed_by == null) return null;
+  const agencyName = cleanText(row.claimed_agency_name);
+  const name = cleanText(row.claimed_name) || cleanText(row.claimed_nurse_name) || agencyName;
+  if (!name) return null;
+  const phone = cleanText(row.claimed_phone) || cleanText(row.claimed_agency_phone);
+  const claimant: Record<string, string> = {
+    name,
+    kind: agencyName ? 'agency' : 'nurse',
+  };
+  if (phone) claimant.phone = phone;
+  if (agencyName) claimant.agency_name = agencyName;
+  const region = cleanText(row.claimed_agency_region);
+  const town = cleanText(row.claimed_agency_town);
+  const practice = cleanText(row.claimed_practice_area);
+  const license = cleanText(row.claimed_license_number);
+  const facility = cleanText(row.claimed_facility);
+  if (region) claimant.region = region;
+  if (town) claimant.town = town;
+  if (practice) claimant.practice_area = practice;
+  if (license) claimant.license_number = license;
+  if (facility) claimant.facility = facility;
+  return claimant;
+}
+
+/** Admins, and the doctor who referred this patient. Other nurses and doctors do not. */
+export function viewerMaySeeHomeCareClaimant(
+  viewer: { id: number; role: string },
+  row: Record<string, unknown>
+): boolean {
+  if (row.claimed_by == null) return false;
+  if (viewer.role === 'admin') return true;
+  if (viewer.role !== 'doctor') return false;
+  const referrerId = row.referrer_user_id == null ? null : Number(row.referrer_user_id);
+  return referrerId != null && referrerId === viewer.id;
+}
+
+export function serialize(row: Record<string, unknown>, viewer: { id: number; role: string; town?: string | null }) {
   const status = String(row.status || 'open');
   const claimedBy = row.claimed_by == null ? null : Number(row.claimed_by);
   const mine = claimedBy != null && claimedBy === viewer.id;
@@ -369,6 +426,10 @@ function serialize(row: Record<string, unknown>, viewer: { id: number; role: str
     body.share_token = shareToken;
     body.share_url = homeCareJobUrl(shareToken);
   }
+  if (viewerMaySeeHomeCareClaimant(viewer, row)) {
+    const claimant = homeCareClaimant(row);
+    if (claimant) body.claimant = claimant;
+  }
   return body;
 }
 
@@ -376,6 +437,46 @@ function publicStatus(raw: unknown): 'open' | 'claimed' | 'closed' {
   const status = String(raw || 'open');
   if (status === 'open' || status === 'claimed' || status === 'closed') return status;
   return 'closed';
+}
+
+/**
+ * Only the user who took the job may release it.
+ * A referring doctor who is not that person cannot clear the claim.
+ * 409 when the job is not currently taken, including when it is already open or closed.
+ */
+export function homeCareReleaseDecision(
+  viewerId: number,
+  row: { status?: unknown; claimed_by?: unknown } | null | undefined
+): 'not_found' | 'not_claimed' | 'forbidden' | 'ok' {
+  if (!row) return 'not_found';
+  const status = String(row.status || '');
+  const raw = row.claimed_by;
+  const claimedBy = raw == null || raw === '' ? null : Number(raw);
+  const claimed = status === 'claimed' && claimedBy != null && Number.isFinite(claimedBy);
+  if (!claimed) return 'not_claimed';
+  if (claimedBy !== viewerId) return 'forbidden';
+  return 'ok';
+}
+
+/** Admin only. An open job with nobody on it stays open. */
+export function homeCareReactivateDecision(
+  role: string,
+  row: { status?: unknown; claimed_by?: unknown } | null | undefined
+): 'not_found' | 'forbidden' | 'already_open' | 'ok' {
+  if (role !== 'admin') return 'forbidden';
+  if (!row) return 'not_found';
+  const status = String(row.status || 'open');
+  const raw = row.claimed_by;
+  const hasClaimant = raw != null && raw !== '' && Number.isFinite(Number(raw));
+  if (status === 'open' && !hasClaimant) return 'already_open';
+  return 'ok';
+}
+
+/** In-app copy for admins. No phone number and no SMS. */
+export function homeCareReleaseAdminMessage(name: string, title: string): string {
+  const who = String(name || '').trim() || 'A caregiver';
+  const job = String(title || '').trim() || 'Home care';
+  return `${who} released the home care job ${job}.`;
 }
 
 /** Logged-out share view. No phone, note, patient, creator, or token echo. */
@@ -579,6 +680,17 @@ async function writeHomeCareInAppNotification(userId: number, title: string, mes
     `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, 'homecare')`,
     [userId, title, message]
   );
+}
+
+/** One in-app row per admin. Does not call sendSMS or queueHomeCareNurseAlerts. */
+async function notifyAdminsOfHomeCareRelease(name: string, title: string) {
+  const message = homeCareReleaseAdminMessage(name, title);
+  const admins = await query(`SELECT id FROM users WHERE role = 'admin'`);
+  for (const row of admins.rows) {
+    const userId = Number(row.id);
+    if (!Number.isFinite(userId) || userId <= 0) continue;
+    await writeHomeCareInAppNotification(userId, 'Home care released', message);
+  }
 }
 
 /** Same nurse list and alert text as the original post. Returns how many in-app rows were written. */
@@ -933,7 +1045,152 @@ export function registerHomeCareRoutes(
     }
   });
 
-  // Open jobs only. Does not run on edit, claim, close, or chat.
+  // The claimant (nurse or agency owner) puts a taken job back to open. No SMS.
+  app.post('/api/homecare/requests/:id/release', authenticate, async (req: AuthedRequest, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: 'A valid request id is required' });
+    }
+    const viewer = await loadViewer(req.user!.id);
+    if (!viewer) return res.status(401).json({ message: 'No token provided' });
+
+    const client = await pool.connect();
+    let title = 'Home care';
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query(
+        `SELECT id, status, claimed_by, title FROM home_care_requests WHERE id = $1 FOR UPDATE`,
+        [id]
+      );
+      const current = locked.rows[0] as { status?: unknown; claimed_by?: unknown; title?: unknown } | undefined;
+      const decision = homeCareReleaseDecision(viewer.id, current);
+      if (decision === 'not_found') {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'That home care request was not found' });
+      }
+      if (decision === 'not_claimed') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'This job is not taken.' });
+      }
+      if (decision !== 'ok') {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          message: 'Only the person who took this job can release it.',
+        });
+      }
+      title = String(current?.title || 'Home care');
+      await client.query(
+        `UPDATE home_care_requests
+         SET status = 'open',
+             claimed_by = NULL,
+             claimed_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [id]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* already rolling back */
+      }
+      console.error('home care release failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not release this home care job' });
+    } finally {
+      client.release();
+    }
+
+    try {
+      await notifyAdminsOfHomeCareRelease(senderName(viewer), title);
+    } catch (err) {
+      console.error('home care release notice failed', (err as { code?: string })?.code || 'error');
+    }
+
+    try {
+      const row = await loadOne(id);
+      if (!row) return res.status(404).json({ message: 'That home care request was not found' });
+      return res.json(serialize(row, { id: viewer.id, role: viewer.role, town: viewerTown(viewer) }));
+    } catch (err) {
+      console.error('home care release load failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not release this home care job' });
+    }
+  });
+
+  // Admin puts a taken or closed job back to open and clears who took it. No SMS.
+  app.post('/api/homecare/requests/:id/reactivate', authenticate, async (req: AuthedRequest, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: 'A valid request id is required' });
+    }
+    if (req.user!.role !== 'admin') {
+      return res.status(403).json({
+        message: 'Only an admin can put this job back for nurses to take.',
+      });
+    }
+    const viewer = await loadViewer(req.user!.id);
+    if (!viewer || viewer.role !== 'admin') {
+      return res.status(403).json({
+        message: 'Only an admin can put this job back for nurses to take.',
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query(
+        `SELECT id, status, claimed_by FROM home_care_requests WHERE id = $1 FOR UPDATE`,
+        [id]
+      );
+      const current = locked.rows[0] as { status?: unknown; claimed_by?: unknown } | undefined;
+      const decision = homeCareReactivateDecision(viewer.role, current);
+      if (!current || decision === 'not_found') {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'That home care request was not found' });
+      }
+      if (decision === 'already_open') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'This job is already open.' });
+      }
+      if (decision !== 'ok') {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          message: 'Only an admin can put this job back for nurses to take.',
+        });
+      }
+      await client.query(
+        `UPDATE home_care_requests
+         SET status = 'open',
+             claimed_by = NULL,
+             claimed_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [id]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        /* already rolling back */
+      }
+      console.error('home care reactivate failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not put this job back for nurses to take' });
+    } finally {
+      client.release();
+    }
+
+    try {
+      const row = await loadOne(id);
+      if (!row) return res.status(404).json({ message: 'That home care request was not found' });
+      return res.json(serialize(row, { id: viewer.id, role: viewer.role }));
+    } catch (err) {
+      console.error('home care reactivate load failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not put this job back for nurses to take' });
+    }
+  });
+
+  // Open jobs only. Does not run on edit, claim, release, reactivate, close, or chat.
   app.post('/api/homecare/requests/:id/reshare', authenticate, async (req: AuthedRequest, res: Response) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) {
