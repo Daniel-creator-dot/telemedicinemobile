@@ -15,6 +15,7 @@ import 'home_care_edit.dart';
 import 'home_care_logic.dart';
 import 'home_care_options.dart';
 import 'home_care_repository.dart';
+import 'home_care_screen.dart';
 import 'home_care_share_actions.dart';
 
 /// Opens one home-care job from the public Healynks share link.
@@ -173,6 +174,60 @@ class _HomeCareLinkScreenState extends State<HomeCareLinkScreen> {
     }
   }
 
+  Future<void> _release(HomeCareRequest request) async {
+    final confirmed = await confirmReleaseHomeCareJob(context);
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _taking = true;
+      _actionError = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await HomeCareRepository(context.read<ApiClient>()).release(request.id);
+      if (!mounted) return;
+      await _load();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('You released this job. Someone else can take it.'),
+        ),
+      );
+    } on HomeCareFailure catch (err) {
+      if (!mounted) return;
+      setState(() => _actionError = err.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _actionError = 'Could not release this job.');
+    } finally {
+      if (mounted) setState(() => _taking = false);
+    }
+  }
+
+  Future<void> _reactivate(HomeCareRequest request) async {
+    final confirmed = await confirmReactivateHomeCareJob(context);
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _taking = true;
+      _actionError = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await HomeCareRepository(context.read<ApiClient>()).reactivate(request.id);
+      if (!mounted) return;
+      await _load();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('This job is open again. Nurses can take it.')),
+      );
+    } on HomeCareFailure catch (err) {
+      if (!mounted) return;
+      setState(() => _actionError = err.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _actionError = 'Could not put this job back.');
+    } finally {
+      if (mounted) setState(() => _taking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
@@ -266,6 +321,15 @@ class _HomeCareLinkScreenState extends State<HomeCareLinkScreen> {
                                       (_snapshot!.request!.referredByMe &&
                                           _snapshot!.request!.isOpen)
                                   ? () => _edit(_snapshot!.request!)
+                                  : null,
+                              onRelease: nurse &&
+                                      _snapshot!.request!.mine &&
+                                      _snapshot!.request!.taken
+                                  ? () => _release(_snapshot!.request!)
+                                  : null,
+                              onReactivate: role == 'admin' &&
+                                      !_snapshot!.request!.isOpen
+                                  ? () => _reactivate(_snapshot!.request!)
                                   : null,
                             ),
                   ],
@@ -381,6 +445,8 @@ class HomeCareShareReviewCard extends StatelessWidget {
     this.onTake,
     this.onMessage,
     this.onEdit,
+    this.onRelease,
+    this.onReactivate,
   });
 
   final HomeCareRequest request;
@@ -393,6 +459,8 @@ class HomeCareShareReviewCard extends StatelessWidget {
   final VoidCallback? onTake;
   final VoidCallback? onMessage;
   final VoidCallback? onEdit;
+  final VoidCallback? onRelease;
+  final VoidCallback? onReactivate;
 
   @override
   Widget build(BuildContext context) {
@@ -516,6 +584,22 @@ class HomeCareShareReviewCard extends StatelessWidget {
               onPressed: taking ? null : onTake,
             ),
           ],
+          if (onRelease != null && request.mine && request.taken && !request.isOpen)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: taking ? null : onRelease,
+                child: const Text('Release this job'),
+              ),
+            ),
+          if (onReactivate != null && admin && !request.isOpen)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: taking ? null : onReactivate,
+                child: const Text('Reactivate'),
+              ),
+            ),
           if (onEdit != null)
             Align(
               alignment: Alignment.centerLeft,
