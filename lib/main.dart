@@ -77,14 +77,18 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
   Future<void> _boot() async {
     final started = DateTime.now();
     
+    var restored = true;
     try {
       await context.read<Session>().restore().timeout(const Duration(seconds: 5));
     } catch (e) {
+      restored = false;
       debugPrint('Session restore timed out or failed: $e');
     }
 
     if (mounted) {
-      setState(() => _loadingMessage = 'Preparing your care workspace…');
+      setState(() {
+        _loadingMessage = restored ? 'Almost ready…' : 'Taking you to sign in…';
+      });
     }
     const minSplash = Duration(milliseconds: 3000);
     final elapsed = DateTime.now().difference(started);

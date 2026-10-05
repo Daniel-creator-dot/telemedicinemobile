@@ -156,11 +156,11 @@ class AuthRepository {
   }
 
   AuthResult _parseAuthResponse(Map<String, dynamic>? data) {
-    if (data == null) throw Exception('Empty auth response');
+    if (data == null) throw Exception('We could not finish signing you in. Try again.');
     final token = data['token']?.toString();
     final userJson = data['user'];
     if (token == null || userJson is! Map) {
-      throw Exception('Invalid auth response');
+      throw Exception('We could not finish signing you in. Try again.');
     }
     return AuthResult(
       token: token,
@@ -170,10 +170,44 @@ class AuthRepository {
 
   static String errorMessage(Object err) {
     final raw = switch (err) {
-      DioException() => ApiClient.messageFromDio(err, 'Authentication failed'),
+      DioException() => ApiClient.messageFromDio(err, 'We could not complete that. Try again.'),
       Exception() => err.toString().replaceFirst('Exception: ', ''),
       _ => err.toString(),
     };
-    return ApiClient.hideApiOrigin(raw, 'Authentication failed');
+    return plainAuthMessage(ApiClient.hideApiOrigin(raw, 'We could not complete that. Try again.'));
+  }
+
+  /// Turn API phrases into sentences a person can act on. Never keep a host or path.
+  static String plainAuthMessage(String message) {
+    final trimmed = message.trim();
+    final lower = trimmed.toLowerCase();
+    if (lower.isEmpty ||
+        lower == 'authentication failed' ||
+        lower == 'server error' ||
+        lower == 'internal server error') {
+      return 'Healynks could not complete that. Try again in a moment.';
+    }
+    if (lower.contains('/api/') || lower.contains('onrender') || lower.contains('telemedicine-server')) {
+      return 'Healynks could not complete that. Try again in a moment.';
+    }
+    if (lower == 'invalid credentials') {
+      return 'Those details do not match an account.';
+    }
+    if (lower.contains('invalid or expired otp')) {
+      return 'That code is not valid, or it has expired. Request a new one.';
+    }
+    if (lower.contains('could not send otp')) {
+      return 'We could not send the text. Check the number and try again.';
+    }
+    if (lower.contains('too many')) {
+      return 'Too many attempts. Wait a moment and try again.';
+    }
+    if (lower.contains('already exists')) {
+      return 'An account already uses this mobile number. Sign in instead.';
+    }
+    if (lower.contains('phone, otp, name and password')) {
+      return 'Enter your name, mobile number, password, and the code from the text.';
+    }
+    return trimmed;
   }
 }

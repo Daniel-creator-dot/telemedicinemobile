@@ -22,7 +22,7 @@ The server binds `0.0.0.0:$PORT` (default `5000`) for local and Render.
 
 ### Public web app
 
-Open **https://healynks.app** (login: **https://healynks.app/login**). Patient OTP signup is [/signup](https://healynks.app/signup). Doctors and nurse agencies use [/join](https://healynks.app/join). Checked 4 October 2026: those URLs return the Healynks app. `www.healynks.app` redirects to the apex.
+Open **https://healynks.app** (login: **https://healynks.app/login**). Patient OTP signup is [/signup](https://healynks.app/signup). Doctors, nurses, and nurse agencies use [/join](https://healynks.app/join). Checked 4 October 2026: those URLs return the Healynks app. `www.healynks.app` redirects to the apex.
 
 The Render service is still **https://telemedicine-server-l2bj.onrender.com** if you need that hostname directly.
 

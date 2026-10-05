@@ -269,15 +269,54 @@ class AuthErrorBanner extends StatelessWidget {
   }
 }
 
+class AuthNoticeBanner extends StatelessWidget {
+  const AuthNoticeBanner({super.key, required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F1FF),
+        borderRadius: BorderRadius.circular(clinicalRadius),
+        border: Border.all(color: const Color(0xFFD3E2F8)),
+      ),
+      child: Text(
+        message,
+        style: GoogleFonts.dmSans(
+          color: const Color(0xFF1D4E89),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
 class AuthPrimaryButton extends StatelessWidget {
-  const AuthPrimaryButton({super.key, required this.label, required this.onPressed, this.loading = false});
+  const AuthPrimaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.loading = false,
+    this.loadingLabel,
+  });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+  final String? loadingLabel;
 
   @override
   Widget build(BuildContext context) {
-    return ClinicalPrimaryButton(label: label, onPressed: onPressed, loading: loading);
+    return ClinicalPrimaryButton(
+      label: label,
+      onPressed: onPressed,
+      loading: loading,
+      loadingLabel: loadingLabel,
+    );
   }
 }

@@ -63,19 +63,42 @@ class ApiClient {
     final data = err.response?.data;
     if (data is Map) {
       final m = data['message'] ?? data['error'];
-      if (m != null) return hideApiOrigin(m.toString(), fallback);
+      if (m != null && m.toString().trim().isNotEmpty) {
+        final cleaned = hideApiOrigin(m.toString(), '');
+        if (cleaned.isNotEmpty) return cleaned;
+      }
     }
-    if (err.type == DioExceptionType.connectionError ||
-        err.type == DioExceptionType.connectionTimeout) {
-      return 'Cannot reach the server. Check your connection and try again.';
+    switch (err.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+        return 'Cannot reach Healynks right now. Check your connection and try again.';
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return 'Healynks took too long to respond. Check your connection and try again.';
+      case DioExceptionType.badResponse:
+        final status = err.response?.statusCode ?? 0;
+        if (status == 401) return 'Those details do not match an account.';
+        if (status == 403) return 'You do not have access to do that.';
+        if (status == 404) return 'We could not find that.';
+        if (status == 429) return 'Too many attempts. Wait a moment and try again.';
+        if (status >= 500) return 'Healynks could not complete that. Try again in a moment.';
+        return fallback;
+      default:
+        return hideApiOrigin(err.message ?? fallback, fallback);
     }
-    return hideApiOrigin(err.message ?? fallback, fallback);
   }
 
   /// Dio messages often embed the request URL. Keep that off the screen.
   static String hideApiOrigin(String message, [String fallback = 'Something went wrong']) {
     final lower = message.toLowerCase();
-    if (lower.contains('onrender.com') || lower.contains('telemedicine-server')) {
+    if (lower.contains('onrender.com') ||
+        lower.contains('telemedicine-server') ||
+        lower.contains('http://') ||
+        lower.contains('https://') ||
+        lower.contains('xmlhttprequest') ||
+        lower.contains('socketexception') ||
+        lower.contains('dioexception') ||
+        lower.contains('clientexception')) {
       return fallback;
     }
     return message;

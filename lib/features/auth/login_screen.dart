@@ -29,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   bool _obscure = true;
   String? _error;
+  String? _notice;
 
   @override
   void dispose() {
@@ -43,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _mode = mode;
       _error = null;
+      _notice = null;
     });
   }
 
@@ -69,10 +71,11 @@ class _LoginScreenState extends State<LoginScreen> {
         case _AuthMode.forgot:
           await repo.forgotPassword(_username.text);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('If an account exists, a reset code has been sent.')),
-          );
-          _setMode(_AuthMode.reset);
+          setState(() {
+            _mode = _AuthMode.reset;
+            _error = null;
+            _notice = 'If an account matches, a reset code is on its way by text.';
+          });
         case _AuthMode.reset:
           await repo.resetPassword(
             username: _username.text,
@@ -80,13 +83,20 @@ class _LoginScreenState extends State<LoginScreen> {
             newPassword: _newPassword.text,
           );
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Password reset successful. Please sign in.')),
-          );
-          _setMode(_AuthMode.signIn);
+          setState(() {
+            _mode = _AuthMode.signIn;
+            _error = null;
+            _notice = 'Password saved. Sign in with the new one.';
+            _password.clear();
+            _otpCode.clear();
+            _newPassword.clear();
+          });
       }
     } catch (e) {
-      setState(() => _error = AuthRepository.errorMessage(e));
+      setState(() {
+        _notice = null;
+        _error = AuthRepository.errorMessage(e);
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -97,9 +107,9 @@ class _LoginScreenState extends State<LoginScreen> {
       case _AuthMode.signIn:
         return 'Sign in';
       case _AuthMode.forgot:
-        return 'Reset access';
+        return 'Reset your password';
       case _AuthMode.reset:
-        return 'New password';
+        return 'Choose a new password';
     }
   }
 
@@ -108,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
       case _AuthMode.signIn:
         return AppBrand.tagline;
       case _AuthMode.forgot:
-        return 'We will text a code to the number on the account.';
+        return 'We will text a code to the mobile number on the account.';
       case _AuthMode.reset:
         return 'Enter the code from the text, then choose a password.';
     }
@@ -125,44 +135,65 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  String get _loadingLabel {
+    switch (_mode) {
+      case _AuthMode.signIn:
+        return 'Signing in…';
+      case _AuthMode.forgot:
+        return 'Sending the code…';
+      case _AuthMode.reset:
+        return 'Saving the password…';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isSignIn = _mode == _AuthMode.signIn;
     final isReset = _mode == _AuthMode.reset;
 
+    final width = MediaQuery.sizeOf(context).width;
+    final short = MediaQuery.sizeOf(context).height < 700;
+    final horizontal = width < 380 ? 12.0 : 20.0;
+    // The phone header already shows the tagline. Repeating it in the card
+    // pushed Forgot password and Create account below a short screen.
+    final showSubtitle = !isSignIn || width >= 960;
     return AuthScaffold(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        padding: EdgeInsets.fromLTRB(horizontal, short ? 8 : 24, horizontal, short ? 16 : 32),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              const AuthBrandHeader(),
-              const SizedBox(height: 20),
+              AuthBrandHeader(compact: short),
+              SizedBox(height: short ? 10 : 20),
               AuthGlassPanel(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(_title, style: clinicalDisplay(28)),
-                    const SizedBox(height: 8),
-                    Text(
-                      _subtitle,
-                      style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.45),
-                    ),
+                    Text(_title, style: clinicalDisplay(short ? 24 : 28)),
+                    if (showSubtitle) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _subtitle,
+                        style: GoogleFonts.dmSans(fontSize: 14, color: digiSlate, height: 1.45),
+                      ),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       AuthErrorBanner(message: _error!),
+                    ],
+                    if (_notice != null) ...[
+                      const SizedBox(height: 16),
+                      AuthNoticeBanner(message: _notice!),
                     ],
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _username,
                       style: GoogleFonts.dmSans(color: digiInk),
                       textInputAction: isSignIn ? TextInputAction.next : TextInputAction.done,
-                      decoration: authFieldDeco(
-                        isSignIn ? 'Username or phone' : 'Username',
-                        Icons.account_circle_outlined,
-                      ),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Username is required' : null,
+                      decoration: authFieldDeco('Username or phone', Icons.account_circle_outlined),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Enter the username or phone number on the account.' : null,
                     ),
                     if (isSignIn) ...[
                       const SizedBox(height: 12),
@@ -181,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () => setState(() => _obscure = !_obscure),
                           ),
                         ),
-                        validator: (v) => v == null || v.length < 4 ? 'Enter a valid password' : null,
+                        validator: (v) => v == null || v.isEmpty ? 'Enter your password.' : null,
                       ),
                     ],
                     if (isReset) ...[
@@ -190,8 +221,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _otpCode,
                         keyboardType: TextInputType.number,
                         style: GoogleFonts.dmSans(color: digiInk),
-                        decoration: authFieldDeco('Code from SMS', Icons.lock_clock_outlined),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Enter verification code' : null,
+                        decoration: authFieldDeco('Code from the text', Icons.lock_clock_outlined),
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Enter the code from the text.' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -208,11 +239,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () => setState(() => _obscure = !_obscure),
                           ),
                         ),
-                        validator: (v) => v == null || v.length < 5 ? 'Min 5 characters required' : null,
+                        validator: (v) => v == null || v.length < 5 ? 'Use at least 5 characters.' : null,
                       ),
                     ],
                     const SizedBox(height: 20),
-                    AuthPrimaryButton(label: _primaryLabel, onPressed: _submit, loading: _loading),
+                    AuthPrimaryButton(
+                      label: _primaryLabel,
+                      loadingLabel: _loadingLabel,
+                      onPressed: _submit,
+                      loading: _loading,
+                    ),
                     const SizedBox(height: 4),
                     if (isSignIn) ...[
                       Align(
@@ -251,12 +287,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               if (isSignIn) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 TextButton(
                   onPressed: () => context.go('/join'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: digiForest,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
                   child: Text(
                     'Join as a doctor, nurse, or nurse agency',
-                    style: GoogleFonts.dmSans(color: digiForest, fontSize: 14, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmSans(color: digiForest, fontSize: 14, fontWeight: FontWeight.w600, height: 1.35),
                   ),
                 ),
               ],

@@ -95,30 +95,36 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
     super.dispose();
   }
 
-  bool get _ready {
-    if (_name.text.trim().isEmpty || _phone.text.trim().isEmpty || _password.text.length < 8) {
-      return false;
+  String? _blockingMessage() {
+    if (_name.text.trim().isEmpty) {
+      return _kind == _JoinKind.agency ? "Enter the nurse's full name." : 'Enter a full name.';
     }
+    if (normalizeAccountPhone(_phone.text) == null) {
+      return 'Use a Ghana number, or include a country code such as +1.';
+    }
+    if (_password.text.length < 8) return 'Use at least 8 characters for the password.';
     switch (_kind) {
       case _JoinKind.doctor:
-        return _specialization != null;
+        return _specialization == null ? 'Choose a specialization.' : null;
       case _JoinKind.nurse:
-        return _practiceArea != null;
+        return _practiceArea == null ? 'Choose a unit or area of practice.' : null;
       case _JoinKind.agency:
-        if (_agencyName.text.trim().isEmpty || _town.text.trim().isEmpty) return false;
-        if (_outsideGhana) return _country.text.trim().isNotEmpty;
-        return _region != null;
+        if (_agencyName.text.trim().isEmpty) return 'Enter the agency name.';
+        if (_outsideGhana) {
+          if (_country.text.trim().isEmpty) return 'Enter the country where the agency operates.';
+        } else if (_region == null) {
+          return 'Choose a region in Ghana, or switch to another country.';
+        }
+        if (_town.text.trim().isEmpty) return 'Enter the town.';
+        return null;
     }
   }
 
   Future<void> _submit() async {
     if (_loading) return;
-    if (!_ready) {
-      setState(() => _error = 'Enter the required details to continue.');
-      return;
-    }
-    if (normalizeAccountPhone(_phone.text) == null) {
-      setState(() => _error = 'Use a Ghana number, or include a country code such as +1');
+    final missing = _blockingMessage();
+    if (missing != null) {
+      setState(() => _error = missing);
       return;
     }
 
@@ -175,9 +181,11 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontal = width < 380 ? 12.0 : 20.0;
     return AuthScaffold(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 32),
         children: [
           Align(
             alignment: Alignment.centerLeft,
@@ -216,7 +224,12 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                 const SizedBox(height: 16),
                 _field(_name, _kind == _JoinKind.agency ? 'Nurse full name' : 'Full name', TextInputType.name),
                 const SizedBox(height: 12),
-                _field(_phone, 'Mobile number', TextInputType.phone),
+                _field(
+                  _phone,
+                  'Mobile number',
+                  TextInputType.phone,
+                  helper: 'Ghana numbers can start with 0. Other countries need a code, such as +1.',
+                ),
                 const SizedBox(height: 12),
                 _passwordField(),
                 const SizedBox(height: 12),
@@ -249,6 +262,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                     label: 'Where the agency operates',
                     value: _outsideGhana ? 'Other country' : 'Ghana',
                     items: const ['Ghana', 'Other country'],
+                    helper: 'Ghana uses one of its 16 regions. Anywhere else, enter the country.',
                     onChanged: (v) => setState(() {
                       _outsideGhana = v == 'Other country';
                       if (!_outsideGhana) _country.clear();
@@ -277,7 +291,8 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                 const SizedBox(height: 20),
                 ClinicalPrimaryButton(
                   label: _submitLabel,
-                  onPressed: _loading || !_ready ? null : _submit,
+                  loadingLabel: 'Creating your account…',
+                  onPressed: _loading ? null : _submit,
                   loading: _loading,
                 ),
               ],
@@ -311,28 +326,37 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
   }
 
   Widget _passwordField() {
-    return TextField(
-      controller: _password,
-      obscureText: _obscure,
-      style: GoogleFonts.dmSans(color: digiInk),
-      decoration: _deco('Password (min 8 characters)').copyWith(
-        suffixIcon: IconButton(
-          onPressed: () => setState(() => _obscure = !_obscure),
-          icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: digiSlate, size: 20),
+    return _caption(
+      'Password',
+      TextField(
+        controller: _password,
+        obscureText: _obscure,
+        style: GoogleFonts.dmSans(color: digiInk),
+        decoration: _plain().copyWith(
+          hintText: 'At least 8 characters',
+          suffixIcon: IconButton(
+            tooltip: _obscure ? 'Show password' : 'Hide password',
+            onPressed: () => setState(() => _obscure = !_obscure),
+            icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: digiSlate, size: 20),
+          ),
         ),
       ),
     );
   }
 
-  Widget _field(TextEditingController controller, String label, TextInputType type) {
-    return TextField(
-      controller: controller,
-      keyboardType: type,
-      textCapitalization: type == TextInputType.name || type == TextInputType.streetAddress
-          ? TextCapitalization.words
-          : TextCapitalization.none,
-      style: GoogleFonts.dmSans(color: digiInk),
-      decoration: _deco(label),
+  Widget _field(TextEditingController controller, String label, TextInputType type, {String? helper}) {
+    return _caption(
+      label,
+      TextField(
+        controller: controller,
+        keyboardType: type,
+        textCapitalization: type == TextInputType.name || type == TextInputType.streetAddress
+            ? TextCapitalization.words
+            : TextCapitalization.none,
+        style: GoogleFonts.dmSans(color: digiInk),
+        decoration: _plain(),
+      ),
+      helper: helper,
     );
   }
 
@@ -341,19 +365,47 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
     required String? value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
+    String? helper,
   }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      isExpanded: true,
-      dropdownColor: Colors.white,
-      style: GoogleFonts.dmSans(color: digiInk, fontSize: 14),
-      decoration: _deco(label),
-      items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
-      onChanged: _loading ? null : onChanged,
+    return _caption(
+      label,
+      DropdownButtonFormField<String>(
+        initialValue: value,
+        isExpanded: true,
+        dropdownColor: Colors.white,
+        style: GoogleFonts.dmSans(color: digiInk, fontSize: 14),
+        decoration: _plain(),
+        hint: Text('Choose one', style: GoogleFonts.dmSans(color: digiSlate, fontSize: 14)),
+        items: items
+            .map(
+              (item) => DropdownMenuItem(
+                value: item,
+                child: Text(item, overflow: TextOverflow.ellipsis),
+              ),
+            )
+            .toList(),
+        onChanged: _loading ? null : onChanged,
+      ),
+      helper: helper,
     );
   }
 
-  InputDecoration _deco(String label) => clinicalFieldDecoration(label);
+  Widget _caption(String label, Widget field, {String? helper}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: digiInk, height: 1.3)),
+        const SizedBox(height: 6),
+        field,
+        if (helper != null) ...[
+          const SizedBox(height: 6),
+          Text(helper, style: GoogleFonts.dmSans(fontSize: 12, color: digiSlate, height: 1.35)),
+        ],
+      ],
+    );
+  }
+
+  InputDecoration _plain() => clinicalFieldDecoration('', hideLabel: true);
 }
 
 class _KindSwitch extends StatelessWidget {
@@ -384,24 +436,36 @@ class _KindSwitch extends StatelessWidget {
     final selected = kind == value;
     return Expanded(
       child: Material(
-        color: selected ? Colors.white : Colors.transparent,
+        color: Colors.transparent,
         elevation: 0,
         shadowColor: const Color(0x140E1525),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onChanged == null ? null : () => onChanged!(value),
           borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  height: 1.2,
-                  color: selected ? healynksBlue : digiSlate,
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: selected ? clinicalActionGradient : null,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  child: Center(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                        height: 1.15,
+                        color: selected ? Colors.white : digiSlate,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

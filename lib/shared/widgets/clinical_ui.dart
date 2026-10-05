@@ -172,12 +172,14 @@ class ClinicalPrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.loading = false,
     this.expand = true,
+    this.loadingLabel,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
   final bool expand;
+  final String? loadingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -200,13 +202,7 @@ class ClinicalPrimaryButton extends StatelessWidget {
               width: expand ? double.infinity : null,
               height: 48,
               child: loading
-                  ? const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      ),
-                    )
+                  ? _loadingRow()
                   : expand
                       ? Center(
                           child: Text(
@@ -227,6 +223,29 @@ class ClinicalPrimaryButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _loadingRow() {
+    final caption = (loadingLabel == null || loadingLabel!.trim().isEmpty) ? null : loadingLabel!.trim();
+    final style = GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ),
+        if (caption != null) ...[
+          const SizedBox(width: 10),
+          if (expand)
+            Flexible(child: Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: style))
+          else
+            Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+        ],
+      ],
     );
   }
 }
@@ -296,13 +315,22 @@ class ClinicalCardSkeleton extends StatelessWidget {
   }
 }
 
-InputDecoration clinicalFieldDecoration(String label, {Widget? suffixIcon, Widget? prefixIcon}) {
+InputDecoration clinicalFieldDecoration(
+  String label, {
+  Widget? suffixIcon,
+  Widget? prefixIcon,
+  String? helper,
+  bool hideLabel = false,
+}) {
   final border = OutlineInputBorder(
     borderRadius: BorderRadius.circular(clinicalButtonRadius),
     borderSide: const BorderSide(color: digiLine),
   );
   return InputDecoration(
-    labelText: label,
+    labelText: hideLabel ? null : label,
+    helperText: helper,
+    helperMaxLines: 3,
+    helperStyle: GoogleFonts.dmSans(color: digiSlate, fontSize: 12, height: 1.35),
     labelStyle: GoogleFonts.dmSans(color: digiSlate, fontSize: 14),
     prefixIcon: prefixIcon,
     suffixIcon: suffixIcon,

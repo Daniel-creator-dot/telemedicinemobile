@@ -42,4 +42,32 @@ void main() {
     expect(find.text('Unit or area of practice'), findsNothing);
     await tester.pump(const Duration(milliseconds: 400));
   });
+
+  testWidgets('join choices fit a narrow phone without painting the API host', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(const MaterialApp(home: ProfessionalSignupScreen()));
+    await tester.pump();
+
+    expect(find.text('Doctor'), findsOneWidget);
+    expect(find.text('Nurse'), findsOneWidget);
+    expect(find.text('Nurse agency'), findsOneWidget);
+    expect(find.textContaining('onrender'), findsNothing);
+    expect(find.textContaining('telemedicine-server'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Nurse'));
+    await tester.pump();
+    expect(find.text('License or council number (optional)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Nurse agency'));
+    await tester.pump();
+    expect(find.text('Where the agency operates'), findsOneWidget);
+    expect(find.textContaining('Anywhere else'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
 }
