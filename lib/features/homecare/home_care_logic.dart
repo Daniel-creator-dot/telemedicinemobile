@@ -99,3 +99,6 @@ String homeCareRoleLabel(String role) {
       return cleaned[0].toUpperCase() + cleaned.substring(1);
   }
 }
+
+const homeCareReleaseConfirm = 'Release this job so someone else can take it?';
+const homeCareReactivateConfirm = 'Put this job back so nurses can take it?';
