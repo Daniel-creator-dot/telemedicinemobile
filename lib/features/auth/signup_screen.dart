@@ -266,6 +266,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 8),
                     TextButton(
+                      onPressed: () => context.go('/signup/simple'),
+                      child: Text(
+                        'Easier signup',
+                        style: GoogleFonts.dmSans(color: digiForest, fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    TextButton(
                       onPressed: () => context.go('/login'),
                       child: Text(
                         'Already have an account? Sign in',

@@ -281,6 +281,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         label: 'Create a patient account',
                         onPressed: () => context.go('/signup'),
                       ),
+                      TextButton(
+                        onPressed: () => context.go('/signup/simple'),
+                        child: Text(
+                          'Need a simpler signup?',
+                          style: GoogleFonts.dmSans(color: digiForest, fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
                     ] else ...[
                       TextButton(
                         onPressed: () => _setMode(_AuthMode.signIn),

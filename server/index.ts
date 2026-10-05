@@ -31,6 +31,7 @@ import { registerPhaseOverviewRoutes } from './phases';
 import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import { applyRouteSeo, robotsTxt, sitemapXml } from './seo';
 import { registerHomeCareRoutes } from './homecare';
+import { registerPatientOnboardRoutes } from './patient_onboard';
 import {
   authenticate,
   requireRoles,
@@ -1986,6 +1987,7 @@ app.get('/api/analytics/dashboard', authenticate, requireRoles(...CLINICAL_STAFF
 
 registerProfessionalSignupRoutes(app);
 registerPhase1Routes(app, { authenticate, sendSMS, sendPushNotification });
+registerPatientOnboardRoutes(app, authenticate);
 registerPhase2Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerPhase3Routes(app, { authenticate, sendSMS, sendPushNotification });
 registerClinicalRoutes(app);

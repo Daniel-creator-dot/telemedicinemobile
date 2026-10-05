@@ -329,6 +329,18 @@ export async function initPhase1Schema() {
     WHERE patient_code IS NULL
   `);
 
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'patients' AND column_name = 'onboarded_by'
+      ) THEN
+        ALTER TABLE patients ADD COLUMN onboarded_by INTEGER REFERENCES users(id);
+      END IF;
+    END $$;
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS patients_onboarded_by_idx ON patients (onboarded_by)`);
+
   const nurseCount = await query("SELECT COUNT(*) FROM users WHERE role = 'nurse'");
   if (parseInt(nurseCount.rows[0].count, 10) === 0) {
     const hashed = await bcrypt.hash('nurse123', 10);

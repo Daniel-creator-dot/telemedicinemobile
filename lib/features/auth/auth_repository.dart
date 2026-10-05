@@ -208,6 +208,12 @@ class AuthRepository {
     if (lower.contains('phone, otp, name and password')) {
       return 'Enter your name, mobile number, password, and the code from the text.';
     }
+    if (lower.contains('invalid payload')) {
+      return 'We could not save that. Try again.';
+    }
+    if (lower.contains('registration failed')) {
+      return 'We could not create the account. Try again.';
+    }
     return trimmed;
   }
 }

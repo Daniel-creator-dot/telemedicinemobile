@@ -823,6 +823,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
             ),
           ).animate().fadeIn(duration: 240.ms),
           const SizedBox(height: 16),
+          ClinicalPrimaryButton(
+            label: 'Add a patient',
+            onPressed: () => context.push('/doctor/add-patient'),
+          ),
+          const SizedBox(height: 16),
           const DoctorHomeCareSection(),
           const SizedBox(height: 16),
 

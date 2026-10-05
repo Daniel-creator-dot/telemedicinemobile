@@ -8,6 +8,8 @@ import '../features/admin/admin_home_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/professional_signup_screen.dart';
 import '../features/auth/signup_screen.dart';
+import '../features/auth/simple_signup_screen.dart';
+import '../features/staff/add_patient_screen.dart';
 import '../features/clinical/care_programs_roster_screen.dart';
 import '../features/doctor/doctor_home_screen.dart';
 import '../features/lab_technician/lab_technician_home_screen.dart';
@@ -60,7 +62,7 @@ GoRouter createAppRouter(Session session) {
       if (session.isRestoring) return null;
       final loggedIn = session.isAuthenticated;
       final loc = state.matchedLocation;
-      final onAuth = loc == '/login' || loc == '/signup' || loc == '/join';
+      final onAuth = loc == '/login' || loc == '/signup' || loc == '/signup/simple' || loc == '/join';
 
       if (!loggedIn) {
         if (onAuth || homeCareJobPath(loc) != null) return null;
@@ -125,6 +127,7 @@ GoRouter createAppRouter(Session session) {
         ),
       ),
       GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+      GoRoute(path: '/signup/simple', builder: (context, state) => const SimpleSignupScreen()),
       GoRoute(path: '/join', builder: (context, state) => const ProfessionalSignupScreen()),
       GoRoute(
         path: '/patient',
@@ -188,6 +191,7 @@ GoRouter createAppRouter(Session session) {
         builder: (context, state) => const DoctorHomeScreen(),
         routes: [
           GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
+          GoRoute(path: 'add-patient', builder: (context, state) => const AddPatientScreen()),
           GoRoute(
             path: 'video',
             builder: (context, state) {
@@ -209,6 +213,7 @@ GoRouter createAppRouter(Session session) {
           GoRoute(path: 'analytics', builder: (context, state) => const AdminAnalyticsScreen()),
           GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
           GoRoute(path: 'homecare', builder: (context, state) => const HomeCareScreen(admin: true)),
+          GoRoute(path: 'add-patient', builder: (context, state) => const AddPatientScreen()),
         ],
       ),
       GoRoute(
@@ -221,6 +226,7 @@ GoRouter createAppRouter(Session session) {
         routes: [
           GoRoute(path: 'programs', builder: (context, state) => const CareProgramsRosterScreen()),
           GoRoute(path: 'homecare', builder: (context, state) => const HomeCareScreen(admin: false)),
+          GoRoute(path: 'add-patient', builder: (context, state) => const AddPatientScreen()),
         ],
       ),
       GoRoute(

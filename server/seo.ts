@@ -35,6 +35,8 @@ export interface PublicPageSeo {
   webPage: boolean;
   indexable: boolean;
   noscriptHeading: string;
+  /** Overrides the shared sitemap date when this page was added later. */
+  lastmod?: string;
 }
 
 const PUBLIC_PAGES: PublicPageSeo[] = [
@@ -72,6 +74,19 @@ const PUBLIC_PAGES: PublicPageSeo[] = [
     webPage: true,
     indexable: true,
     noscriptHeading: 'Create a Healynks account',
+  },
+  {
+    path: '/signup/simple',
+    title: 'Easier Healynks signup',
+    description:
+      'A simpler Healynks signup with one question at a time, large type, and a text code. Made for older patients and the family member helping them.',
+    robots: 'index,follow',
+    changefreq: 'monthly',
+    priority: '0.7',
+    webPage: true,
+    indexable: true,
+    noscriptHeading: 'Easier Healynks signup',
+    lastmod: '2026-10-05',
   },
   {
     path: '/join',
@@ -212,7 +227,7 @@ export function noscriptBlock(page: PublicPageSeo): string {
     '<noscript>',
     `  <h1>${attr(page.noscriptHeading)}</h1>`,
     `  <p>${attr(page.description)}</p>`,
-    `  <p><a href="${origin}/login">Log in</a> · <a href="${origin}/signup">Create a patient account</a> · <a href="${origin}/join">Join as a doctor, nurse, or nurse agency</a></p>`,
+    `  <p><a href="${origin}/login">Log in</a> · <a href="${origin}/signup">Create a patient account</a> · <a href="${origin}/signup/simple">Easier signup</a> · <a href="${origin}/join">Join as a doctor, nurse, or nurse agency</a></p>`,
     '</noscript>',
   ].join('\n');
 }
@@ -258,6 +273,7 @@ export function robotsTxt(): string {
     'Allow: /',
     'Allow: /login',
     'Allow: /signup',
+    'Allow: /signup/simple',
     'Allow: /join',
     'Disallow: /api/',
     'Disallow: /health',
@@ -288,7 +304,7 @@ export function sitemapXml(): string {
     return [
       '  <url>',
       `    <loc>${loc}</loc>`,
-      `    <lastmod>${SITEMAP_LASTMOD}</lastmod>`,
+      `    <lastmod>${page.lastmod || SITEMAP_LASTMOD}</lastmod>`,
       `    <changefreq>${page.changefreq}</changefreq>`,
       `    <priority>${page.priority}</priority>`,
       '  </url>',

@@ -674,6 +674,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.06, curve: Curves.easeOutCubic),
           const SizedBox(height: 14),
           ClinicalPrimaryButton(
+            label: 'Add a patient',
+            onPressed: () => context.push('/admin/add-patient'),
+          ),
+          const SizedBox(height: 12),
+          ClinicalPrimaryButton(
             label: 'New home care request',
             onPressed: () => showAdminHomeCareCreateForm(context),
           ),

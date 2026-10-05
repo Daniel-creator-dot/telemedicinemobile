@@ -12,6 +12,7 @@ import 'core/brand.dart';
 import 'core/session.dart';
 import 'core/notification_service.dart';
 import 'features/auth/auth_repository.dart';
+import 'features/auth/larger_text.dart';
 import 'features/patient/appointments_repository.dart';
 import 'features/patient/care_repository.dart';
 import 'routing/app_router.dart';
@@ -63,6 +64,7 @@ class TelemedicineApp extends StatefulWidget {
 
 class _TelemedicineAppState extends State<TelemedicineApp> {
   late final GoRouter _router;
+  final LargerTextController _largerText = LargerTextController();
   bool _splashDone = false;
   String _loadingMessage = 'Opening ${AppBrand.name}…';
 
@@ -104,6 +106,7 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
 
   @override
   void dispose() {
+    _largerText.dispose();
     _router.dispose();
     super.dispose();
   }
@@ -147,13 +150,16 @@ class _TelemedicineAppState extends State<TelemedicineApp> {
       ),
       routerConfig: _router,
       builder: (context, child) {
-        return Consumer<Session>(
-          builder: (context, session, _) {
-            if (!_splashDone || session.isRestoring) {
-              return AppLaunchCarousel(message: _loadingMessage);
-            }
-            return child ?? const SizedBox.shrink();
-          },
+        return LargerTextScope(
+          controller: _largerText,
+          child: Consumer<Session>(
+            builder: (context, session, _) {
+              if (!_splashDone || session.isRestoring) {
+                return AppLaunchCarousel(message: _loadingMessage);
+              }
+              return child ?? const SizedBox.shrink();
+            },
+          ),
         );
       },
     );

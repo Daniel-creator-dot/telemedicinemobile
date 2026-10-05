@@ -91,6 +91,17 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
     }
   }
 
+  bool _canAddPatient(Session session) {
+    final user = session.user;
+    if (user == null) return false;
+    if (user.role == AppRole.admin) return true;
+    if (user.role != AppRole.nurse) return false;
+    final status = (user.verificationStatus ?? _agency?['verification_status']?.toString() ?? '')
+        .trim()
+        .toLowerCase();
+    return status == 'approved';
+  }
+
   int? _readInt(dynamic v) {
     if (v is int) return v;
     return int.tryParse(v?.toString() ?? '');
@@ -171,6 +182,13 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16),
                       children: [
+                        if (_canAddPatient(session)) ...[
+                          ClinicalPrimaryButton(
+                            label: 'Add a patient',
+                            onPressed: () => context.push('/nurse/add-patient'),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         if (session.user?.role == AppRole.nurse) ...[
                           HomeCareNurseSection(reloadToken: _homeCareToken),
                           const SizedBox(height: 8),
