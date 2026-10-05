@@ -1,28 +1,18 @@
 /// Healynks video rooms.
 ///
-/// Public Jitsi hosts that block anonymous room creation (moderator/SSO gate):
-/// - meet.jit.si / 8x8.vc — require authenticated moderator
-/// - jitsi.debian.social — tokenAuthUrl → salsa.debian.org SSO
-/// - jitsi.member.fsf.org — FSF associate-member login to *start* rooms
-///
-/// Default: meet.ffmuc.net (Freifunk) — no tokenAuthUrl; first joiner is
-/// moderator. That host sets X-Frame-Options / CSP frame-ancestors, so the
-/// in-app client must load the room as a **top-level** WebView document
-/// (not an External API iframe). Override with JITSI_DOMAIN if you self-host.
+/// meet.jit.si is free but rejects anonymous room creation (token login).
+/// meet.ffmuc.net allows anonymous rooms but blocks iframes and is unreliable
+/// in mobile WebViews. Default host is meet.evolix.org: free public Jitsi,
+/// no API key, no account, and the external API iframe is allowed.
+/// Override with JITSI_DOMAIN only when the server uses the same host.
 const String kDigiJitsiDomain = String.fromEnvironment(
   'JITSI_DOMAIN',
-  defaultValue: 'meet.ffmuc.net',
+  defaultValue: 'meet.evolix.org',
 );
 
-bool isLockedPublicJitsiHost(String host) {
-  final h = host.toLowerCase().trim();
-  return h == 'meet.jit.si' ||
-      h == '8x8.vc' ||
-      h.endsWith('.8x8.vc') ||
-      h == 'jaas.8x8.vc' ||
-      h == 'jitsi.debian.social' ||
-      h == 'jitsi.member.fsf.org';
-}
+/// Features the consult iframe / WebView must be allowed to use.
+const String kJitsiIframeAllow =
+    'camera *; microphone *; autoplay *; fullscreen *; display-capture *; clipboard-write *';
 
 /// Hosts that refuse being framed (External API / iframe embeds blank out).
 bool jitsiHostBlocksIframeEmbed(String host) {
@@ -34,28 +24,19 @@ bool jitsiHostBlocksIframeEmbed(String host) {
       h.endsWith('.ffmeet.de');
 }
 
+/// Join host. Stored links may still name an old server; the constant wins.
 String digiJitsiDomainFromUrl(String meetingUrl) {
-  final uri = Uri.tryParse(normalizeJitsiMeetingUrl(meetingUrl));
-  final host = uri?.host ?? '';
-  if (host.isEmpty || isLockedPublicJitsiHost(host)) return kDigiJitsiDomain;
-  return host;
+  final room = jitsiRoomNameFromUrl(meetingUrl);
+  if (room.isEmpty) return kDigiJitsiDomain;
+  return kDigiJitsiDomain;
 }
 
 String normalizeJitsiMeetingUrl(String meetingUrl) {
   final trimmed = meetingUrl.trim();
   if (trimmed.isEmpty) return trimmed;
-  final withScheme = trimmed.contains('://') ? trimmed : 'https://$trimmed';
-  final uri = Uri.tryParse(withScheme);
-  if (uri == null || uri.host.isEmpty) {
-    return 'https://$kDigiJitsiDomain/${jitsiRoomNameFromUrl(trimmed)}';
-  }
-  final room = jitsiRoomNameFromUrl(uri.toString());
-  final host = isLockedPublicJitsiHost(uri.host) ? kDigiJitsiDomain : uri.host;
-  return Uri(
-    scheme: 'https',
-    host: host,
-    path: '/$room',
-  ).toString();
+  final room = jitsiRoomNameFromUrl(trimmed);
+  if (room.isEmpty) return trimmed;
+  return 'https://$kDigiJitsiDomain/$room';
 }
 
 String jitsiRoomNameFromUrl(String meetingUrl) {
@@ -216,7 +197,7 @@ String buildJitsiHostHtml({
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, display-capture=*, autoplay=*">
+  <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, display-capture=*, autoplay=*, fullscreen=*, clipboard-write=*">
   <script src="https://$safeHost/external_api.js"></script>
   <style>
     html, body, #meet { margin: 0; padding: 0; height: 100%; width: 100%; background: #071018; overflow: hidden; }

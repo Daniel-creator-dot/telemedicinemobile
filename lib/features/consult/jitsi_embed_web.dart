@@ -61,16 +61,13 @@ class _JitsiRoomViewState extends State<JitsiRoomView> {
       ..style.border = 'none'
       ..style.width = '100%'
       ..style.height = '100%'
-      ..allow = 'camera *; microphone *; fullscreen *; display-capture *; autoplay *'
-      ..setAttribute(
-        'allow',
-        'camera *; microphone *; fullscreen *; display-capture *; autoplay *',
-      )
+      ..allow = kJitsiIframeAllow
+      ..setAttribute('allow', kJitsiIframeAllow)
       ..allowFullscreen = true;
 
     if (_frameBlocked) {
-      // meet.ffmuc.net (and similar) set CSP frame-ancestors / XFO — iframe is blank.
-      // Use External API only when framing is allowed; otherwise open the room URL.
+      // A few public hosts set CSP frame-ancestors / X-Frame-Options.
+      // The external API iframe would be blank, so offer the same https room.
       _iframe.srcdoc = '''
 <!DOCTYPE html><html><body style="margin:0;background:#071018;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100%;">
 <p style="opacity:.7">Opening secure video room…</p>

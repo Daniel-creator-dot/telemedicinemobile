@@ -83,8 +83,8 @@ export function serializeAppointment(row: any) {
       row.preferred_time == null
         ? row.preferred_time
         : String(row.preferred_time).slice(0, 8),
-    // Always surface the Healynks host so patient + doctor share one room URL
-    // even when the DB still has a legacy meet.jit.si / debian.social link.
+    // Always rebuild onto the current Jitsi host so patient + doctor share
+    // one room even when the DB still has a meet.ffmuc.net or meet.jit.si URL.
     meeting_link: meetingLink ?? row.meeting_link,
   };
 }

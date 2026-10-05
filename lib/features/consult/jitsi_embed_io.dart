@@ -260,6 +260,9 @@ class _JitsiRoomViewState extends State<JitsiRoomView> with WidgetsBindingObserv
     } catch (_) {}
   }
 
+  /// Full-screen in-app room. The Jitsi page is the WebView document itself.
+  /// Nesting the external API iframe inside Android WebView drops camera and
+  /// microphone permission, so mobile does not use that path.
   void _loadDirectRoom() {
     _bridgeInjected = false;
     final url = jitsiDirectJoinUrl(
