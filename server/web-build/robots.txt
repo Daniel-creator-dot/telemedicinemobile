@@ -6,6 +6,7 @@ User-agent: *
 Allow: /
 Allow: /login
 Allow: /signup
+Allow: /signup/simple
 Allow: /join
 Disallow: /api/
 Disallow: /health
