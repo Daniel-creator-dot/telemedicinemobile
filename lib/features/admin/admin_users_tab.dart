@@ -39,9 +39,11 @@ List<PendingSignup> parsePendingSignups(Map<String, dynamic>? data) {
       final map = Map<String, dynamic>.from(raw);
       final id = int.tryParse(map['user_id']?.toString() ?? '');
       if (id == null) continue;
-      final detail = kind == 'agency'
-          ? (map['agency_name']?.toString() ?? 'Nurse agency')
-          : (map['specialty']?.toString() ?? 'Doctor');
+      final detail = switch (kind) {
+        'agency' => map['agency_name']?.toString() ?? 'Nurse agency',
+        'nurse' => map['specialty']?.toString() ?? 'Nurse',
+        _ => map['specialty']?.toString() ?? 'Doctor',
+      };
       out.add(
         PendingSignup(
           userId: id,
@@ -58,6 +60,7 @@ List<PendingSignup> parsePendingSignups(Map<String, dynamic>? data) {
   }
 
   addAll(data['doctors'], 'doctor');
+  addAll(data['nurses'], 'nurse');
   addAll(data['agencies'], 'agency');
   return out;
 }
@@ -212,6 +215,7 @@ class AdminUsersTab extends StatelessWidget {
 
   Widget _pendingReview() {
     final doctors = signups.where((s) => s.kind == 'doctor').toList();
+    final nurses = signups.where((s) => s.kind == 'nurse').toList();
     final agencies = signups.where((s) => s.kind == 'agency').toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
@@ -226,7 +230,7 @@ class AdminUsersTab extends StatelessWidget {
         children: [
           const ClinicalPageHeader(
             title: 'Pending review',
-            subtitle: 'Doctors and nurse agencies waiting for a decision.',
+            subtitle: 'Doctors, nurses, and nurse agencies waiting for a decision.',
           ),
           if (signups.isEmpty)
             Padding(
@@ -241,6 +245,11 @@ class AdminUsersTab extends StatelessWidget {
               const SizedBox(height: 16),
               Text('Doctors', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: digiSlate)),
               ...doctors.map(_signupTile),
+            ],
+            if (nurses.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('Nurses', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: digiSlate)),
+              ...nurses.map(_signupTile),
             ],
             if (agencies.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -260,7 +269,7 @@ class AdminUsersTab extends StatelessWidget {
     final headline = signup.kind == 'agency' && signup.detail.isNotEmpty ? signup.detail : signup.name;
     final bits = <String>[
       if (signup.kind == 'agency' && signup.name.isNotEmpty) signup.name,
-      if (signup.kind == 'doctor' && signup.detail.isNotEmpty) signup.detail,
+      if ((signup.kind == 'doctor' || signup.kind == 'nurse') && signup.detail.isNotEmpty) signup.detail,
       if (place.isNotEmpty) place,
       if (signup.phone.isNotEmpty) signup.phone,
       if (when.isNotEmpty) when,

@@ -125,11 +125,11 @@ class _AuthAside extends StatelessWidget {
                 ),
                 const _AsideNote(
                   title: 'Clinicians',
-                  body: 'Work the floor, the queue, and the chart from one desk.',
+                  body: 'Doctors and nurses join to practice. Healynks reviews the profile first.',
                 ),
                 const _AsideNote(
                   title: 'Agencies',
-                  body: 'Register a nurse agency. Healynks reviews the profile before it goes live.',
+                  body: 'Register the nurse agency you run. This is not a nurse clinician account.',
                 ),
               ],
             ),

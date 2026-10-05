@@ -17,6 +17,14 @@ const SPECIALIZATIONS = [
   'Other',
 ] as const;
 
+const PRACTICE_AREAS = [
+  'General nursing',
+  'Midwifery',
+  'Triage',
+  'Community',
+  'Other',
+] as const;
+
 const WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const REGION_NAMES = new Set(GHANA_REGIONS.map((r) => r.name.toLowerCase()));
@@ -185,6 +193,55 @@ export function registerProfessionalSignupRoutes(app: Express) {
     }
   });
 
+  app.post('/api/auth/signup/nurse', async (req, res) => {
+    const body = req.body || {};
+    const fullName = clip(body.fullName, 100);
+    const phone = normalizeGhanaPhone(body.phone);
+    const password = typeof body.password === 'string' ? body.password : '';
+    const practiceArea = String(body.practiceArea || '').trim();
+    const licenseNumber = clip(body.licenseNumber, 80);
+    const facility = clip(body.facility, 120) || 'Healynks Virtual Clinic';
+
+    if (!fullName) return res.status(400).json({ message: 'Full name is required' });
+    if (!phone) return res.status(400).json({ message: 'Enter a valid Ghana mobile number' });
+    if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    if (!PRACTICE_AREAS.includes(practiceArea as (typeof PRACTICE_AREAS)[number])) {
+      return res.status(400).json({ message: 'Choose a unit or area of practice' });
+    }
+
+    try {
+      const session = await withTransaction(async (q) => {
+        if (await phoneTaken(q, phone)) {
+          const error = new Error('duplicate') as Error & { status?: number };
+          error.status = 409;
+          throw error;
+        }
+        const hashed = await bcrypt.hash(password, 10);
+        const userResult = await q(
+          `INSERT INTO users (username, password, role, name, phone_number, verification_status)
+           VALUES ($1, $2, 'nurse', $3, $1, 'pending')
+           RETURNING id, username, role, name, phone_number, email, verification_status`,
+          [phone, hashed, fullName]
+        );
+        const user = userResult.rows[0];
+        await q(
+          `INSERT INTO nurses (
+             user_id, name, practice_area, facility, registration_number, verification_status, is_active
+           ) VALUES ($1, $2, $3, $4, $5, 'pending', TRUE)`,
+          [user.id, fullName, practiceArea, facility, licenseNumber || null]
+        );
+        return issueSession(user);
+      });
+      res.status(201).json(session);
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      if (status === 409) {
+        return res.status(409).json({ message: 'An account already exists for this phone number' });
+      }
+      return rejectSignupError(res, err);
+    }
+  });
+
   app.post('/api/auth/signup/agency', async (req, res) => {
     const body = req.body || {};
     const fullName = clip(body.fullName, 100);
@@ -243,6 +300,15 @@ export function registerProfessionalSignupRoutes(app: Express) {
          WHERE u.role = 'doctor' AND u.verification_status = 'pending'
          ORDER BY u.created_at DESC NULLS LAST, u.id DESC`
       );
+      const nurses = await query(
+        `SELECT u.id AS user_id, u.name, u.phone_number AS phone, n.practice_area AS specialty, u.created_at
+         FROM users u
+         JOIN nurses n ON n.user_id = u.id
+         WHERE u.role = 'nurse'
+           AND u.verification_status = 'pending'
+           AND NOT EXISTS (SELECT 1 FROM nurse_agencies a WHERE a.owner_user_id = u.id)
+         ORDER BY u.created_at DESC NULLS LAST, u.id DESC`
+      );
       const agencies = await query(
         `SELECT u.id AS user_id,
                 u.name,
@@ -256,16 +322,18 @@ export function registerProfessionalSignupRoutes(app: Express) {
          WHERE u.verification_status = 'pending'
          ORDER BY a.created_at DESC NULLS LAST, a.id DESC`
       );
+      const clinician = (row: { user_id: number; name: string; phone: string; specialty: string; created_at: unknown }) => ({
+        user_id: row.user_id,
+        name: row.name,
+        phone: row.phone,
+        specialty: row.specialty,
+        region: null,
+        town: null,
+        created_at: row.created_at,
+      });
       res.json({
-        doctors: doctors.rows.map((row) => ({
-          user_id: row.user_id,
-          name: row.name,
-          phone: row.phone,
-          specialty: row.specialty,
-          region: null,
-          town: null,
-          created_at: row.created_at,
-        })),
+        doctors: doctors.rows.map(clinician),
+        nurses: nurses.rows.map(clinician),
         agencies: agencies.rows.map((row) => ({
           user_id: row.user_id,
           name: row.name,
@@ -294,12 +362,6 @@ export function registerProfessionalSignupRoutes(app: Express) {
 
     const approved = decision === 'approve';
     const status = approved ? 'approved' : 'rejected';
-    const title = approved
-      ? 'Healynks approved your profile'
-      : 'Healynks did not approve your profile';
-    const message = approved
-      ? 'Healynks approved your profile'
-      : 'Your Healynks profile was not approved. Contact Healynks support.';
 
     try {
       const result = await withTransaction(async (q) => {
@@ -312,12 +374,34 @@ export function registerProfessionalSignupRoutes(app: Express) {
 
         const doctor = await q(`SELECT id FROM doctors WHERE user_id = $1 LIMIT 1`, [userId]);
         const agency = await q(`SELECT id FROM nurse_agencies WHERE owner_user_id = $1 LIMIT 1`, [userId]);
+        const nurse = await q(`SELECT id FROM nurses WHERE user_id = $1 LIMIT 1`, [userId]);
         const isDoctor = user.role === 'doctor' && Boolean(doctor.rows[0]);
         const isAgency = user.role === 'nurse' && Boolean(agency.rows[0]);
-        if (!isDoctor && !isAgency) throw httpError(404, 'No signup found for this account');
+        const isNurse = user.role === 'nurse' && Boolean(nurse.rows[0]) && !isAgency;
+        if (!isDoctor && !isAgency && !isNurse) throw httpError(404, 'No signup found for this account');
         if (user.verification_status !== 'pending') {
           throw httpError(409, 'This signup has already been reviewed');
         }
+
+        const notice = isNurse
+          ? approved
+            ? {
+                title: 'Healynks approved your nurse profile',
+                message: 'Healynks approved your nurse profile. You can practice on Healynks.',
+              }
+            : {
+                title: 'Healynks did not approve your nurse profile',
+                message: 'Your Healynks nurse profile was not approved. Contact Healynks support.',
+              }
+          : approved
+            ? {
+                title: 'Healynks approved your profile',
+                message: 'Healynks approved your profile',
+              }
+            : {
+                title: 'Healynks did not approve your profile',
+                message: 'Your Healynks profile was not approved. Contact Healynks support.',
+              };
 
         await q(`UPDATE users SET verification_status = $1 WHERE id = $2`, [status, userId]);
         if (isDoctor) {
@@ -330,16 +414,25 @@ export function registerProfessionalSignupRoutes(app: Express) {
             [status, approved, userId]
           );
         }
+        if (isNurse) {
+          await q(
+            `UPDATE nurses
+             SET verification_status = $1,
+                 is_active = $2
+             WHERE user_id = $3`,
+            [status, approved, userId]
+          );
+        }
         await q(
           `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, 'verification')`,
-          [userId, title, message]
+          [userId, notice.title, notice.message]
         );
         return {
           user_id: userId,
           role: user.role,
           decision,
           verification_status: status,
-          is_active: isDoctor ? approved : null,
+          is_active: isDoctor || isNurse ? approved : null,
         };
       });
       res.json(result);

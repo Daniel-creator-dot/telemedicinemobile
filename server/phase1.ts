@@ -261,6 +261,21 @@ export async function initPhase1Schema() {
     );
   `);
 
+  // Individual clinician nurses. Agency owners stay in nurse_agencies and do not get a row here.
+  await query(`
+    CREATE TABLE IF NOT EXISTS nurses (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(100) NOT NULL,
+      practice_area VARCHAR(80),
+      facility VARCHAR(120),
+      registration_number VARCHAR(80),
+      verification_status VARCHAR(20),
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS triage_records (
       id SERIAL PRIMARY KEY,

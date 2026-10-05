@@ -85,6 +85,28 @@ class AuthRepository {
     return _parseAuthResponse(res.data);
   }
 
+  Future<AuthResult> signupNurse({
+    required String fullName,
+    required String phone,
+    required String password,
+    required String practiceArea,
+    String? licenseNumber,
+    String? facility,
+  }) async {
+    final res = await _api.dio.post<Map<String, dynamic>>(
+      '/api/auth/signup/nurse',
+      data: {
+        'fullName': fullName.trim(),
+        'phone': phone.trim(),
+        'password': password,
+        'practiceArea': practiceArea,
+        if (licenseNumber != null && licenseNumber.trim().isNotEmpty) 'licenseNumber': licenseNumber.trim(),
+        if (facility != null && facility.trim().isNotEmpty) 'facility': facility.trim(),
+      },
+    );
+    return _parseAuthResponse(res.data);
+  }
+
   Future<AuthResult> signupAgency({
     required String fullName,
     required String phone,

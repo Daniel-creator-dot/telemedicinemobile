@@ -75,15 +75,15 @@ const PUBLIC_PAGES: PublicPageSeo[] = [
   },
   {
     path: '/join',
-    title: 'Join Healynks as a doctor or nurse',
+    title: 'Join Healynks as a doctor, nurse, or nurse agency',
     description:
-      'Doctors and nurse agencies in Ghana can join Healynks to see patients on video and issue prescriptions.',
+      'Doctors, nurses, and nurse agencies in Ghana can join Healynks to see patients on video and issue prescriptions.',
     robots: 'index,follow',
     changefreq: 'monthly',
     priority: '0.7',
     webPage: true,
     indexable: true,
-    noscriptHeading: 'Join Healynks as a doctor or nurse',
+    noscriptHeading: 'Join Healynks as a doctor, nurse, or nurse agency',
   },
 ];
 
@@ -198,7 +198,7 @@ export function noscriptBlock(page: PublicPageSeo): string {
     '<noscript>',
     `  <h1>${attr(page.noscriptHeading)}</h1>`,
     `  <p>${attr(page.description)}</p>`,
-    `  <p><a href="${origin}/login">Log in</a> · <a href="${origin}/signup">Create a patient account</a> · <a href="${origin}/join">Join as a doctor or nurse</a></p>`,
+    `  <p><a href="${origin}/login">Log in</a> · <a href="${origin}/signup">Create a patient account</a> · <a href="${origin}/join">Join as a doctor, nurse, or nurse agency</a></p>`,
     '</noscript>',
   ].join('\n');
 }

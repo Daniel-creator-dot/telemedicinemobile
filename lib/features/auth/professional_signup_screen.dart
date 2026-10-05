@@ -9,7 +9,7 @@ import 'auth_chrome.dart';
 import 'auth_repository.dart';
 import 'ghana_phone.dart';
 
-enum _JoinKind { doctor, agency }
+enum _JoinKind { doctor, nurse, agency }
 
 const _specializations = [
   'General practice',
@@ -17,6 +17,14 @@ const _specializations = [
   'Internal medicine',
   'Obstetrics',
   'Mental health',
+  'Other',
+];
+
+const _practiceAreas = [
+  'General nursing',
+  'Midwifery',
+  'Triage',
+  'Community',
   'Other',
 ];
 
@@ -58,6 +66,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
 
   _JoinKind _kind = _JoinKind.doctor;
   String? _specialization;
+  String? _practiceArea;
   String? _region;
   bool _loading = false;
   bool _obscure = true;
@@ -88,8 +97,14 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
     if (_name.text.trim().isEmpty || _phone.text.trim().isEmpty || _password.text.length < 8) {
       return false;
     }
-    if (_kind == _JoinKind.doctor) return _specialization != null;
-    return _agencyName.text.trim().isNotEmpty && _region != null && _town.text.trim().isNotEmpty;
+    switch (_kind) {
+      case _JoinKind.doctor:
+        return _specialization != null;
+      case _JoinKind.nurse:
+        return _practiceArea != null;
+      case _JoinKind.agency:
+        return _agencyName.text.trim().isNotEmpty && _region != null && _town.text.trim().isNotEmpty;
+    }
   }
 
   Future<void> _submit() async {
@@ -110,24 +125,37 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
 
     try {
       final repo = context.read<AuthRepository>();
-      final result = _kind == _JoinKind.doctor
-          ? await repo.signupDoctor(
-              fullName: _name.text,
-              phone: _phone.text,
-              password: _password.text,
-              specialization: _specialization!,
-              licenseNumber: _license.text,
-              facility: _facility.text,
-            )
-          : await repo.signupAgency(
-              fullName: _name.text,
-              phone: _phone.text,
-              password: _password.text,
-              agencyName: _agencyName.text,
-              region: _region!,
-              town: _town.text,
-              address: _address.text,
-            );
+      final AuthResult result;
+      switch (_kind) {
+        case _JoinKind.doctor:
+          result = await repo.signupDoctor(
+            fullName: _name.text,
+            phone: _phone.text,
+            password: _password.text,
+            specialization: _specialization!,
+            licenseNumber: _license.text,
+            facility: _facility.text,
+          );
+        case _JoinKind.nurse:
+          result = await repo.signupNurse(
+            fullName: _name.text,
+            phone: _phone.text,
+            password: _password.text,
+            practiceArea: _practiceArea!,
+            licenseNumber: _license.text,
+            facility: _facility.text,
+          );
+        case _JoinKind.agency:
+          result = await repo.signupAgency(
+            fullName: _name.text,
+            phone: _phone.text,
+            password: _password.text,
+            agencyName: _agencyName.text,
+            region: _region!,
+            town: _town.text,
+            address: _address.text,
+          );
+      }
       if (!mounted) return;
       await context.read<Session>().setSession(token: result.token, user: result.user);
       if (!mounted) return;
@@ -142,7 +170,6 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final doctor = _kind == _JoinKind.doctor;
     return AuthScaffold(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -164,7 +191,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                 const ClinicalPageHeader(
                   title: 'Join Healynks',
                   subtitle:
-                      'Register as a doctor, or as the nurse agency you run. You can sign in while Healynks reviews the profile.',
+                      'Register as a doctor, as a nurse who will practice on Healynks, or as the nurse agency you run. You can sign in while Healynks reviews the profile.',
                 ),
                 const SizedBox(height: 20),
                 _KindSwitch(
@@ -178,19 +205,17 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  doctor
-                      ? 'Your name, a Ghana number, and a specialty. License and facility can wait.'
-                      : 'The nurse who will sign in, and the agency they represent.',
+                  _kindHint,
                   style: GoogleFonts.dmSans(fontSize: 13, color: digiSlate, height: 1.4),
                 ),
                 const SizedBox(height: 16),
-                _field(_name, doctor ? 'Full name' : 'Nurse full name', TextInputType.name),
+                _field(_name, _kind == _JoinKind.agency ? 'Nurse full name' : 'Full name', TextInputType.name),
                 const SizedBox(height: 12),
                 _field(_phone, 'Ghana mobile number', TextInputType.phone),
                 const SizedBox(height: 12),
                 _passwordField(),
                 const SizedBox(height: 12),
-                if (doctor) ...[
+                if (_kind == _JoinKind.doctor) ...[
                   _dropdown(
                     label: 'Specialization',
                     value: _specialization,
@@ -199,6 +224,17 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                   ),
                   const SizedBox(height: 12),
                   _field(_license, 'License number (optional)', TextInputType.text),
+                  const SizedBox(height: 12),
+                  _field(_facility, 'Facility (optional)', TextInputType.text),
+                ] else if (_kind == _JoinKind.nurse) ...[
+                  _dropdown(
+                    label: 'Unit or area of practice',
+                    value: _practiceArea,
+                    items: _practiceAreas,
+                    onChanged: (v) => setState(() => _practiceArea = v),
+                  ),
+                  const SizedBox(height: 12),
+                  _field(_license, 'License or council number (optional)', TextInputType.text),
                   const SizedBox(height: 12),
                   _field(_facility, 'Facility (optional)', TextInputType.text),
                 ] else ...[
@@ -221,7 +257,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
                 ],
                 const SizedBox(height: 20),
                 ClinicalPrimaryButton(
-                  label: doctor ? 'Create doctor account' : 'Create agency account',
+                  label: _submitLabel,
                   onPressed: _loading || !_ready ? null : _submit,
                   loading: _loading,
                 ),
@@ -231,6 +267,28 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
         ],
       ),
     );
+  }
+
+  String get _kindHint {
+    switch (_kind) {
+      case _JoinKind.doctor:
+        return 'Your name, a Ghana number, and a specialty. License and facility can wait.';
+      case _JoinKind.nurse:
+        return 'Your name, a Ghana number, and where you practice. License and facility can wait.';
+      case _JoinKind.agency:
+        return 'The nurse who will sign in, and the agency they run.';
+    }
+  }
+
+  String get _submitLabel {
+    switch (_kind) {
+      case _JoinKind.doctor:
+        return 'Create doctor account';
+      case _JoinKind.nurse:
+        return 'Create nurse account';
+      case _JoinKind.agency:
+        return 'Create agency account';
+    }
   }
 
   Widget _passwordField() {
@@ -296,6 +354,7 @@ class _KindSwitch extends StatelessWidget {
       child: Row(
         children: [
           _choice('Doctor', _JoinKind.doctor),
+          _choice('Nurse', _JoinKind.nurse),
           _choice('Nurse agency', _JoinKind.agency),
         ],
       ),
@@ -313,18 +372,20 @@ class _KindSwitch extends StatelessWidget {
         child: InkWell(
           onTap: onChanged == null ? null : () => onChanged!(value),
           borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.dmSans(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: selected ? healynksBlue : digiSlate,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  height: 1.2,
+                  color: selected ? healynksBlue : digiSlate,
+                ),
               ),
             ),
-          ),
         ),
       ),
     );

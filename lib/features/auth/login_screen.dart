@@ -254,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(
                   onPressed: () => context.go('/join'),
                   child: Text(
-                    'Join as a doctor or nurse agency',
+                    'Join as a doctor, nurse, or nurse agency',
                     style: GoogleFonts.dmSans(color: digiForest, fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ),
