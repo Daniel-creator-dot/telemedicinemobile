@@ -11,6 +11,7 @@ import {
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { getEligibility } from './phase3';
 import { sendCurrencyJson } from './locale';
+import { notificationSms, sendSMS, smsUser } from './sms';
 
 export async function initCompleteSchema() {
   await query(`
@@ -629,29 +630,31 @@ export function registerCompleteRoutes(app: Express) {
         dest.rows[0].id,
       ]);
       for (const s of destStaff.rows) {
+        const staffTitle = 'Inbound hospital referral';
+        const staffBody = `${code}: ${specialty || 'transfer'} — ${String(reason).trim()}`;
         await query(
           `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-          [
-            s.user_id,
-            'Inbound hospital referral',
-            `${code}: ${specialty || 'transfer'} — ${String(reason).trim()}`,
-            'referral',
-          ]
+          [s.user_id, staffTitle, staffBody, 'referral']
         );
+        await smsUser(s.user_id, staffTitle, staffBody);
       }
 
-      const patient = await query(`SELECT user_id, full_name, patient_code FROM patients WHERE id = $1`, [
-        patientId,
-      ]);
+      const patient = await query(
+        `SELECT user_id, full_name, patient_code, phone_number FROM patients WHERE id = $1`,
+        [patientId]
+      );
       if (patient.rows[0]?.user_id) {
+        const patientTitle = 'Facility transfer arranged';
+        const patientBody = `${code} → ${dest.rows[0].name}`;
         await query(
           `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-          [
-            patient.rows[0].user_id,
-            'Facility transfer arranged',
-            `${code} → ${dest.rows[0].name}`,
-            'referral',
-          ]
+          [patient.rows[0].user_id, patientTitle, patientBody, 'referral']
+        );
+        await smsUser(patient.rows[0].user_id, patientTitle, patientBody);
+      } else if (patient.rows[0]?.phone_number) {
+        await sendSMS(
+          patient.rows[0].phone_number,
+          notificationSms('Facility transfer arranged', `${code} → ${dest.rows[0].name}`)
         );
       }
 

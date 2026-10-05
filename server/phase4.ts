@@ -10,6 +10,7 @@ import {
 } from './authz';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
 import { getActiveMembership } from './membership';
+import { smsUser } from './sms';
 
 const AI_DISCLAIMER =
   'Assistive draft only. Not a diagnosis, not medical advice, and not a substitute for a licensed clinician. Healynks does not claim HIPAA certification.';
@@ -226,6 +227,7 @@ async function notifyUser(userId: number | null, title: string, message: string,
     'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)',
     [userId, title, message, type]
   );
+  await smsUser(userId, title, message);
 }
 
 async function resolveManagedPatient(req: AuthedRequest, requestedId?: number | null) {

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { query } from './db';
 import { haversineKm, regionCentroid } from './phase5';
 import { getAccessiblePatientIds, getPatientForUser } from './patients';
+import { smsUser } from './sms';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -418,6 +419,7 @@ async function notifyUser(
     [userId, title, message, type]
   );
   await deps.sendPushNotification([userId], title, message, { type });
+  await smsUser(userId, title, message);
 }
 
 async function patientUserId(patientId: number | null | undefined) {
@@ -443,9 +445,7 @@ export async function notifyDiagnosticClosedLoop(
   const body = row.results ? `${label}: ${String(row.results).slice(0, 140)}` : `${label} results have been returned.`;
   const patient = await patientUserId(row.patient_id);
   if (patient?.user_id) await notifyUser(deps, patient.user_id, title, body, 'result');
-  if (patient?.phone_number) {
-    await deps.sendSMS(patient.phone_number, `Healynks: ${body}`);
-  }
+  else if (patient?.phone_number) await deps.sendSMS(patient.phone_number, `Healynks: ${body}`);
   if (row.doctor_id) await notifyUser(deps, row.doctor_id, title, `Result returned for your patient. ${body}`, 'result');
 }
 
@@ -474,9 +474,7 @@ export async function notifyDiagnosticOrdered(
   const patientBody = `${label} was sent to ${partnerName}.`;
   const patient = await patientUserId(row.patient_id);
   if (patient?.user_id) await notifyUser(deps, patient.user_id, patientTitle, patientBody, 'result');
-  if (patient?.phone_number) {
-    await deps.sendSMS(patient.phone_number, `Healynks: ${patientBody}`);
-  }
+  else if (patient?.phone_number) await deps.sendSMS(patient.phone_number, `Healynks: ${patientBody}`);
   if (row.partner_id) {
     const staff = await query('SELECT user_id FROM partner_staff WHERE org_id = $1', [row.partner_id]);
     const staffTitle = kind === 'lab' ? 'New lab order' : 'New imaging order';
@@ -516,10 +514,7 @@ export async function notifyDiagnosticProgress(
   const detail = partnerName ? `${title} · ${partnerName}` : title;
   const patient = await patientUserId(row.patient_id);
   if (patient?.user_id) await notifyUser(deps, patient.user_id, title, detail, 'result');
-  // SMS only on scheduled (patient action) — mirror pharmacy ready/dispensed pattern
-  if (patient?.phone_number && status === 'scheduled') {
-    await deps.sendSMS(patient.phone_number, `Healynks: ${detail}`);
-  }
+  else if (patient?.phone_number) await deps.sendSMS(patient.phone_number, `Healynks: ${detail}`);
 }
 
 async function orgForUser(userId: number) {
@@ -632,8 +627,7 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
           `${rx.rows[0].medication_name} was sent to ${pharmacyName}.`,
           'pharmacy'
         );
-      }
-      if (patient?.phone_number) {
+      } else if (patient?.phone_number) {
         await deps.sendSMS(
           patient.phone_number,
           `Healynks: Your prescription ${rx.rows[0].prescription_ref || ''} was sent to ${pharmacyName}.`
@@ -824,21 +818,23 @@ export function registerPhase2Routes(app: Express, deps: Deps) {
       const title = labels[status];
       const detail = `${result.rows[0].medication_name}${org?.name ? ` · ${org.name}` : ''}`;
       if (patient?.user_id) await notifyUser(deps, patient.user_id, title, detail, 'pharmacy');
-      if (patient?.phone_number && (status === 'ready' || status === 'dispensed')) {
+      else if (patient?.phone_number) {
         await deps.sendSMS(patient.phone_number, `Healynks: ${title} — ${result.rows[0].medication_name}`);
       }
       // Notify prescribing doctor when dispensed or unavailable
       if (status === 'dispensed' || status === 'unavailable') {
         const apt = await query(
-          `SELECT a.doctor_id FROM appointments a
+          `SELECT d.user_id
+           FROM appointments a
            JOIN prescriptions pr ON pr.appointment_id = a.id
+           LEFT JOIN doctors d ON d.id = a.doctor_id
            WHERE pr.id = $1`,
           [req.params.id]
         );
-        if (apt.rows[0]?.doctor_id) {
+        if (apt.rows[0]?.user_id) {
           await notifyUser(
             deps,
-            apt.rows[0].doctor_id,
+            apt.rows[0].user_id,
             status === 'dispensed' ? 'Prescription dispensed' : 'Prescription not filled',
             detail,
             'pharmacy'

@@ -6,6 +6,7 @@ import { commercialOrgId } from './phase5';
 import { GENERAL_CONSULT_FEE, getActiveMembership, membershipEligibilityOverlay } from './membership';
 import { isDemoPaymentReference, refundPaystackTransaction } from './paystack';
 import { currencyForRequest, formatMoneyFromGhs, sendCurrencyJson } from './locale';
+import { smsUser } from './sms';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -1129,6 +1130,7 @@ async function notifyUser(
     [userId, title, message, type]
   );
   await deps.sendPushNotification([userId], title, message, { type });
+  await smsUser(userId, title, message);
 }
 
 export function registerPhase3Routes(app: Express, deps: Deps) {

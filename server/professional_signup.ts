@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import type { PoolClient, QueryResult } from 'pg';
 import { pool, query } from './db';
 import { authenticate, requireRoles, type AuthedRequest } from './authz';
+import { smsUser } from './sms';
 import { GHANA_REGIONS } from './phase5';
 
 type Sql = (text: string, params?: unknown[]) => Promise<QueryResult>;
@@ -485,9 +486,21 @@ export function registerProfessionalSignupRoutes(app: Express) {
           decision,
           verification_status: status,
           is_active: isDoctor || isNurse ? approved : null,
+          notice_title: notice.title,
+          notice_message: notice.message,
         };
       });
-      res.json(result);
+      const noticeTitle = result.notice_title;
+      const noticeMessage = result.notice_message;
+      const publicResult = {
+        user_id: result.user_id,
+        role: result.role,
+        decision: result.decision,
+        verification_status: result.verification_status,
+        is_active: result.is_active,
+      };
+      await smsUser(publicResult.user_id, noticeTitle, noticeMessage);
+      res.json(publicResult);
     } catch (err) {
       const statusCode = (err as { status?: number })?.status;
       if (statusCode) return res.status(statusCode).json({ message: (err as Error).message });

@@ -14,6 +14,7 @@ import { createSecureJitsiLink, normalizeJitsiMeetingLink } from './jitsi';
 import { getActiveMembership } from './membership';
 import { sendCurrencyJson } from './locale';
 import { normalizeAccountPhone, phoneMatchKeys, PHONE_INVALID_MESSAGE } from './professional_signup';
+import { smsUser } from './sms';
 
 type AuthedRequest = Request & { user?: { id: number; username: string; role: string } };
 
@@ -522,6 +523,7 @@ async function notifyUser(
   );
   if (userId) {
     await deps.sendPushNotification([userId], title, message, { type });
+    await smsUser(userId, title, message);
   }
 }
 
@@ -661,7 +663,7 @@ export function registerPhase1Routes(app: Express, deps: Deps) {
         [phone, otp, expiresAt, usePurpose, phone]
       );
 
-      console.log(`[OTP ${usePurpose}] ${phone}: ${otp}`);
+      console.log(`[OTP ${usePurpose}] queued for ${phone}`);
       await sendSMS(
         phone,
         `Healynks: your ${usePurpose === 'register' ? 'registration' : 'password reset'} code is ${otp}. It expires in 10 minutes.`

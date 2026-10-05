@@ -46,9 +46,9 @@ import {
   CLINICAL_STAFF,
 } from './authz';
 import { getAccessiblePatientIds, resolvePatientIdFromAppointment } from './patients';
+import { canonicalMsisdn, phoneForUser, sendSMS, smsUser } from './sms';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import axios from 'axios';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 
@@ -355,68 +355,25 @@ app.get('/paystack/callback', (_req, res) => {
   res.type('html').send(paystackReturnHtml());
 });
 
-// --- SMS Utility ---
-async function sendSMS(recipient: string, message: string) {
-  try {
-    const settingsResult = await query('SELECT * FROM settings');
-    const settings = settingsResult.rows.reduce((acc: any, row: any) => {
-      acc[row.key] = row.value;
-      return acc;
-    }, {});
-
-    const { sms_base_url, sms_sender_id, sms_api_key } = settings;
-
-    if (!sms_base_url) {
-      console.warn('SMS Base URL not configured. Skipping SMS.');
-      return;
-    }
-
-    // Format phone number to international standard (e.g., 050 -> 23350)
-    let formattedRecipient = recipient.replace(/[^0-9+]/g, '');
-    if (formattedRecipient.startsWith('0')) {
-      formattedRecipient = '233' + formattedRecipient.substring(1);
-    } else if (formattedRecipient.startsWith('+')) {
-      formattedRecipient = formattedRecipient.substring(1);
-    }
-
-    // Settings store the Intek API root (/api/v1). Sends are POST /messages/send.
-    const base = String(sms_base_url).trim().replace(/\/+$/, '');
-    const sendUrl = /\/messages\/send$/i.test(base) ? base : `${base}/messages/send`;
-
-    console.log(`[SMS SEND] Attempting to send to ${formattedRecipient} via ${sendUrl}`);
-
-    await axios.post(sendUrl, {
-      sender: sms_sender_id,
-      recipients: [formattedRecipient],
-      message: message
-    }, {
-      headers: {
-        'Authorization': `Bearer ${sms_api_key}`,
-        'Content-Type': 'application/json'
-      }
-    }).then(res => {
-      console.log('[SMS SUCCESS]', res.data);
-    }).catch(err => {
-      console.error('[SMS ERROR]', err.response?.data || err.message);
-    });
-
-    await query('INSERT INTO sms_logs (recipient, message, status) VALUES ($1, $2, $3)', [
-      recipient, message, 'sent'
-    ]);
-  } catch (err) {
-    console.error('Error in sendSMS utility:', err);
-  }
+async function phoneOnAppointment(apt: { phone_number?: string | null; patient_id?: number | null }) {
+  const direct = String(apt?.phone_number || '').trim();
+  if (direct) return direct;
+  if (!apt?.patient_id) return '';
+  const row = await query(
+    `SELECT COALESCE(NULLIF(BTRIM(p.phone_number), ''), NULLIF(BTRIM(u.phone_number), '')) AS phone
+     FROM patients p
+     LEFT JOIN users u ON u.id = p.user_id
+     WHERE p.id = $1`,
+    [apt.patient_id]
+  );
+  return String(row.rows[0]?.phone || '').trim();
 }
 
 /** SMS + in-app + push when the doctor starts / activates a video consult. */
 async function notifyPatientDoctorStartedVideo(apt: any) {
   if (!apt) return;
   try {
-    let phone = apt.phone_number as string | null | undefined;
-    if (!phone && apt.patient_id) {
-      const p = await query('SELECT phone_number FROM patients WHERE id = $1', [apt.patient_id]);
-      phone = p.rows[0]?.phone_number;
-    }
+    const phone = await phoneOnAppointment(apt);
 
     const docResult = apt.doctor_id
       ? await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id])
@@ -444,8 +401,10 @@ async function notifyPatientDoctorStartedVideo(apt: any) {
     }
 
     const smsBody = `Healynks: ${doctorName} has started your video consultation${when ? ` (${when})` : ''}.${payHint}`;
+    const texted = new Set<string>();
     if (phone) {
       await sendSMS(phone, smsBody).catch((e) => console.error('SMS Error (doctor started video):', e));
+      texted.add(canonicalMsisdn(phone));
     }
 
     const userIds: number[] = [];
@@ -477,6 +436,14 @@ async function notifyPatientDoctorStartedVideo(apt: any) {
         `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
         [uid, title, notifBody, 'appointment']
       );
+      const userPhone = await phoneForUser(uid);
+      const key = userPhone ? canonicalMsisdn(userPhone) : '';
+      if (userPhone && key && !texted.has(key)) {
+        texted.add(key);
+        await sendSMS(userPhone, `Healynks: ${title}. ${notifBody}`).catch((e) =>
+          console.error('SMS Error (doctor started video):', e)
+        );
+      }
     }
     if (unique.length > 0) {
       await sendPushNotification(unique, title, notifBody, {
@@ -776,15 +743,18 @@ app.post('/api/appointments', authenticate, async (req: any, res) => {
             `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
             [doctorUserId, 'New appointment booked', msg, 'appointment']
           );
+          await smsUser(Number(doctorUserId), 'New appointment booked', msg);
         }
       }
       const adminUsers = await query("SELECT id FROM users WHERE role IN ('admin', 'medical_ops', 'nurse')");
       for (const r of adminUsers.rows) {
         notifyIds.push(Number(r.id));
+        const adminMsg = `New appointment ${appointmentId} by ${fullName}.`;
         await query(
           `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-          [r.id, 'New appointment booked', `New appointment ${appointmentId} by ${fullName}.`, 'appointment']
+          [r.id, 'New appointment booked', adminMsg, 'appointment']
         );
+        await smsUser(Number(r.id), 'New appointment booked', adminMsg);
       }
       const uniqueIds = [...new Set(notifyIds)];
       if (uniqueIds.length > 0) {
@@ -867,15 +837,15 @@ app.patch('/api/appointments/:id', authenticate, async (req: any, res) => {
         const doctorName = docResult.rows[0]?.name || 'a Physician';
         const dateStr = apt.preferred_date ? new Date(apt.preferred_date).toLocaleDateString() : 'the scheduled date';
         const msg = `Healynks: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app to join or view details.`;
-        await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Approve:', e));
+        await sendSMS(await phoneOnAppointment(apt), msg).catch(e => console.error('SMS Error in Edit/Approve:', e));
       } else if (status === 'completed') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'our team';
         const msg = `Healynks: your visit ${apt.appointment_id} with ${doctorName} is complete. Review notes and prescriptions in the app.`;
-        await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Complete:', e));
+        await sendSMS(await phoneOnAppointment(apt), msg).catch(e => console.error('SMS Error in Edit/Complete:', e));
       } else if (status === 'cancelled') {
         const msg = `Healynks: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
-        await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Edit/Cancel:', e));
+        await sendSMS(await phoneOnAppointment(apt), msg).catch(e => console.error('SMS Error in Edit/Cancel:', e));
       }
 
       // Send push notification to the patient
@@ -992,7 +962,7 @@ async function markAppointmentPaid(apt: any, paymentRef: string, gateway = 'pays
   if (apt.is_telemedicine && meetingLink) {
     const scheduledInfo = `${new Date(apt.preferred_date).toLocaleDateString()} at ${apt.preferred_time}`;
     await sendSMS(
-      apt.phone_number,
+      await phoneOnAppointment(apt),
       `Healynks: payment confirmed for your visit on ${scheduledInfo}. Open the app to join.`
     ).catch((e) => console.error('SMS Error after pay:', e));
   }
@@ -1150,15 +1120,15 @@ app.patch('/api/appointments/:id/status', authenticate, async (req: any, res) =>
           msg = `Healynks: appointment ${apt.appointment_id} is confirmed with ${doctorName} for ${dateStr}. Open the app for details.`;
         }
         
-        await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Approve:', e));
+        await sendSMS(await phoneOnAppointment(apt), msg).catch(e => console.error('SMS Error in Status/Approve:', e));
       } else if (status === 'completed') {
         const docResult = await query('SELECT name FROM doctors WHERE id = $1', [apt.doctor_id]);
         const doctorName = docResult.rows[0]?.name || 'our team';
         const msg = `Healynks: your visit ${apt.appointment_id} with ${doctorName} is complete. Review your care plan in the app.`;
-        await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Complete:', e));
+        await sendSMS(await phoneOnAppointment(apt), msg).catch(e => console.error('SMS Error in Status/Complete:', e));
       } else if (status === 'cancelled') {
         const msg = `Healynks: appointment ${apt.appointment_id} has been cancelled. Open the app to rebook.`;
-        await sendSMS(apt.phone_number, msg).catch(e => console.error('SMS Error in Status/Cancel:', e));
+        await sendSMS(await phoneOnAppointment(apt), msg).catch(e => console.error('SMS Error in Status/Cancel:', e));
       }
 
       // Send push notification to the patient
@@ -1343,9 +1313,17 @@ app.post('/api/prescriptions', authenticate, async (req: any, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *
     `, [appointment_id, resolvedPatientId, consultation_id || null, medication_name, dosage, frequency, duration, instructions, prescriptionRef, strength || null, route || null, quantity || null]);
     
-    const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
+    const aptResult = await query('SELECT phone_number, patient_id FROM appointments WHERE id = $1', [appointment_id]);
     if (aptResult.rows[0]) {
-      await sendSMS(aptResult.rows[0].phone_number, `Healynks: a new prescription is ready in your app. Open Prescriptions to review instructions.`);
+      await sendSMS(
+        await phoneOnAppointment(aptResult.rows[0]),
+        `Healynks: a new prescription is ready in your app. Open Prescriptions to review instructions.`
+      );
+    } else if (resolvedPatientId) {
+      await sendSMS(
+        await phoneOnAppointment({ patient_id: resolvedPatientId }),
+        `Healynks: a new prescription is ready in your app. Open Prescriptions to review instructions.`
+      );
     }
 
     res.status(201).json(result.rows[0]);
@@ -1421,10 +1399,11 @@ app.post('/api/consultations', authenticate, async (req: any, res) => {
       hpc || null, medical_history || null, working_diagnosis || diagnosis || null, differential || null, treatment_plan || null, patient_education || null]);
     
     if (status === 'completed' && diagnosis) {
-      const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [appointment_id]);
-      if (aptResult.rows[0]) {
-        await sendSMS(aptResult.rows[0].phone_number, `Healynks: your consultation is complete. Open the app to review your care plan and prescriptions.`);
-      }
+      const aptResult = await query('SELECT phone_number, patient_id FROM appointments WHERE id = $1', [appointment_id]);
+      const consultPhone = aptResult.rows[0]
+        ? await phoneOnAppointment(aptResult.rows[0])
+        : await phoneOnAppointment({ patient_id: resolvedPatientId });
+      await sendSMS(consultPhone, `Healynks: your consultation is complete. Open the app to review your care plan and prescriptions.`);
     }
 
     res.status(201).json(result.rows[0]);
@@ -1457,10 +1436,11 @@ app.put('/api/consultations/:id', authenticate, async (req: any, res) => {
       treatment_plan || null, patient_education || null, req.params.id]);
     
     if (status === 'completed' && oldCons.rows[0]?.status !== 'completed' && diagnosis) {
-      const aptResult = await query('SELECT phone_number FROM appointments WHERE id = $1', [oldCons.rows[0].appointment_id]);
-      if (aptResult.rows[0]) {
-        await sendSMS(aptResult.rows[0].phone_number, `Healynks: your consultation is complete. Open the app to review your care plan and prescriptions.`);
-      }
+      const aptResult = await query('SELECT phone_number, patient_id FROM appointments WHERE id = $1', [oldCons.rows[0].appointment_id]);
+      await sendSMS(
+        aptResult.rows[0] ? await phoneOnAppointment(aptResult.rows[0]) : '',
+        `Healynks: your consultation is complete. Open the app to review your care plan and prescriptions.`
+      );
     }
 
     res.json(result.rows[0]);
