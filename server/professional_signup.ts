@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import type { PoolClient, QueryResult } from 'pg';
 import { pool, query } from './db';
 import { authenticate, requireRoles, type AuthedRequest } from './authz';
-import { smsUser } from './sms';
+import { sendSMS } from './sms';
 import { GHANA_REGIONS } from './phase5';
 
 type Sql = (text: string, params?: unknown[]) => Promise<QueryResult>;
@@ -29,6 +29,64 @@ const PRACTICE_AREAS = [
 const WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const REGION_NAMES = new Set(GHANA_REGIONS.map((r) => r.name.toLowerCase()));
+
+export type StaffSignupKind = 'doctor' | 'nurse' | 'agency';
+
+/** Exact SMS copy when an admin approves a doctor, nurse, or agency owner. */
+export function staffApprovalSms(name: string, kind: StaffSignupKind): string {
+  const role = kind === 'agency' ? 'agency' : kind;
+  const who = String(name || '').replace(/\s+/g, ' ').trim();
+  const lead = who ? `${who}, ` : '';
+  return `${lead}Healynks approved your ${role} profile. You can sign in and start.`;
+}
+
+/** One calm sentence when a signup is declined. */
+export function staffDeclineSms(kind: StaffSignupKind): string {
+  const role = kind === 'agency' ? 'agency' : kind;
+  return `Healynks did not approve your ${role} profile.`;
+}
+
+function signupNotice(kind: StaffSignupKind, approved: boolean): { title: string; message: string } {
+  if (!approved) {
+    if (kind === 'nurse') {
+      return {
+        title: 'Healynks did not approve your nurse profile',
+        message: 'Your Healynks nurse profile was not approved. Contact Healynks support.',
+      };
+    }
+    const role = kind === 'agency' ? 'agency' : 'doctor';
+    return {
+      title: `Healynks did not approve your ${role} profile`,
+      message: `Your Healynks ${role} profile was not approved. Contact Healynks support.`,
+    };
+  }
+  if (kind === 'nurse') {
+    return {
+      title: 'Healynks approved your nurse profile',
+      message: 'Healynks approved your nurse profile. You can practice on Healynks.',
+    };
+  }
+  const role = kind === 'agency' ? 'agency' : 'doctor';
+  return {
+    title: `Healynks approved your ${role} profile`,
+    message: `Healynks approved your ${role} profile. You can sign in and start.`,
+  };
+}
+
+/**
+ * Text the staff phone after the decision is saved.
+ * Missing phones are skipped. Decline is one sentence.
+ */
+export async function textStaffSignupDecision(
+  input: { name: string; phone: string | null | undefined; kind: StaffSignupKind; approved: boolean },
+  deliver: (phone: string, message: string) => Promise<void> = sendSMS
+): Promise<boolean> {
+  const phone = String(input.phone || '').trim();
+  if (!phone) return false;
+  const message = input.approved ? staffApprovalSms(input.name, input.kind) : staffDeclineSms(input.kind);
+  await deliver(phone, message);
+  return true;
+}
 
 /** Local Ghana mobile: 0 + 9 digits. Accepts 0XXXXXXXXX, 233XXXXXXXXX, +233…, or 9 digits. */
 export function normalizeGhanaPhone(raw: unknown): string | null {
@@ -419,7 +477,7 @@ export function registerProfessionalSignupRoutes(app: Express) {
     try {
       const result = await withTransaction(async (q) => {
         const userRes = await q(
-          `SELECT id, role, verification_status FROM users WHERE id = $1 FOR UPDATE`,
+          `SELECT id, role, name, phone_number, verification_status FROM users WHERE id = $1 FOR UPDATE`,
           [userId]
         );
         const user = userRes.rows[0];
@@ -436,25 +494,8 @@ export function registerProfessionalSignupRoutes(app: Express) {
           throw httpError(409, 'This signup has already been reviewed');
         }
 
-        const notice = isNurse
-          ? approved
-            ? {
-                title: 'Healynks approved your nurse profile',
-                message: 'Healynks approved your nurse profile. You can practice on Healynks.',
-              }
-            : {
-                title: 'Healynks did not approve your nurse profile',
-                message: 'Your Healynks nurse profile was not approved. Contact Healynks support.',
-              }
-          : approved
-            ? {
-                title: 'Healynks approved your profile',
-                message: 'Healynks approved your profile',
-              }
-            : {
-                title: 'Healynks did not approve your profile',
-                message: 'Your Healynks profile was not approved. Contact Healynks support.',
-              };
+        const kind: StaffSignupKind = isDoctor ? 'doctor' : isAgency ? 'agency' : 'nurse';
+        const notice = signupNotice(kind, approved);
 
         await q(`UPDATE users SET verification_status = $1 WHERE id = $2`, [status, userId]);
         if (isDoctor) {
@@ -486,12 +527,11 @@ export function registerProfessionalSignupRoutes(app: Express) {
           decision,
           verification_status: status,
           is_active: isDoctor || isNurse ? approved : null,
-          notice_title: notice.title,
-          notice_message: notice.message,
+          name: String(user.name || ''),
+          phone: String(user.phone_number || '').trim(),
+          kind,
         };
       });
-      const noticeTitle = result.notice_title;
-      const noticeMessage = result.notice_message;
       const publicResult = {
         user_id: result.user_id,
         role: result.role,
@@ -499,7 +539,16 @@ export function registerProfessionalSignupRoutes(app: Express) {
         verification_status: result.verification_status,
         is_active: result.is_active,
       };
-      await smsUser(publicResult.user_id, noticeTitle, noticeMessage);
+      try {
+        await textStaffSignupDecision({
+          name: result.name,
+          phone: result.phone,
+          kind: result.kind,
+          approved,
+        });
+      } catch (smsErr) {
+        console.error('signup decision SMS failed', (smsErr as { code?: string })?.code || 'error');
+      }
       res.json(publicResult);
     } catch (err) {
       const statusCode = (err as { status?: number })?.status;
