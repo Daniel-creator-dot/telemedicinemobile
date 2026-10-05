@@ -5,8 +5,15 @@ dotenv.config();
 
 const { Pool } = pg;
 
+const connectionString = process.env.DATABASE_URL;
+const useSupabaseSsl =
+  !!connectionString &&
+  (connectionString.includes('supabase.co') || connectionString.includes('pooler.supabase.com'));
+
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
+  max: 10,
+  ssl: useSupabaseSsl ? { rejectUnauthorized: false } : undefined,
 });
 
 export const query = (text: string, params?: any[]) => pool.query(text, params);
