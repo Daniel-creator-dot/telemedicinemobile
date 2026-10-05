@@ -371,6 +371,23 @@ class HomeCareRepository {
     }
   }
 
+  Future<HomeCareRequest> addNote(int id, String note) async {
+    try {
+      final res = await _api.dio.post<Map<String, dynamic>>(
+        '/api/homecare/requests/$id/note',
+        data: {'note': note.trim()},
+      );
+      final data = res.data;
+      if (data == null) throw HomeCareFailure('Could not add that note.');
+      return HomeCareRequest.fromJson(data);
+    } on DioException catch (err) {
+      throw HomeCareFailure(
+        ApiClient.messageFromDio(err, 'Could not add that note.'),
+        statusCode: err.response?.statusCode,
+      );
+    }
+  }
+
   Future<HomeCareRequest> close(int id) async {
     try {
       final res = await _api.dio.post<Map<String, dynamic>>(

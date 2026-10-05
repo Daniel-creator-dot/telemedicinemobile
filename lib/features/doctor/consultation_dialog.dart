@@ -5,6 +5,9 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
 import '../../models/appointment.dart';
+import '../../shared/widgets/clinical_ui.dart';
+import '../homecare/home_care_refer.dart';
+import '../homecare/home_care_repository.dart';
 import '../patient/care_repository.dart';
 import 'referral_dialog.dart';
 
@@ -50,12 +53,13 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
   bool _loading = true;
   bool _saving = false;
   int _patientId = 0;
+  int _homeCareReload = 0;
   dynamic _consultation;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _loadAllData();
   }
 
@@ -528,6 +532,11 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                   ),
                   text: 'Rx',
                 ),
+                const Tab(
+                  icon: Icon(Icons.home_work_outlined, size: 16),
+                  text: 'Home care',
+                  iconMargin: EdgeInsets.only(bottom: 2),
+                ),
               ],
             ),
           ),
@@ -542,6 +551,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                 _buildLabsTab(),
                 _buildScansTab(),
                 _buildRxTab(),
+                _buildHomeCareTab(),
               ],
             ),
           ),
@@ -576,6 +586,11 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                     side: const BorderSide(color: Color(0xFF00D2C4)),
                   ),
                 ),
+              ),
+              const SizedBox(height: 10),
+              ClinicalPrimaryButton(
+                label: 'Refer to home care',
+                onPressed: _referToHomeCare,
               ),
               const SizedBox(height: 10),
               SizedBox(
@@ -659,6 +674,47 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
                 )
               : dialogContent,
         ),
+      ),
+    );
+  }
+
+  int? get _linkedPatientId {
+    if (_patientId > 0) return _patientId;
+    final fromVisit = widget.appointment.patientId;
+    if (fromVisit != null && fromVisit > 0) return fromVisit;
+    return null;
+  }
+
+  Future<void> _referToHomeCare() async {
+    final id = _linkedPatientId;
+    final sent = await showDoctorHomeCareReferSheet(
+      context,
+      patient: id == null
+          ? null
+          : HomeCarePatientChoice(
+              id: id,
+              name: widget.appointment.fullName,
+              phone: widget.appointment.phoneNumber,
+            ),
+      suggestedName: widget.appointment.fullName,
+      suggestedPhone: widget.appointment.phoneNumber,
+    );
+    if (sent && mounted) setState(() => _homeCareReload++);
+  }
+
+  Widget _buildHomeCareTab() {
+    return ColoredBox(
+      color: healynksCanvas,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          DoctorHomeCareSection(
+            patientId: _linkedPatientId,
+            patientName: widget.appointment.fullName,
+            patientPhone: widget.appointment.phoneNumber,
+            reloadToken: _homeCareReload,
+          ),
+        ],
       ),
     );
   }

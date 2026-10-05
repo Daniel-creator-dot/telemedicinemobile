@@ -9,6 +9,8 @@ import 'package:dio/dio.dart';
 import '../../core/api_client.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
+import '../../shared/widgets/clinical_ui.dart';
+import '../homecare/home_care_screen.dart';
 import '../../models/appointment.dart';
 import '../../models/auth_user.dart';
 import '../consult/open_video_consult.dart';
@@ -662,6 +664,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               ),
             ),
           ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.06, curve: Curves.easeOutCubic),
+          const SizedBox(height: 14),
+          ClinicalPrimaryButton(
+            label: 'New home care request',
+            onPressed: () => showAdminHomeCareCreateForm(context),
+          ),
+          const SizedBox(height: 16),
 
           GridView.count(
             crossAxisCount: MediaQuery.of(context).size.width >= 600 ? 4 : 2,

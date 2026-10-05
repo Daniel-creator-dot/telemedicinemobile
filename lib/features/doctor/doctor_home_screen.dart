@@ -21,6 +21,7 @@ import '../patient/notifications_inbox_screen.dart';
 import 'consultation_dialog.dart';
 import 'doctor_queue_tab.dart';
 import 'prescription_dialog.dart';
+import '../homecare/home_care_refer.dart';
 
 // ---------------------------------------------------------------------------
 // Tab enum
@@ -821,6 +822,8 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               ],
             ),
           ).animate().fadeIn(duration: 240.ms),
+          const SizedBox(height: 16),
+          const DoctorHomeCareSection(),
           const SizedBox(height: 16),
 
           // ── Active Consultation Spotlight ──────────────────────────────────

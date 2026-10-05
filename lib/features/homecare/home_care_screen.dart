@@ -24,16 +24,9 @@ class HomeCareScreen extends StatefulWidget {
 }
 
 class _HomeCareScreenState extends State<HomeCareScreen> {
-  final _title = TextEditingController();
-  final _location = TextEditingController();
-  final _phone = TextEditingController();
-  final _note = TextEditingController();
-
   List<HomeCareRequest> _requests = [];
   bool _loading = true;
-  bool _posting = false;
   String? _error;
-  String? _formError;
   int? _busyId;
   Timer? _poll;
 
@@ -51,10 +44,6 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
   @override
   void dispose() {
     _poll?.cancel();
-    _title.dispose();
-    _location.dispose();
-    _phone.dispose();
-    _note.dispose();
     super.dispose();
   }
 
@@ -88,50 +77,10 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
     }
   }
 
-  Future<void> _post() async {
-    final title = _title.text.trim();
-    final location = _location.text.trim();
-    final phone = _phone.text.trim();
-    if (title.isEmpty || location.isEmpty || phone.isEmpty) {
-      setState(
-        () => _formError =
-            'Enter what is needed, the location, and a contact phone number.',
-      );
-      return;
-    }
-    setState(() {
-      _posting = true;
-      _formError = null;
-    });
-    try {
-      await _repo.create(
-        title: title,
-        location: location,
-        contactPhone: phone,
-        note: _note.text,
-      );
-      if (!mounted) return;
-      _title.clear();
-      _location.clear();
-      _phone.clear();
-      _note.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Home care request posted. Nurses and agencies can take it.',
-          ),
-        ),
-      );
-      await _load(silent: true);
-    } on HomeCareFailure catch (err) {
-      if (!mounted) return;
-      setState(() => _formError = err.message);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _formError = 'Could not post this home care request.');
-    } finally {
-      if (mounted) setState(() => _posting = false);
-    }
+  Future<void> _openCreate() async {
+    final posted = await showAdminHomeCareCreateForm(context);
+    if (!posted || !mounted) return;
+    await _load(silent: true);
   }
 
   Future<void> _close(HomeCareRequest request, {required bool cancel}) async {
@@ -197,6 +146,21 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
           if (context.mounted) context.go('/login');
         },
       ),
+      bottomNavigationBar: widget.admin
+          ? Material(
+              color: Colors.white,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  child: ClinicalPrimaryButton(
+                    label: 'New home care request',
+                    onPressed: _openCreate,
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: () => _load(silent: true),
         child: ListView(
@@ -204,7 +168,10 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             if (widget.admin) ...[
-              _postForm(),
+              ClinicalPrimaryButton(
+                label: 'New home care request',
+                onPressed: _openCreate,
+              ),
               const SizedBox(height: 22),
               Text('Posted requests', style: clinicalDisplay(22)),
               const SizedBox(height: 6),
@@ -233,80 +200,6 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
             _board(),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _postForm() {
-    return DigiCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('New request', style: clinicalDisplay(22)),
-          const SizedBox(height: 6),
-          Text(
-            'Say what care is needed, where, and the number the caregiver should call.',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              color: healynksMuted,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _title,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: clinicalFieldDecoration(
-              'What is needed',
-              helper: 'For example, wound dressing or overnight watch',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _location,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: clinicalFieldDecoration(
-              'Location',
-              helper: 'Town, area, or address',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            decoration: clinicalFieldDecoration('Contact phone'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _note,
-            minLines: 2,
-            maxLines: 4,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: clinicalFieldDecoration(
-              'Note',
-              helper: 'Optional. Timing, access, or what to bring.',
-            ),
-          ),
-          const SizedBox(height: 12),
-          const HealynksHomeCareCommissionNote(),
-          if (_formError != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _formError!,
-              style: GoogleFonts.plusJakartaSans(
-                color: const Color(0xFFB42318),
-                height: 1.4,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          ClinicalPrimaryButton(
-            label: 'Post request',
-            loading: _posting,
-            loadingLabel: 'Posting…',
-            onPressed: _posting ? null : _post,
-          ),
-        ],
       ),
     );
   }
@@ -358,6 +251,176 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
           const SizedBox(height: 12),
         ],
       ],
+    );
+  }
+}
+
+/// Opens the admin create form. Returns true when a request was posted.
+Future<bool> showAdminHomeCareCreateForm(BuildContext context) async {
+  final posted = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      final inset = MediaQuery.viewInsetsOf(ctx).bottom;
+      final height = MediaQuery.sizeOf(ctx).height;
+      return Padding(
+        padding: EdgeInsets.only(bottom: inset),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 560, maxHeight: height * 0.92),
+            child: const SingleChildScrollView(child: _AdminHomeCareCreateForm()),
+          ),
+        ),
+      );
+    },
+  );
+  if (posted == true && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Home care request posted. Nurses and agencies can take it.'),
+      ),
+    );
+  }
+  return posted == true;
+}
+
+class _AdminHomeCareCreateForm extends StatefulWidget {
+  const _AdminHomeCareCreateForm();
+
+  @override
+  State<_AdminHomeCareCreateForm> createState() => _AdminHomeCareCreateFormState();
+}
+
+class _AdminHomeCareCreateFormState extends State<_AdminHomeCareCreateForm> {
+  final _title = TextEditingController();
+  final _location = TextEditingController();
+  final _phone = TextEditingController();
+  final _note = TextEditingController();
+  bool _posting = false;
+  String? _formError;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _location.dispose();
+    _phone.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _post() async {
+    final title = _title.text.trim();
+    final location = _location.text.trim();
+    final phone = _phone.text.trim();
+    if (title.isEmpty || location.isEmpty || phone.isEmpty) {
+      setState(
+        () => _formError = 'Enter what is needed, the location, and a contact phone number.',
+      );
+      return;
+    }
+    setState(() {
+      _posting = true;
+      _formError = null;
+    });
+    try {
+      await HomeCareRepository(context.read<ApiClient>()).create(
+        title: title,
+        location: location,
+        contactPhone: phone,
+        note: _note.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on HomeCareFailure catch (err) {
+      if (!mounted) return;
+      setState(() => _formError = err.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _formError = 'Could not post this home care request.');
+    } finally {
+      if (mounted) setState(() => _posting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: healynksLine,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+          Text('New home care request', style: clinicalDisplay(22)),
+          const SizedBox(height: 6),
+          Text(
+            'Say what care is needed, where, and the number the caregiver should call.',
+            style: GoogleFonts.plusJakartaSans(fontSize: 14, color: healynksMuted, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _title,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: clinicalFieldDecoration(
+              'What is needed',
+              helper: 'For example, wound dressing or overnight watch',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _location,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: clinicalFieldDecoration('Location', helper: 'Town, area, or address'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phone,
+            keyboardType: TextInputType.phone,
+            decoration: clinicalFieldDecoration('Contact phone'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _note,
+            minLines: 2,
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: clinicalFieldDecoration(
+              'Note',
+              helper: 'Optional. Timing, access, or what to bring.',
+            ),
+          ),
+          const SizedBox(height: 12),
+          const HealynksHomeCareCommissionNote(),
+          if (_formError != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _formError!,
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFB42318), height: 1.4),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ClinicalPrimaryButton(
+            label: 'Post request',
+            loading: _posting,
+            loadingLabel: 'Posting…',
+            onPressed: _posting ? null : _post,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -598,6 +661,27 @@ class HomeCareRequestCard extends StatelessWidget {
                 fontSize: 14,
                 color: healynksInk,
                 height: 1.4,
+              ),
+            ),
+          ],
+          if (admin && request.patientName != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Patient · ${request.patientName}',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: healynksInk,
+              ),
+            ),
+          ],
+          if (admin && request.referrerName != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Referred by ${request.referrerName}',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: healynksMuted,
               ),
             ),
           ],
