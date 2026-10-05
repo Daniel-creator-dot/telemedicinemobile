@@ -29,6 +29,21 @@ export function authenticate(req: AuthedRequest, res: Response, next: NextFuncti
   }
 }
 
+/** Sets req.user when the bearer token is valid. A missing or bad token stays anonymous. */
+export function authenticateOptional(req: AuthedRequest, _res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return next();
+  const token = authHeader.split(' ')[1];
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as AuthedUser;
+    req.user = { id: decoded.id, username: decoded.username, role: decoded.role };
+  } catch {
+    /* public share view */
+  }
+  next();
+}
+
 export function requireRoles(...roles: string[]) {
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ message: 'No token provided' });

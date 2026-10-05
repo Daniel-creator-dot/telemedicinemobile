@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
+import '../homecare/home_care_logic.dart';
 import 'auth_chrome.dart';
 import 'auth_repository.dart';
 
@@ -40,6 +41,15 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  String? _safeNext() {
+    try {
+      if (GoRouter.maybeOf(context) == null) return null;
+      return homeCareJobPath(GoRouterState.of(context).uri.queryParameters['next']);
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _setMode(_AuthMode mode) {
     setState(() {
       _mode = mode;
@@ -67,7 +77,12 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           await session.setSession(token: result.token, user: result.user);
           if (!mounted) return;
-          goHomeForRole(context, result.user.role.name);
+          final next = _safeNext();
+          if (next != null) {
+            context.go(next);
+          } else {
+            goHomeForRole(context, result.user.role.name);
+          }
         case _AuthMode.forgot:
           await repo.forgotPassword(_username.text);
           if (!mounted) return;
@@ -289,7 +304,19 @@ class _LoginScreenState extends State<LoginScreen> {
               if (isSignIn) ...[
                 const SizedBox(height: 4),
                 TextButton(
-                  onPressed: () => context.go('/join'),
+                  onPressed: () {
+                    final next = _safeNext();
+                    if (next == null) {
+                      context.go('/join');
+                    } else {
+                      context.go(
+                        Uri(
+                          path: '/join',
+                          queryParameters: {'as': 'nurse', 'next': next},
+                        ).toString(),
+                      );
+                    }
+                  },
                   style: TextButton.styleFrom(
                     foregroundColor: digiForest,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

@@ -10,9 +10,13 @@ import '../../core/api_client.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
+import '../nurse/nurse_job_alerts.dart';
 import 'home_care_chat.dart';
+import 'home_care_edit.dart';
+import 'home_care_options.dart';
 import 'home_care_repository.dart';
 import 'home_care_sent.dart';
+import 'home_care_share_actions.dart';
 
 /// Admin posts requests at `/admin/homecare`. Nurses and agencies work the board at `/nurse/homecare`.
 class HomeCareScreen extends StatefulWidget {
@@ -173,6 +177,14 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
     }
   }
 
+  Future<void> _edit(HomeCareRequest request) async {
+    final saved = await showHomeCareEditSheet(context, request);
+    if (saved == null || !mounted) return;
+    HomeCareSentNotice.instance.replaceLatest(saved);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved')));
+    await _load(silent: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<Session>();
@@ -183,6 +195,7 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
         subtitle: widget.admin
             ? 'Post a request for a nurse or agency'
             : (session.user?.name ?? 'Caregiver'),
+        trailing: widget.admin ? const [] : const [NurseJobAlertButton()],
         onRefresh: _load,
         onLogout: () async {
           await session.clear();
@@ -297,6 +310,7 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
             onClose: widget.admin && request.taken
                 ? () => _close(request, cancel: false)
                 : null,
+            onEdit: widget.admin ? () => _edit(request) : null,
           ),
           const SizedBox(height: 12),
         ],
@@ -345,6 +359,8 @@ class _AdminHomeCareCreateFormState extends State<_AdminHomeCareCreateForm> {
   final _location = TextEditingController();
   final _phone = TextEditingController();
   final _note = TextEditingController();
+  final _custom = TextEditingController();
+  Set<String> _options = {};
   bool _posting = false;
   String? _formError;
 
@@ -354,6 +370,7 @@ class _AdminHomeCareCreateFormState extends State<_AdminHomeCareCreateForm> {
     _location.dispose();
     _phone.dispose();
     _note.dispose();
+    _custom.dispose();
     super.dispose();
   }
 
@@ -377,6 +394,8 @@ class _AdminHomeCareCreateFormState extends State<_AdminHomeCareCreateForm> {
         location: location,
         contactPhone: phone,
         note: _note.text,
+        careOptions: _options.toList(),
+        customOption: _custom.text,
       );
       if (!mounted) return;
       Navigator.of(context).pop(created.markedSent());
@@ -446,6 +465,12 @@ class _AdminHomeCareCreateFormState extends State<_AdminHomeCareCreateForm> {
               'Note',
               helper: 'Optional. Timing, access, or what to bring.',
             ),
+          ),
+          const SizedBox(height: 12),
+          HomeCareOptionFields(
+            selected: _options,
+            onChanged: (next) => setState(() => _options = next),
+            custom: _custom,
           ),
           const SizedBox(height: 12),
           const HealynksHomeCareCommissionNote(),
@@ -649,6 +674,7 @@ class HomeCareRequestCard extends StatelessWidget {
     this.onTap,
     this.onCancel,
     this.onClose,
+    this.onEdit,
     this.busy = false,
   });
 
@@ -657,6 +683,7 @@ class HomeCareRequestCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onCancel;
   final VoidCallback? onClose;
+  final VoidCallback? onEdit;
   final bool busy;
 
   @override
@@ -705,6 +732,13 @@ class HomeCareRequestCard extends StatelessWidget {
                 color: healynksInk,
                 height: 1.4,
               ),
+            ),
+          ],
+          if (request.optionChips.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            HomeCareOptionChips(
+              options: request.careOptions,
+              customOption: request.customOption,
             ),
           ],
           if (admin && request.patientName != null) ...[
@@ -763,6 +797,7 @@ class HomeCareRequestCard extends StatelessWidget {
               ),
             ),
           ],
+          if (admin) HomeCareShareActions(token: request.shareToken ?? ''),
           if (!admin) ...[
             const SizedBox(height: 10),
             const HealynksHomeCareCommissionNote(compact: true),
@@ -771,6 +806,14 @@ class HomeCareRequestCard extends StatelessWidget {
             const SizedBox(height: 12),
             ClinicalPrimaryButton(label: 'Take this request', onPressed: onTap),
           ],
+          if (onEdit != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: busy ? null : onEdit,
+                child: const Text('Edit'),
+              ),
+            ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -955,6 +998,13 @@ class _TakeRequestSheetState extends State<_TakeRequestSheet> {
               ),
             ),
             Text(request.title, style: clinicalDisplay(24)),
+            if (request.optionChips.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              HomeCareOptionChips(
+                options: request.careOptions,
+                customOption: request.customOption,
+              ),
+            ],
             const SizedBox(height: 8),
             ClinicalStatusPill(
               label: request.isClosed

@@ -461,12 +461,14 @@ class RoleChrome extends StatelessWidget implements PreferredSizeWidget {
     required this.subtitle,
     this.onRefresh,
     this.onLogout,
+    this.trailing = const [],
   });
 
   final String title;
   final String subtitle;
   final VoidCallback? onRefresh;
   final VoidCallback? onLogout;
+  final List<Widget> trailing;
 
   @override
   Size get preferredSize => const Size.fromHeight(72);
@@ -487,6 +489,7 @@ class RoleChrome extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
+        ...trailing,
         if (onRefresh != null)
           IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: healynksBlue)),
         if (onLogout != null) IconButton(onPressed: onLogout, icon: const Icon(Icons.logout, color: digiSlate)),

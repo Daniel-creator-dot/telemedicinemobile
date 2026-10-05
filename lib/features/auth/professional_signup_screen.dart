@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
+import '../homecare/home_care_logic.dart';
 import 'auth_chrome.dart';
 import 'auth_repository.dart';
 import 'ghana_phone.dart';
@@ -73,6 +74,7 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
   bool _loading = false;
   bool _obscure = true;
   String? _error;
+  bool _appliedRouteKind = false;
 
   @override
   void initState() {
@@ -81,6 +83,25 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
       c.addListener(_refresh);
     }
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_appliedRouteKind) return;
+    _appliedRouteKind = true;
+    if (_query('as') == 'nurse') _kind = _JoinKind.nurse;
+  }
+
+  String? _query(String key) {
+    try {
+      if (GoRouter.maybeOf(context) == null) return null;
+      return GoRouterState.of(context).uri.queryParameters[key];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _safeNext() => homeCareJobPath(_query('next'));
 
   void _refresh() {
     if (mounted) setState(() {});
@@ -170,7 +191,12 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
       if (!mounted) return;
       await context.read<Session>().setSession(token: result.token, user: result.user);
       if (!mounted) return;
-      goHomeForRole(context, result.user.role.name);
+      final next = _safeNext();
+      if (next != null) {
+        context.go(next);
+      } else {
+        goHomeForRole(context, result.user.role.name);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = AuthRepository.errorMessage(e));
@@ -190,7 +216,16 @@ class _ProfessionalSignupScreenState extends State<ProfessionalSignupScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: _loading ? null : () => context.go('/login'),
+              onPressed: _loading
+                  ? null
+                  : () {
+                      final next = _safeNext();
+                      if (next == null) {
+                        context.go('/login');
+                      } else {
+                        context.go(Uri(path: '/login', queryParameters: {'next': next}).toString());
+                      }
+                    },
               icon: const Icon(Icons.arrow_back, size: 18, color: digiForest),
               label: Text('Sign in', style: GoogleFonts.dmSans(color: digiForest, fontWeight: FontWeight.w600)),
             ),

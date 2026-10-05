@@ -87,6 +87,19 @@ const PUBLIC_PAGES: PublicPageSeo[] = [
   },
 ];
 
+/** Share links are public to open, private to index. Tokens stay out of the sitemap. */
+const HOME_CARE_SHARE: PublicPageSeo = {
+  path: '/homecare',
+  title: 'Home care request · Healynks',
+  description: 'A Healynks home care job. Sign in, or join as a nurse, to review it.',
+  robots: 'noindex,nofollow',
+  changefreq: 'yearly',
+  priority: '0.1',
+  webPage: false,
+  indexable: false,
+  noscriptHeading: 'Home care request',
+};
+
 const PRIVATE_SHELL: PublicPageSeo = {
   path: '/',
   title: 'Healynks',
@@ -108,6 +121,7 @@ export function normalizePublicPath(requestPath: string): string {
 
 export function pageForPath(requestPath: string): PublicPageSeo {
   const path = normalizePublicPath(requestPath);
+  if (path === '/homecare' || path.startsWith('/homecare/')) return HOME_CARE_SHARE;
   return PUBLIC_PAGES.find((page) => page.path === path) ?? PRIVATE_SHELL;
 }
 
@@ -260,6 +274,7 @@ export function robotsTxt(): string {
     'Disallow: /insurance',
     'Disallow: /finance',
     'Disallow: /hospital',
+    'Disallow: /homecare',
     '',
     `Sitemap: ${HEALYNK_CANONICAL_ORIGIN}/sitemap.xml`,
     '',

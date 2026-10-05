@@ -11,6 +11,7 @@ import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../auth/pending_review_banner.dart';
 import '../homecare/home_care_screen.dart';
+import 'nurse_job_alerts.dart';
 import '../../models/role.dart';
 import '../../models/appointment.dart';
 import '../../models/doctor_profile.dart';
@@ -140,6 +141,7 @@ class _NurseHomeScreenState extends State<NurseHomeScreen> {
       appBar: RoleChrome(
         title: 'Triage',
         subtitle: session.user?.name ?? 'Nurse',
+        trailing: const [NurseJobAlertButton()],
         onRefresh: _load,
         onLogout: () async {
           await session.clear();

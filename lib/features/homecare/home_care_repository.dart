@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
 import 'home_care_logic.dart';
+import 'home_care_options.dart';
 
 class HomeCareFailure implements Exception {
   HomeCareFailure(this.message, {this.statusCode});
@@ -57,6 +58,9 @@ class HomeCareRequest {
     this.referrerName,
     this.referredByMe = false,
     this.postedByMe = false,
+    this.shareToken,
+    this.careOptions = const [],
+    this.customOption,
   });
 
   final int id;
@@ -81,6 +85,17 @@ class HomeCareRequest {
 
   /// True when this viewer created the request. Status in the API stays `open`.
   final bool postedByMe;
+
+  /// Present for an admin or the referring doctor. The public URL is built from it.
+  final String? shareToken;
+  final List<String> careOptions;
+  final String? customOption;
+
+  String? get shareUrl => homeCarePublicUrl(shareToken);
+
+  List<String> get optionChips => homeCareChipLabels(careOptions, customOption);
+
+  bool get showsStayIn => homeCareShowsStayIn(careOptions, customOption);
 
   bool get isOpen => status == 'open';
   bool get isClosed => status == 'closed';
@@ -118,6 +133,9 @@ class HomeCareRequest {
       referrerName: referrerName,
       referredByMe: referred || referredByMe,
       postedByMe: true,
+      shareToken: shareToken,
+      careOptions: careOptions,
+      customOption: customOption,
     );
   }
 
@@ -190,6 +208,63 @@ class HomeCareRequest {
       referrerName: _text(json['referrer_name']),
       referredByMe: json['referred_by_me'] == true,
       postedByMe: json['posted_by_me'] == true,
+      shareToken: _text(json['share_token']),
+      careOptions: homeCareOptionsFromJson(json['care_options']),
+      customOption: normalizeHomeCareCustomOption(_text(json['custom_option'])),
+    );
+  }
+}
+
+/// A share link. [request] is set only when this viewer may see the board record.
+class HomeCareShareSnapshot {
+  const HomeCareShareSnapshot({
+    required this.limited,
+    required this.pendingReview,
+    required this.title,
+    required this.status,
+    required this.taken,
+    this.location,
+    this.request,
+    this.careOptions = const [],
+    this.customOption,
+  });
+
+  final bool limited;
+  final bool pendingReview;
+  final String title;
+  final String status;
+  final bool taken;
+  final String? location;
+  final HomeCareRequest? request;
+  final List<String> careOptions;
+  final String? customOption;
+
+  factory HomeCareShareSnapshot.fromJson(Map<String, dynamic> json) {
+    final id = _readId(json['id']);
+    if (id != null && id > 0) {
+      final request = HomeCareRequest.fromJson(json);
+      return HomeCareShareSnapshot(
+        limited: false,
+        pendingReview: false,
+        title: request.title,
+        status: request.status,
+        taken: request.taken,
+        location: request.location,
+        request: request,
+        careOptions: request.careOptions,
+        customOption: request.customOption,
+      );
+    }
+    final title = json['title']?.toString().trim() ?? '';
+    return HomeCareShareSnapshot(
+      limited: true,
+      pendingReview: json['pending_review'] == true,
+      title: title.isEmpty ? 'Home care' : title,
+      status: json['status']?.toString() ?? 'open',
+      taken: json['taken'] == true || json['status']?.toString() == 'claimed',
+      location: _text(json['location']),
+      careOptions: homeCareOptionsFromJson(json['care_options']),
+      customOption: normalizeHomeCareCustomOption(_text(json['custom_option'])),
     );
   }
 }
@@ -358,6 +433,8 @@ class HomeCareRepository {
     required String contactPhone,
     String? note,
     int? patientId,
+    List<String> careOptions = const [],
+    String? customOption,
   }) async {
     try {
       final res = await _api.dio.post<Map<String, dynamic>>(
@@ -368,6 +445,9 @@ class HomeCareRepository {
           'contact_phone': contactPhone.trim(),
           if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
           if (patientId != null && patientId > 0) 'patient_id': patientId,
+          'care_options': normalizeHomeCareOptions(careOptions),
+          if (normalizeHomeCareCustomOption(customOption) != null)
+            'custom_option': normalizeHomeCareCustomOption(customOption),
         },
       );
       final data = res.data;
@@ -379,6 +459,66 @@ class HomeCareRepository {
       throw HomeCareFailure(
         ApiClient.messageFromDio(err, 'Could not post this home care request.'),
         statusCode: err.response?.statusCode,
+      );
+    }
+  }
+
+  /// Saves the same request. Does not post a new one and does not text nurses.
+  Future<HomeCareRequest> update({
+    required int id,
+    required String title,
+    required String location,
+    required String contactPhone,
+    String? note,
+    List<String> careOptions = const [],
+    String? customOption,
+  }) async {
+    try {
+      final res = await _api.dio.patch<Map<String, dynamic>>(
+        '/api/homecare/requests/$id',
+        data: {
+          'title': title.trim(),
+          'location': location.trim(),
+          'contact_phone': contactPhone.trim(),
+          'note': note?.trim() ?? '',
+          'care_options': normalizeHomeCareOptions(careOptions),
+          'custom_option': normalizeHomeCareCustomOption(customOption) ?? '',
+        },
+      );
+      final data = res.data;
+      if (data == null) {
+        throw HomeCareFailure('Could not save this home care request.');
+      }
+      return HomeCareRequest.fromJson(data);
+    } on DioException catch (err) {
+      throw HomeCareFailure(
+        ApiClient.messageFromDio(err, 'Could not save this home care request.'),
+        statusCode: err.response?.statusCode,
+      );
+    }
+  }
+
+  Future<HomeCareShareSnapshot> openShare(String token) async {
+    try {
+      final res = await _api.dio.get<Map<String, dynamic>>(
+        '/api/homecare/share/${Uri.encodeComponent(token.trim())}',
+      );
+      final data = res.data;
+      if (data == null) {
+        throw HomeCareFailure('Could not open this home care request.');
+      }
+      return HomeCareShareSnapshot.fromJson(data);
+    } on DioException catch (err) {
+      final status = err.response?.statusCode;
+      if (status == 404) {
+        throw HomeCareFailure(
+          'This link does not match a home care request.',
+          statusCode: 404,
+        );
+      }
+      throw HomeCareFailure(
+        ApiClient.messageFromDio(err, 'Could not open this home care request.'),
+        statusCode: status,
       );
     }
   }

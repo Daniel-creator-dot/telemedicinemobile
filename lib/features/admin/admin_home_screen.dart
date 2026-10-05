@@ -10,6 +10,7 @@ import '../../core/api_client.dart';
 import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
+import '../homecare/home_care_edit.dart';
 import '../homecare/home_care_screen.dart';
 import '../homecare/home_care_sent.dart';
 import '../../models/appointment.dart';
@@ -684,6 +685,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               HomeCareRequestCard(
                 request: HomeCareSentNotice.instance.latest!.markedSent(),
                 admin: true,
+                onEdit: () async {
+                  final current = HomeCareSentNotice.instance.latest;
+                  if (current == null) return;
+                  final saved = await showHomeCareEditSheet(context, current);
+                  if (saved == null || !context.mounted) return;
+                  HomeCareSentNotice.instance.replaceLatest(saved);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Saved')),
+                  );
+                },
               ),
             ],
           ],

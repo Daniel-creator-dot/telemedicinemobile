@@ -1994,7 +1994,7 @@ registerPhase5Routes(app);
 registerCompleteRoutes(app);
 registerMembershipRoutes(app, authenticate);
 registerPhaseOverviewRoutes(app);
-registerHomeCareRoutes(app);
+registerHomeCareRoutes(app, { sendPushNotification });
 
 // Crawl files are generated from HEALYNK_CANONICAL_ORIGIN so they are not the SPA shell.
 app.get('/robots.txt', (_req, res) => {
@@ -2008,7 +2008,8 @@ app.get('/sitemap.xml', (_req, res) => {
 
 // Flutter web shell. API and /health stay on their own routes.
 // Missing files with an extension (JS, wasm, images) still 404.
-// /login, /signup, and /join get their own title, canonical, and og:url.
+// /login, /signup, /join, and /homecare/:token get index.html.
+// Share links are noindex and are not listed in sitemap.xml.
 if (healynksWebReady()) {
   app.use(express.static(healynksWebRoot, {
     index: false,

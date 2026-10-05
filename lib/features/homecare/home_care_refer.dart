@@ -7,8 +7,11 @@ import 'package:provider/provider.dart';
 import '../../core/api_client.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
+import 'home_care_edit.dart';
+import 'home_care_options.dart';
 import 'home_care_repository.dart';
 import 'home_care_sent.dart';
+import 'home_care_share_actions.dart';
 
 const homeCareDoctorEmpty = 'No home care referrals yet.';
 
@@ -156,6 +159,15 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
     if (created == null || !mounted) return;
   }
 
+  Future<void> _edit(HomeCareRequest request) async {
+    if (!request.referredByMe || !request.isOpen) return;
+    final saved = await showHomeCareEditSheet(context, request);
+    if (saved == null || !mounted) return;
+    HomeCareSentNotice.instance.replaceLatest(saved);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved')));
+    await _load(silent: true);
+  }
+
   Future<void> _addNote(HomeCareRequest request) async {
     final controller = TextEditingController();
     final text = await showDialog<String>(
@@ -280,6 +292,7 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
             busyId: _busyId,
             onAddNote: _addNote,
             onClose: _close,
+            onEdit: _edit,
           ),
       ],
       ),
@@ -294,6 +307,7 @@ class HomeCareDoctorList extends StatelessWidget {
     this.showPatientName = true,
     this.onAddNote,
     this.onClose,
+    this.onEdit,
     this.busyId,
   });
 
@@ -301,6 +315,7 @@ class HomeCareDoctorList extends StatelessWidget {
   final bool showPatientName;
   final Future<void> Function(HomeCareRequest request)? onAddNote;
   final Future<void> Function(HomeCareRequest request)? onClose;
+  final Future<void> Function(HomeCareRequest request)? onEdit;
   final int? busyId;
 
   @override
@@ -324,6 +339,9 @@ class HomeCareDoctorList extends StatelessWidget {
             onClose: onClose == null || !request.referredByMe || request.isClosed
                 ? null
                 : () => onClose!(request),
+            onEdit: onEdit == null || !request.referredByMe || !request.isOpen
+                ? null
+                : () => onEdit!(request),
           ),
           const SizedBox(height: 12),
         ],
@@ -339,6 +357,7 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
     this.showPatientName = true,
     this.onAddNote,
     this.onClose,
+    this.onEdit,
     this.busy = false,
   });
 
@@ -346,6 +365,7 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
   final bool showPatientName;
   final VoidCallback? onAddNote;
   final VoidCallback? onClose;
+  final VoidCallback? onEdit;
   final bool busy;
 
   @override
@@ -385,6 +405,13 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
             const SizedBox(height: 6),
             Text(request.location!, style: GoogleFonts.plusJakartaSans(fontSize: 14, height: 1.4, color: healynksInk)),
           ],
+          if (request.optionChips.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            HomeCareOptionChips(
+              options: request.careOptions,
+              customOption: request.customOption,
+            ),
+          ],
           if ((request.contactPhone ?? '').isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(request.contactPhone!, style: GoogleFonts.plusJakartaSans(fontSize: 14, color: healynksMuted)),
@@ -407,7 +434,8 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
             const SizedBox(height: 8),
             Text(request.note!, style: GoogleFonts.plusJakartaSans(fontSize: 13.5, height: 1.4, color: healynksMuted)),
           ],
-          if (onAddNote != null || onClose != null)
+          if (request.referredByMe) HomeCareShareActions(token: request.shareToken ?? ''),
+          if (onEdit != null || onAddNote != null || onClose != null)
             busy
                 ? const Padding(
                     padding: EdgeInsets.only(top: 8),
@@ -415,6 +443,8 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
                   )
                 : Wrap(
                     children: [
+                      if (onEdit != null)
+                        TextButton(onPressed: onEdit, child: const Text('Edit')),
                       if (onAddNote != null)
                         TextButton(onPressed: onAddNote, child: const Text('Add a note')),
                       if (onClose != null)
@@ -486,6 +516,8 @@ class _DoctorReferFormState extends State<_DoctorReferForm> {
   final _phone = TextEditingController();
   final _title = TextEditingController();
   final _note = TextEditingController();
+  final _custom = TextEditingController();
+  Set<String> _options = {};
   Timer? _debounce;
   List<HomeCarePatientChoice> _results = [];
   HomeCarePatientChoice? _selected;
@@ -520,6 +552,7 @@ class _DoctorReferFormState extends State<_DoctorReferForm> {
     _phone.dispose();
     _title.dispose();
     _note.dispose();
+    _custom.dispose();
     super.dispose();
   }
 
@@ -590,6 +623,8 @@ class _DoctorReferFormState extends State<_DoctorReferForm> {
         contactPhone: phone,
         note: _note.text,
         patientId: patient.id,
+        careOptions: _options.toList(),
+        customOption: _custom.text,
       );
       if (!mounted) return;
       Navigator.of(context).pop(created.markedSent(referred: true));
@@ -726,6 +761,12 @@ class _DoctorReferFormState extends State<_DoctorReferForm> {
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
             decoration: clinicalFieldDecoration('Note', helper: 'Optional. Timing, access, or what to bring.'),
+          ),
+          const SizedBox(height: 12),
+          HomeCareOptionFields(
+            selected: _options,
+            onChanged: (next) => setState(() => _options = next),
+            custom: _custom,
           ),
           const SizedBox(height: 12),
           const HealynksHomeCareCommissionNote(),

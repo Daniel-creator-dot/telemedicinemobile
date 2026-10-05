@@ -28,6 +28,13 @@ class HomeCareSentNotice extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Keeps a just-posted card current after an edit, without showing the sent banner again.
+  void replaceLatest(HomeCareRequest request) {
+    if (_latest == null || _latest!.id != request.id) return;
+    _latest = request;
+    notifyListeners();
+  }
+
   void dismiss() {
     if (!_visible) return;
     _visible = false;

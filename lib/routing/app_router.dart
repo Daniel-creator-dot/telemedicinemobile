@@ -11,6 +11,8 @@ import '../features/auth/signup_screen.dart';
 import '../features/clinical/care_programs_roster_screen.dart';
 import '../features/doctor/doctor_home_screen.dart';
 import '../features/lab_technician/lab_technician_home_screen.dart';
+import '../features/homecare/home_care_link.dart';
+import '../features/homecare/home_care_logic.dart';
 import '../features/homecare/home_care_screen.dart';
 import '../features/nurse/nurse_home_screen.dart';
 import '../features/ops/ops_home_screen.dart';
@@ -61,15 +63,20 @@ GoRouter createAppRouter(Session session) {
       final onAuth = loc == '/login' || loc == '/signup' || loc == '/join';
 
       if (!loggedIn) {
-        return onAuth ? null : '/login';
+        if (onAuth || homeCareJobPath(loc) != null) return null;
+        return '/login';
       }
 
       if (onAuth) {
-        return _homePathFor(session.user!.role.name);
+        final role = session.user!.role.name;
+        final next = homeCareJobPath(state.uri.queryParameters['next']);
+        if (next != null) return next;
+        return _homePathFor(role);
       }
 
       final role = session.user!.role.name;
       final path = state.matchedLocation;
+      if (homeCareJobPath(path) != null) return null;
       if (path.startsWith('/patient') && role != 'patient') {
         return _homePathFor(role);
       }
@@ -111,6 +118,12 @@ GoRouter createAppRouter(Session session) {
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/homecare/:token',
+        builder: (context, state) => HomeCareLinkScreen(
+          token: state.pathParameters['token'] ?? '',
+        ),
+      ),
       GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
       GoRoute(path: '/join', builder: (context, state) => const ProfessionalSignupScreen()),
       GoRoute(

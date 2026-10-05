@@ -1,12 +1,30 @@
+import crypto from 'crypto';
 import type { Express, Response } from 'express';
 import { pool, query } from './db';
-import { authenticate, type AuthedRequest } from './authz';
+import { authenticate, authenticateOptional, type AuthedRequest } from './authz';
 import { normalizeAccountPhone, PHONE_INVALID_MESSAGE } from './professional_signup';
+import { sendSMS } from './sms';
+import {
+  homeCareJobUrl,
+  isHomeCareShareToken,
+  newHomeCareShareToken,
+  notifyApprovedNursesOfHomeCare,
+  type HomeCareNurseCandidate,
+  type HomeCarePushSender,
+} from './homecare_notify';
+import {
+  HOME_CARE_STAY_IN_LINE,
+  homeCareShowsStayIn,
+  homeCareUpdateStatement,
+  normalizeCustomOption,
+  normalizeHomeCareOptions,
+} from './homecare_options';
 
 /**
  * Home-care request board.
- * Admins post a visit. Approved nurses and nurse-agency owners claim it in the app.
- * No payment and no SMS broadcast.
+ * Admins and doctors post a visit. Approved nurses and nurse-agency owners claim it.
+ * A successful create texts each approved nurse once and writes one in-app notification.
+ * Claim, close, chat, and edits do not notify again.
  */
 
 type Viewer = {
@@ -89,7 +107,52 @@ export async function initHomeCareSchema() {
   await query(`
     CREATE INDEX IF NOT EXISTS home_care_requests_patient_idx ON home_care_requests (patient_id);
   `);
+  await query(`
+    ALTER TABLE home_care_requests
+      ADD COLUMN IF NOT EXISTS care_options TEXT[] NOT NULL DEFAULT '{}';
+  `);
+  await query(`
+    ALTER TABLE home_care_requests
+      ADD COLUMN IF NOT EXISTS custom_option VARCHAR(80);
+  `);
+  await ensureHomeCareShareTokens();
   console.log('Home care requests schema ready');
+}
+
+function isShareTokenConflict(err: unknown): boolean {
+  const code = (err as { code?: string }).code;
+  const constraint = String((err as { constraint?: string }).constraint || '');
+  return code === '23505' && (constraint === '' || constraint.includes('share_token'));
+}
+
+/** Adds an unguessable share token. Existing rows are filled in without sending SMS. */
+async function ensureHomeCareShareTokens() {
+  await query(`
+    ALTER TABLE home_care_requests
+      ADD COLUMN IF NOT EXISTS share_token VARCHAR(128);
+  `);
+  const missing = await query(
+    `SELECT id FROM home_care_requests WHERE share_token IS NULL OR BTRIM(share_token) = ''`
+  );
+  for (const row of missing.rows) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        await query(
+          `UPDATE home_care_requests
+           SET share_token = $1
+           WHERE id = $2 AND (share_token IS NULL OR BTRIM(share_token) = '')`,
+          [newHomeCareShareToken(), row.id]
+        );
+        break;
+      } catch (err) {
+        if (!isShareTokenConflict(err) || attempt === 3) throw err;
+      }
+    }
+  }
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS home_care_requests_share_token_idx
+    ON home_care_requests (share_token);
+  `);
 }
 
 /** Case-insensitive town match. No town means no "Near you" label. */
@@ -112,6 +175,24 @@ function timeValue(value: unknown): number {
 
 function clip(raw: unknown, max: number): string {
   return String(raw ?? '').trim().slice(0, max);
+}
+
+function readOptionPayload(body: Record<string, unknown>) {
+  const optionsProvided = 'care_options' in body || 'careOptions' in body;
+  const customProvided = 'custom_option' in body || 'customOption' in body;
+  return {
+    optionsProvided,
+    customProvided,
+    options: normalizeHomeCareOptions(optionsProvided ? (body.care_options ?? body.careOptions) : []),
+    custom: customProvided ? normalizeCustomOption(body.custom_option ?? body.customOption) : null,
+  };
+}
+
+function phoneFromBody(body: Record<string, unknown>): { present: boolean; raw: unknown; text: string } {
+  const key = (['contact_phone', 'contactPhone', 'phone'] as const).find((name) => name in body);
+  if (!key) return { present: false, raw: undefined, text: '' };
+  const raw = body[key];
+  return { present: true, raw, text: String(raw ?? '').trim() };
 }
 
 async function loadViewer(userId: number): Promise<Viewer | null> {
@@ -249,6 +330,14 @@ function serialize(row: Record<string, unknown>, viewer: { id: number; role: str
     claimed_by_label: claimedLabel(row),
     created_at: row.created_at,
     updated_at: row.updated_at,
+    care_options: normalizeHomeCareOptions(row.care_options),
+    custom_option: normalizeCustomOption(row.custom_option),
+    stay_in_note: homeCareShowsStayIn(
+      normalizeHomeCareOptions(row.care_options),
+      normalizeCustomOption(row.custom_option)
+    )
+      ? HOME_CARE_STAY_IN_LINE
+      : null,
   };
   if (showPrivate) {
     body.location = row.location;
@@ -272,7 +361,36 @@ function serialize(row: Record<string, unknown>, viewer: { id: number; role: str
     body.created_by_name = row.created_by_name || null;
     body.claimed_by = claimedBy;
   }
+  const shareToken = String(row.share_token || '').trim();
+  const referrerForShare = row.referrer_user_id == null ? null : Number(row.referrer_user_id);
+  const mayCopyLink = admin || (doctor && referrerForShare === viewer.id);
+  if (mayCopyLink && isHomeCareShareToken(shareToken)) {
+    body.share_token = shareToken;
+    body.share_url = homeCareJobUrl(shareToken);
+  }
   return body;
+}
+
+function publicStatus(raw: unknown): 'open' | 'claimed' | 'closed' {
+  const status = String(raw || 'open');
+  if (status === 'open' || status === 'claimed' || status === 'closed') return status;
+  return 'closed';
+}
+
+/** Logged-out share view. No phone, note, patient, creator, or token echo. */
+export function publicHomeCareShare(row: Record<string, unknown>) {
+  const status = publicStatus(row.status);
+  const careOptions = normalizeHomeCareOptions(row.care_options);
+  const customOption = normalizeCustomOption(row.custom_option);
+  return {
+    title: String(row.title || 'Home care').slice(0, 160),
+    location: String(row.location || '').slice(0, 400),
+    status,
+    taken: status === 'claimed',
+    care_options: careOptions,
+    custom_option: customOption,
+    stay_in_note: homeCareShowsStayIn(careOptions, customOption) ? HOME_CARE_STAY_IN_LINE : null,
+  };
 }
 
 async function loadOne(id: number) {
@@ -352,7 +470,118 @@ async function listForDoctor(userId: number, patientId: number | null) {
   );
 }
 
-export function registerHomeCareRoutes(app: Express) {
+async function loadApprovedHomeCareNurses(): Promise<HomeCareNurseCandidate[]> {
+  const result = await query(
+    `SELECT u.id,
+            u.role,
+            NULLIF(BTRIM(u.phone_number), '') AS phone,
+            u.verification_status,
+            BOOL_OR(COALESCE(n.is_active, FALSE)) AS is_active
+     FROM users u
+     LEFT JOIN nurses n ON n.user_id = u.id
+     WHERE u.role = 'nurse'
+       AND LOWER(BTRIM(COALESCE(u.verification_status, ''))) NOT IN ('pending', 'rejected')
+     GROUP BY u.id, u.role, u.phone_number, u.verification_status
+     HAVING LOWER(BTRIM(COALESCE(u.verification_status, ''))) = 'approved'
+         OR BOOL_OR(COALESCE(n.is_active, FALSE)) = TRUE`
+  );
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    role: String(row.role || ''),
+    phone: row.phone ? String(row.phone) : null,
+    verification_status: row.verification_status ? String(row.verification_status) : null,
+    is_active: row.is_active === true || row.is_active === 't' || row.is_active === 'true',
+  }));
+}
+
+async function insertOpenHomeCareRequest(input: {
+  title: string;
+  location: string;
+  phone: string;
+  note: string | null;
+  createdBy: number;
+  referrerId: number | null;
+  patientId: number | null;
+  careOptions: string[];
+  customOption: string | null;
+}): Promise<{ id: number; token: string }> {
+  let last: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const token = newHomeCareShareToken();
+    try {
+      const inserted = await query(
+        `INSERT INTO home_care_requests
+           (title, location, contact_phone, note, status, created_by, referrer_user_id, patient_id, share_token, care_options, custom_option)
+         VALUES ($1, $2, $3, $4, 'open', $5, $6, $7, $8, $9, $10)
+         RETURNING id, share_token`,
+        [
+          input.title,
+          input.location,
+          input.phone,
+          input.note,
+          input.createdBy,
+          input.referrerId,
+          input.patientId,
+          token,
+          input.careOptions,
+          input.customOption,
+        ]
+      );
+      return {
+        id: Number(inserted.rows[0].id),
+        token: String(inserted.rows[0].share_token || token),
+      };
+    } catch (err) {
+      last = err;
+      if (!isShareTokenConflict(err) || attempt === 3) throw err;
+    }
+  }
+  throw last instanceof Error ? last : new Error('Could not post this home care request');
+}
+
+/** Runs after the request row is stored. One failure does not cancel the post or the other nurses. */
+function queueHomeCareNurseAlerts(
+  job: { title: string; location: string; token: string },
+  sendPush?: HomeCarePushSender
+) {
+  const token = String(job.token || '').trim();
+  if (!isHomeCareShareToken(token)) {
+    console.error('home care alert skipped, share token missing');
+    return;
+  }
+  void deliverHomeCareNurseAlerts({ ...job, token }, sendPush).catch((err) => {
+    console.error('home care nurse alerts failed', err instanceof Error ? err.message : 'error');
+  });
+}
+
+async function deliverHomeCareNurseAlerts(
+  job: { title: string; location: string; token: string },
+  sendPush?: HomeCarePushSender
+) {
+  const nurses = await loadApprovedHomeCareNurses();
+  const summary = await notifyApprovedNursesOfHomeCare({
+    nurses,
+    title: job.title,
+    location: job.location,
+    token: job.token,
+    sendSMS,
+    sendPush,
+    writeNotification: async (userId, title, message) => {
+      await query(
+        `INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, 'homecare')`,
+        [userId, title, message]
+      );
+    },
+  });
+  console.log(
+    `[HOME CARE] Alerts for ${homeCareJobUrl(job.token)}: ${summary.inApp} in-app, ${summary.sms} sms, ${summary.skippedNoPhone} without a phone`
+  );
+}
+
+export function registerHomeCareRoutes(
+  app: Express,
+  deps: { sendPushNotification?: HomeCarePushSender } = {}
+) {
   app.post('/api/homecare/requests', authenticate, async (req: AuthedRequest, res: Response) => {
     const role = req.user!.role;
     if (role !== 'admin' && role !== 'doctor') {
@@ -403,19 +632,84 @@ export function registerHomeCareRoutes(app: Express) {
           return res.status(404).json({ message: 'That patient was not found.' });
         }
       }
-      const inserted = await query(
-        `INSERT INTO home_care_requests
-           (title, location, contact_phone, note, status, created_by, referrer_user_id, patient_id)
-         VALUES ($1, $2, $3, $4, 'open', $5, $6, $7)
-         RETURNING id`,
-        [title, location, phone, note || null, req.user!.id, referrerId, patientId]
+      const careOptions = normalizeHomeCareOptions(
+        (body as { care_options?: unknown; careOptions?: unknown }).care_options
+          ?? (body as { careOptions?: unknown }).careOptions
       );
-      const row = await loadOne(Number(inserted.rows[0].id));
+      const customOption = normalizeCustomOption(
+        (body as { custom_option?: unknown; customOption?: unknown }).custom_option
+          ?? (body as { customOption?: unknown }).customOption
+      );
+      const created = await insertOpenHomeCareRequest({
+        title,
+        location,
+        phone,
+        note: note || null,
+        createdBy: req.user!.id,
+        referrerId,
+        patientId,
+        careOptions,
+        customOption,
+      });
+      const row = await loadOne(created.id);
       if (!row) return res.status(500).json({ message: 'Could not post this home care request' });
+      queueHomeCareNurseAlerts(
+        {
+          title: String(row.title || title),
+          location: String(row.location || location),
+          token: String(row.share_token || created.token),
+        },
+        deps.sendPushNotification
+      );
       return res.status(201).json(serialize(row, { id: req.user!.id, role: viewerRole }));
     } catch (err) {
       console.error('home care create failed', (err as { code?: string })?.code || 'error');
       return res.status(500).json({ message: 'Could not post this home care request' });
+    }
+  });
+
+  app.get('/api/homecare/share/:token', authenticateOptional, async (req: AuthedRequest, res: Response) => {
+    const raw = req.params.token;
+    const token = Array.isArray(raw) ? String(raw[0] || '') : String(raw || '');
+    if (!isHomeCareShareToken(token)) {
+      return res.status(404).json({ message: 'That home care request was not found' });
+    }
+    try {
+      const result = await query(`${LIST_SQL} WHERE r.share_token = $1`, [token]);
+      const row = result.rows[0] as Record<string, unknown> | undefined;
+      if (!row) return res.status(404).json({ message: 'That home care request was not found' });
+      if (!req.user) return res.json(publicHomeCareShare(row));
+
+      const viewer = await loadViewer(req.user.id);
+      if (!viewer) return res.json(publicHomeCareShare(row));
+
+      if (viewer.role === 'admin') {
+        return res.json(serialize(row, { id: viewer.id, role: 'admin', town: null }));
+      }
+
+      if (viewer.role === 'doctor') {
+        const referrerId = row.referrer_user_id == null ? null : Number(row.referrer_user_id);
+        if (referrerId === viewer.id) {
+          return res.json(serialize(row, { id: viewer.id, role: 'doctor', town: null }));
+        }
+        return res.json(publicHomeCareShare(row));
+      }
+
+      if (viewer.role === 'nurse') {
+        const review = (viewer.verification_status || '').toLowerCase();
+        if (review === 'pending') {
+          return res.json({ ...publicHomeCareShare(row), pending_review: true });
+        }
+        if (!caregiverCanWork(viewer)) return res.json(publicHomeCareShare(row));
+        return res.json(
+          serialize(row, { id: viewer.id, role: viewer.role, town: viewerTown(viewer) })
+        );
+      }
+
+      return res.json(publicHomeCareShare(row));
+    } catch (err) {
+      console.error('home care share lookup failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not open this home care request' });
     }
   });
 
@@ -704,6 +998,98 @@ export function registerHomeCareRoutes(app: Express) {
     } catch (err) {
       console.error('home care message send failed', (err as { code?: string })?.code || 'error');
       return res.status(500).json({ message: 'Could not send that message. Try again.' });
+    }
+  });
+
+  // Edits update the same row. They do not call queueHomeCareNurseAlerts or sendSMS.
+  app.patch('/api/homecare/requests/:id', authenticate, async (req: AuthedRequest, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: 'A valid request id is required' });
+    }
+    const role = req.user!.role;
+    if (role !== 'admin' && role !== 'doctor') {
+      return res.status(403).json({ message: 'You do not have access to home care requests.' });
+    }
+    const body = req.body;
+    if (body == null || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({ message: 'Title, location, and contact phone are required' });
+    }
+    const record = body as Record<string, unknown>;
+    const titlePresent = 'title' in record;
+    const locationPresent = 'location' in record;
+    const title = clip(record.title, 160);
+    const location = clip(record.location, 400);
+    const phoneField = phoneFromBody(record);
+    if (!titlePresent || !title || !locationPresent || !location || !phoneField.present || !phoneField.text) {
+      return res.status(400).json({ message: 'Title, location, and contact phone are required' });
+    }
+    const phone = normalizeAccountPhone(phoneField.raw);
+    if (!phone) {
+      return res.status(400).json({ message: PHONE_INVALID_MESSAGE });
+    }
+    const care = readOptionPayload(record);
+    const noteProvided = 'note' in record;
+    const note = noteProvided ? clip(record.note, 2000) : '';
+
+    try {
+      const viewer = await loadViewer(req.user!.id);
+      if (!viewer) return res.status(401).json({ message: 'No token provided' });
+      if (viewer.role === 'doctor') {
+        const blocked = doctorReferralBlocked(viewer);
+        if (blocked) return res.status(403).json({ message: blocked });
+      }
+      const existing = await loadOne(id);
+      if (!existing) return res.status(404).json({ message: 'That home care request was not found' });
+      const open = String(existing.status) === 'open' && existing.claimed_by == null;
+      const referrerId = existing.referrer_user_id == null ? null : Number(existing.referrer_user_id);
+      const referringDoctor = viewer.role === 'doctor' && referrerId === viewer.id;
+      if (viewer.role !== 'admin' && !referringDoctor) {
+        return res.status(403).json({
+          message: 'Only an admin, or the doctor who referred this patient, can edit this request.',
+        });
+      }
+      if (!open && viewer.role !== 'admin') {
+        return res.status(403).json({
+          message: 'You can edit this request while it is still open.',
+        });
+      }
+
+      const nextNote = noteProvided
+        ? (note || null)
+        : (existing.note == null ? null : String(existing.note));
+      const nextOptions = care.optionsProvided
+        ? care.options
+        : normalizeHomeCareOptions(existing.care_options);
+      const nextCustom = care.customProvided
+        ? care.custom
+        : normalizeCustomOption(existing.custom_option);
+
+      const updated = open
+        ? await query(homeCareUpdateStatement(true), [
+            title,
+            location,
+            phone,
+            nextNote,
+            nextOptions,
+            nextCustom,
+            id,
+          ])
+        : await query(homeCareUpdateStatement(false), [phone, nextNote, id]);
+      if (!updated.rows[0]) {
+        const again = await loadOne(id);
+        if (!again) return res.status(404).json({ message: 'That home care request was not found' });
+        const closed = String(again.status) === 'closed';
+        return res.status(409).json({
+          message: closed ? 'This request is closed' : 'This job has been taken.',
+        });
+      }
+      const row = await loadOne(id);
+      if (!row) return res.status(404).json({ message: 'That home care request was not found' });
+      return res.json(serialize(row, { id: viewer.id, role: viewer.role, town: viewerTown(viewer) }));
+    } catch (err) {
+      console.error('home care edit failed', (err as { code?: string })?.code || 'error');
+      return res.status(500).json({ message: 'Could not save this home care request' });
     }
   });
 }

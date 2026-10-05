@@ -22,5 +22,6 @@ Disallow: /corporate
 Disallow: /insurance
 Disallow: /finance
 Disallow: /hospital
+Disallow: /homecare
 
 Sitemap: https://healynks.app/sitemap.xml

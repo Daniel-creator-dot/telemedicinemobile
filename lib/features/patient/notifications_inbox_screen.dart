@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../shared/widgets/clinical_ui.dart';
+import '../homecare/home_care_logic.dart';
 import 'care_repository.dart';
 
 class NotificationsInboxScreen extends StatefulWidget {
-  const NotificationsInboxScreen({super.key});
+  const NotificationsInboxScreen({
+    super.key,
+    this.emptyMessage =
+        'Appointment, pharmacy, lab and referral updates will appear here.',
+  });
+
+  final String emptyMessage;
 
   @override
   State<NotificationsInboxScreen> createState() => _NotificationsInboxScreenState();
@@ -49,10 +57,10 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
-              ? const ClinicalEmptyState(
+              ? ClinicalEmptyState(
                   icon: Icons.notifications_none_rounded,
                   title: 'You are up to date',
-                  message: 'Appointment, pharmacy, lab and referral updates will appear here.',
+                  message: widget.emptyMessage,
                 )
               : RefreshIndicator(
                   onRefresh: _load,
@@ -62,6 +70,8 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, i) {
                       final n = _items[i];
+                      final message = n['message']?.toString() ?? '';
+                      final token = homeCareTokenFromNotification(message);
                       return ListTile(
                         tileColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -70,7 +80,8 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                           n['title']?.toString() ?? 'Update',
                           style: GoogleFonts.roboto(fontWeight: FontWeight.w700),
                         ),
-                        subtitle: Text(n['message']?.toString() ?? ''),
+                        subtitle: Text(message),
+                        onTap: token == null ? null : () => context.push('/homecare/$token'),
                       );
                     },
                   ),
