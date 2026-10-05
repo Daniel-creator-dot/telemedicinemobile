@@ -2,7 +2,7 @@
 
 // Cache name changes with each web release. A previous worker kept
 // serving main.dart.js that painted the API host on the sign-in layout.
-const CACHE_NAME = 'healynks-shell-261005144736';
+const CACHE_NAME = 'healynks-shell-261005145803';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
