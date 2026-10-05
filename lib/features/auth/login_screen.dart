@@ -254,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () => setState(() => _obscure = !_obscure),
                           ),
                         ),
-                        validator: (v) => v == null || v.length < 5 ? 'Use at least 5 characters.' : null,
+                        validator: (v) => v == null || v.length < 8 ? 'Use at least 8 characters.' : null,
                       ),
                     ],
                     const SizedBox(height: 20),

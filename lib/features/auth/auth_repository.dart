@@ -193,8 +193,12 @@ class AuthRepository {
     if (lower == 'invalid credentials') {
       return 'Those details do not match an account.';
     }
-    if (lower.contains('invalid or expired otp')) {
-      return 'That code is not valid, or it has expired. Request a new one.';
+    if (lower.contains('invalid or expired otp') ||
+        lower.contains('that code is not valid') ||
+        lower.contains('expired')) {
+      if (lower.contains('code') || lower.contains('otp')) {
+        return 'That code is not valid, or it has expired.';
+      }
     }
     if (lower.contains('could not send otp')) {
       return 'We could not send the text. Check the number and try again.';

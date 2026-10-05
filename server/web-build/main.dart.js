@@ -33408,7 +33408,7 @@ bxh(a){var s=u.E,r=B.c.H(a),q=r.toLowerCase()
 if(q.length===0||q==="authentication failed"||q==="server error"||q==="internal server error")return s
 if(B.c.n(q,"/api/")||B.c.n(q,"onrender")||B.c.n(q,"telemedicine-server"))return s
 if(q==="invalid credentials")return"Those details do not match an account."
-if(B.c.n(q,"invalid or expired otp"))return"That code is not valid, or it has expired. Request a new one."
+if(B.c.n(q,"invalid or expired otp")||B.c.n(q,"that code is not valid")||B.c.n(q,"expired"))if(B.c.n(q,"code")||B.c.n(q,"otp"))return"That code is not valid, or it has expired."
 if(B.c.n(q,"could not send otp"))return"We could not send the text. Check the number and try again."
 if(B.c.n(q,"too many"))return u.o
 if(B.c.n(q,"already exists"))return"An account already uses this mobile number. Sign in instead."
@@ -118615,7 +118615,7 @@ $0(){var s=this.a
 return s.z=!s.z},
 $S:0}
 A.aYI.prototype={
-$1(a){return a==null||a.length<5?"Use at least 5 characters.":null},
+$1(a){return a==null||a.length<8?"Use at least 8 characters.":null},
 $S:26}
 A.aYJ.prototype={
 $0(){return this.a.SI(B.Kr)},

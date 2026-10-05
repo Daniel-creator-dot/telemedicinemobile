@@ -48,7 +48,15 @@ import {
   CLINICAL_STAFF,
 } from './authz';
 import { getAccessiblePatientIds, resolvePatientIdFromAppointment } from './patients';
-import { canonicalMsisdn, phoneForUser, sendSMS, smsUser } from './sms';
+import { canonicalMsisdn, deliverSMS, phoneForUser, sendSMS, smsUser } from './sms';
+import {
+  RESET_GENERIC_MESSAGE,
+  RESET_INVALID_MESSAGE,
+  RESET_SMS_FAILED_MESSAGE,
+  normalizeResetCode,
+  resetPasswordError,
+  resetSmsText,
+} from './password_reset';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { initializeApp, cert } from 'firebase-admin/app';
@@ -228,36 +236,80 @@ app.post('/api/auth/register', async (_req, res) => {
 
 
 
+type ResetAccount = { id: number; username: string; phone: string };
+
+/**
+ * Same account login would accept: username is case-insensitive, and a phone
+ * matches local, 233, and +233 forms. A phone that lives only on the patient
+ * row still counts.
+ */
+async function findResetAccount(raw: string): Promise<ResetAccount | null> {
+  const keys = phoneMatchKeys(raw);
+  const result = await query(
+    `SELECT u.id, u.username,
+            COALESCE(NULLIF(BTRIM(u.phone_number), ''), NULLIF(BTRIM(p.phone_number), '')) AS phone
+     FROM users u
+     LEFT JOIN LATERAL (
+       SELECT phone_number
+       FROM patients
+       WHERE user_id = u.id AND NULLIF(BTRIM(phone_number), '') IS NOT NULL
+       ORDER BY id DESC
+       LIMIT 1
+     ) p ON TRUE
+     WHERE LOWER(u.username) = LOWER($1)
+        OR u.username = ANY($2::text[])
+        OR u.phone_number = ANY($2::text[])
+        OR p.phone_number = ANY($2::text[])
+     ORDER BY u.id
+     LIMIT 1`,
+    [raw, keys]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    username: String(row.username),
+    phone: String(row.phone || '').trim(),
+  };
+}
+
 app.post('/api/auth/forgot-password', async (req, res) => {
-  const { username } = req.body;
-  const generic = { message: 'If an account exists for that identifier, a reset code has been sent.' };
+  const username = String(req.body?.username ?? req.body?.phone ?? '').trim();
   try {
-    const limit = checkOtpRateLimit(`reset:${username}`, 'request');
+    if (!username) {
+      return res.status(400).json({ message: 'Enter the username or phone number on the account.' });
+    }
+    const limit = checkOtpRateLimit(`reset:${username.toLowerCase()}`, 'request');
     if (!limit.ok) {
       return res.status(429).json({ message: 'Too many reset attempts. Try again later.' });
     }
 
-    const keys = phoneMatchKeys(username);
-    const userResult = await query(
-      'SELECT * FROM users WHERE username = ANY($1::text[]) OR phone_number = ANY($1::text[])',
-      [keys]
-    );
-    const user = userResult.rows[0];
-
-    if (user?.phone_number) {
+    const account = await findResetAccount(username);
+    if (account?.phone) {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60000);
-      await query('DELETE FROM otps WHERE username = $1', [username]);
-      await query('INSERT INTO otps (username, code, expires_at, purpose, phone_number) VALUES ($1, $2, $3, $4, $5)', [
-        username, otp, expiresAt, 'reset', user.phone_number,
-      ]);
-      await sendSMS(
-        user.phone_number,
-        `Healynks: your password reset code is ${otp}. It expires in 10 minutes.`
+      const phoneKeys = phoneMatchKeys(account.phone);
+      await query(
+        `DELETE FROM otps
+         WHERE purpose = 'reset'
+           AND (LOWER(username) = LOWER($1) OR phone_number = ANY($2::text[]))`,
+        [account.username, phoneKeys]
       );
+      await query(
+        `INSERT INTO otps (username, code, expires_at, purpose, phone_number)
+         VALUES ($1, $2, NOW() + INTERVAL '10 minutes', 'reset', $3)`,
+        [account.username, otp, account.phone]
+      );
+      const sent = await deliverSMS(account.phone, resetSmsText(otp));
+      if (!sent) {
+        await query(`DELETE FROM otps WHERE purpose = 'reset' AND code = $1 AND username = $2`, [
+          otp,
+          account.username,
+        ]);
+        return res.status(503).json({ message: RESET_SMS_FAILED_MESSAGE });
+      }
     }
 
-    res.json(generic);
+    res.json({ message: RESET_GENERIC_MESSAGE });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -265,30 +317,56 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 app.post('/api/auth/reset-password', async (req, res) => {
-  const { username, code, newPassword } = req.body;
+  const username = String(req.body?.username ?? req.body?.phone ?? '').trim();
+  const code = normalizeResetCode(req.body?.code ?? req.body?.otp);
+  const newPassword = req.body?.newPassword;
   try {
-    const limit = checkOtpRateLimit(`reset-verify:${username}`, 'verify');
+    const limit = checkOtpRateLimit(`reset-verify:${username.toLowerCase()}`, 'verify');
     if (!limit.ok) {
       return res.status(429).json({ message: 'Too many attempts. Try again later.' });
     }
+    const tooShort = resetPasswordError(newPassword);
+    if (!username || !code || tooShort) {
+      if (username && code && tooShort) {
+        return res.status(400).json({ message: tooShort });
+      }
+      recordOtpFailure(`reset-verify:${username.toLowerCase()}`);
+      return res.status(400).json({ message: RESET_INVALID_MESSAGE });
+    }
     const keys = phoneMatchKeys(username);
     const otpResult = await query(
-      `SELECT * FROM otps WHERE (username = ANY($1::text[]) OR phone_number = ANY($1::text[])) AND code = $2 AND expires_at > NOW()`,
-      [keys, code]
+      `SELECT id FROM otps
+       WHERE purpose = 'reset'
+         AND code = $1
+         AND expires_at > NOW()
+         AND (
+           LOWER(username) = LOWER($2)
+           OR username = ANY($3::text[])
+           OR phone_number = ANY($3::text[])
+         )`,
+      [code, username, keys]
     );
-    
-    if (otpResult.rows.length === 0) {
-      recordOtpFailure(`reset-verify:${username}`);
-      return res.status(400).json({ message: 'Invalid or expired OTP.' });
+
+    const account = otpResult.rows.length ? await findResetAccount(username) : null;
+    if (!account || otpResult.rows.length === 0) {
+      recordOtpFailure(`reset-verify:${username.toLowerCase()}`);
+      return res.status(400).json({ message: RESET_INVALID_MESSAGE });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(String(newPassword), 10);
+    await query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, account.id]);
+    const phoneKeys = phoneMatchKeys(account.phone || username);
     await query(
-      'UPDATE users SET password = $1 WHERE username = ANY($2::text[]) OR phone_number = ANY($2::text[])',
-      [hashedPassword, keys]
+      `DELETE FROM otps
+       WHERE purpose = 'reset'
+         AND (
+           LOWER(username) = LOWER($1)
+           OR username = ANY($2::text[])
+           OR phone_number = ANY($2::text[])
+         )`,
+      [account.username, phoneKeys]
     );
-    await query('DELETE FROM otps WHERE username = ANY($1::text[]) OR phone_number = ANY($1::text[])', [keys]);
-    clearOtpFailures(`reset-verify:${username}`);
+    clearOtpFailures(`reset-verify:${username.toLowerCase()}`);
 
     res.json({ message: 'Password reset successful.' });
   } catch (err) {

@@ -110,5 +110,39 @@ void main() {
       AuthRepository.plainAuthMessage('https://telemedicine-server-l2bj.onrender.com/api/auth/login'),
       isNot(contains('telemedicine-server')),
     );
+    expect(
+      AuthRepository.plainAuthMessage('Invalid or expired OTP.'),
+      'That code is not valid, or it has expired.',
+    );
+    expect(
+      AuthRepository.plainAuthMessage('That code is not valid, or it has expired.'),
+      'That code is not valid, or it has expired.',
+    );
+  });
+
+  testWidgets('reset asks for a code and a password of at least 8 characters', (tester) async {
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+    await tester.pump();
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pump();
+    expect(find.text('Send reset code'), findsOneWidget);
+
+    await tester.tap(find.text('I already have a code'));
+    await tester.pump();
+    expect(find.text('Choose a new password'), findsOneWidget);
+    expect(find.text('Code from the text'), findsOneWidget);
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), '0241555000');
+    await tester.enterText(fields.at(1), '123456');
+    await tester.enterText(fields.at(2), 'short');
+    await tester.tap(find.text('Save new password'));
+    await tester.pump();
+    expect(find.text('Use at least 8 characters.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

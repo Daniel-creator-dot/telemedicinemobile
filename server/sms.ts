@@ -24,21 +24,23 @@ async function loadSmsSettings(): Promise<{ sms_base_url: string; sms_sender_id:
 
 /**
  * Send one SMS through the gateway stored in settings.
- * Reloads settings on every call. Skips only when the phone or the base URL is missing.
+ * Reloads settings on every call. Returns false when the phone, the base URL,
+ * or the provider response means the text was not accepted. Never throws.
  */
-export async function sendSMS(recipient: string | null | undefined, message: string): Promise<void> {
+export async function deliverSMS(recipient: string | null | undefined, message: string): Promise<boolean> {
   const raw = String(recipient || '').trim();
-  if (!raw) return;
+  if (!raw) return false;
 
+  let sent = false;
   try {
     const { sms_base_url, sms_sender_id, sms_api_key } = await loadSmsSettings();
     if (!sms_base_url.trim()) {
       console.warn('SMS Base URL not configured. Skipping SMS.');
-      return;
+      return false;
     }
 
     const formattedRecipient = canonicalMsisdn(raw);
-    if (!formattedRecipient) return;
+    if (!formattedRecipient) return false;
 
     const base = sms_base_url.trim().replace(/\/+$/, '');
     const sendUrl = /\/messages\/send$/i.test(base) ? base : `${base}/messages/send`;
@@ -65,6 +67,7 @@ export async function sendSMS(recipient: string | null | undefined, message: str
       );
       const body = res.data && typeof res.data === 'object' ? res.data : {};
       const accepted = res.status >= 200 && res.status < 300 && body.ok !== false;
+      sent = accepted;
       status = accepted ? 'sent' : 'failed';
       const summary = {
         http: res.status,
@@ -76,16 +79,28 @@ export async function sendSMS(recipient: string | null | undefined, message: str
       const detail = err instanceof Error ? err.message : 'request failed';
       console.error('[SMS ERROR]', detail);
       status = 'failed';
+      sent = false;
     }
 
-    await query('INSERT INTO sms_logs (recipient, message, status) VALUES ($1, $2, $3)', [
-      raw.slice(0, 20),
-      message,
-      status,
-    ]);
+    try {
+      await query('INSERT INTO sms_logs (recipient, message, status) VALUES ($1, $2, $3)', [
+        raw.slice(0, 20),
+        message,
+        status,
+      ]);
+    } catch (err) {
+      console.error('Error writing sms_logs:', err);
+    }
   } catch (err) {
     console.error('Error in sendSMS utility:', err);
+    sent = false;
   }
+  return sent;
+}
+
+/** Same send as {@link deliverSMS}. Callers that only need a best-effort text use this. */
+export async function sendSMS(recipient: string | null | undefined, message: string): Promise<void> {
+  await deliverSMS(recipient, message);
 }
 
 export async function phoneForUser(userId: number | null | undefined): Promise<string | null> {
