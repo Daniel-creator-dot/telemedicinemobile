@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../features/homecare/home_care_sent.dart';
 import '../models/auth_user.dart';
 import 'api_client.dart';
 
@@ -77,6 +78,7 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> clear() async {
+    HomeCareSentNotice.instance.reset();
     _token = null;
     _user = null;
     _api.setToken(null);

@@ -56,6 +56,7 @@ class HomeCareRequest {
     this.referrerUserId,
     this.referrerName,
     this.referredByMe = false,
+    this.postedByMe = false,
   });
 
   final int id;
@@ -78,6 +79,9 @@ class HomeCareRequest {
   final String? referrerName;
   final bool referredByMe;
 
+  /// True when this viewer created the request. Status in the API stays `open`.
+  final bool postedByMe;
+
   bool get isOpen => status == 'open';
   bool get isClosed => status == 'closed';
   bool get canTake => isOpen && !mine && !taken;
@@ -91,10 +95,41 @@ class HomeCareRequest {
     return claimedByName?.trim() ?? '';
   }
 
-  /// Pill shown on the card. Other caregivers see "Taken" with the taker's name.
+  /// Copy used right after a successful post so the card can say Sent immediately.
+  HomeCareRequest markedSent({bool referred = false}) {
+    return HomeCareRequest(
+      id: id,
+      title: title,
+      status: status,
+      mine: mine,
+      taken: taken,
+      location: location,
+      contactPhone: contactPhone,
+      note: note,
+      claimedByLabel: claimedByLabel,
+      claimedByName: claimedByName,
+      claimedByAgency: claimedByAgency,
+      createdAt: createdAt,
+      claimedAt: claimedAt,
+      nearYou: nearYou,
+      patientId: patientId,
+      patientName: patientName,
+      referrerUserId: referrerUserId,
+      referrerName: referrerName,
+      referredByMe: referred || referredByMe,
+      postedByMe: true,
+    );
+  }
+
+  /// Pill shown on the card.
+  /// The creator sees Sent while the job is still open. Nurses keep Open so Take stays.
+  /// Other caregivers see Taken with the taker's name once it is claimed.
   String pillLabel({required bool admin}) {
     if (isClosed) return 'Closed';
-    if (isOpen) return 'Open';
+    if (isOpen) {
+      final creator = admin ? postedByMe : referredByMe;
+      return creator ? 'Sent' : 'Open';
+    }
     if (mine && !admin) return 'You took this';
     if (!admin) {
       final name = claimerName;
@@ -154,6 +189,7 @@ class HomeCareRequest {
       referrerUserId: _readId(json['referrer_user_id']),
       referrerName: _text(json['referrer_name']),
       referredByMe: json['referred_by_me'] == true,
+      postedByMe: json['posted_by_me'] == true,
     );
   }
 }
@@ -178,6 +214,52 @@ List<HomeCareRequest> sortHomeCareRequests(List<HomeCareRequest> items) {
     return b.id.compareTo(a.id);
   });
   return copy;
+}
+
+/// Puts a request that was just posted at the top of the open group.
+List<HomeCareRequest> placeNewestHomeCareRequest(
+  List<HomeCareRequest> items,
+  HomeCareRequest created,
+) {
+  final open = <HomeCareRequest>[created];
+  final later = <HomeCareRequest>[];
+  for (final row in items) {
+    if (row.id == created.id) continue;
+    if (row.isOpen) {
+      open.add(row);
+    } else {
+      later.add(row);
+    }
+  }
+  return [...open, ...later];
+}
+
+/// Keeps a request the viewer just posted at the top, labeled Sent, while it is open.
+List<HomeCareRequest> pinJustPostedHomeCareRequest(
+  List<HomeCareRequest> items,
+  HomeCareRequest? justPosted, {
+  bool referred = false,
+  int? onlyPatientId,
+}) {
+  if (justPosted == null) return items;
+  if (onlyPatientId != null && justPosted.patientId != onlyPatientId) {
+    return items;
+  }
+  HomeCareRequest? found;
+  for (final row in items) {
+    if (row.id == justPosted.id) {
+      found = row;
+      break;
+    }
+  }
+  if (found != null && !found.isOpen) return items;
+  final source = found ?? justPosted;
+  return placeNewestHomeCareRequest(
+    items,
+    source.markedSent(
+      referred: referred || source.referredByMe || justPosted.referredByMe,
+    ),
+  );
 }
 
 class HomeCareMessage {

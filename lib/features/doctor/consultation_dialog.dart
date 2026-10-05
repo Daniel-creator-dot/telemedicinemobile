@@ -699,7 +699,7 @@ class _ConsultationDialogState extends State<ConsultationDialog> with SingleTick
       suggestedName: widget.appointment.fullName,
       suggestedPhone: widget.appointment.phoneNumber,
     );
-    if (sent && mounted) setState(() => _homeCareReload++);
+    if (sent != null && mounted) setState(() => _homeCareReload++);
   }
 
   Widget _buildHomeCareTab() {

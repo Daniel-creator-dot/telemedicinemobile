@@ -12,6 +12,7 @@ import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
 import 'home_care_chat.dart';
 import 'home_care_repository.dart';
+import 'home_care_sent.dart';
 
 /// Admin posts requests at `/admin/homecare`. Nurses and agencies work the board at `/nurse/homecare`.
 class HomeCareScreen extends StatefulWidget {
@@ -28,13 +29,16 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
   bool _loading = true;
   String? _error;
   int? _busyId;
+  int _loadGen = 0;
   Timer? _poll;
+  final ScrollController _scroll = ScrollController();
 
   HomeCareRepository get _repo => HomeCareRepository(context.read<ApiClient>());
 
   @override
   void initState() {
     super.initState();
+    HomeCareSentNotice.instance.addListener(_onSentNotice);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _load(silent: true);
@@ -43,11 +47,43 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
 
   @override
   void dispose() {
+    HomeCareSentNotice.instance.removeListener(_onSentNotice);
     _poll?.cancel();
+    _scroll.dispose();
     super.dispose();
   }
 
+  void _onSentNotice() {
+    if (!mounted) return;
+    final latest = HomeCareSentNotice.instance.latest;
+    if (widget.admin && latest != null && HomeCareSentNotice.instance.visible) {
+      _loadGen++;
+      setState(() {
+        _requests = placeNewestHomeCareRequest(_requests, latest.markedSent());
+        _loading = false;
+        _error = null;
+      });
+      _scrollToTop();
+      _load(silent: true);
+      return;
+    }
+    setState(() {});
+  }
+
+  void _scrollToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   Future<void> _load({bool silent = false}) async {
+    final gen = ++_loadGen;
     if (!silent) {
       setState(() {
         _loading = true;
@@ -56,31 +92,38 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
     }
     try {
       final list = await _repo.list();
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
-        _requests = list;
+        _requests = widget.admin
+            ? pinJustPostedHomeCareRequest(
+                list,
+                HomeCareSentNotice.instance.latest,
+              )
+            : list;
         _loading = false;
         _error = null;
       });
     } on HomeCareFailure catch (err) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _loading = false;
-        _error = err.message;
+        if (!silent || _requests.isEmpty) _error = err.message;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load home care requests.';
+        if (!silent || _requests.isEmpty) {
+          _error = 'Could not load home care requests.';
+        }
       });
     }
   }
 
   Future<void> _openCreate() async {
-    final posted = await showAdminHomeCareCreateForm(context);
-    if (!posted || !mounted) return;
-    await _load(silent: true);
+    final created = await showAdminHomeCareCreateForm(context);
+    if (created == null || !mounted) return;
+    _scrollToTop();
   }
 
   Future<void> _close(HomeCareRequest request, {required bool cancel}) async {
@@ -164,6 +207,7 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
       body: RefreshIndicator(
         onRefresh: () => _load(silent: true),
         child: ListView(
+          controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
@@ -184,6 +228,12 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (HomeCareSentNotice.instance.visible) ...[
+                HomeCareRequestSentBanner(
+                  onDismiss: HomeCareSentNotice.instance.dismiss,
+                ),
+                const SizedBox(height: 12),
+              ],
             ] else ...[
               Text('Open requests', style: clinicalDisplay(22)),
               const SizedBox(height: 6),
@@ -255,9 +305,9 @@ class _HomeCareScreenState extends State<HomeCareScreen> {
   }
 }
 
-/// Opens the admin create form. Returns true when a request was posted.
-Future<bool> showAdminHomeCareCreateForm(BuildContext context) async {
-  final posted = await showModalBottomSheet<bool>(
+/// Opens the admin create form. Returns the request when it was posted.
+Future<HomeCareRequest?> showAdminHomeCareCreateForm(BuildContext context) async {
+  final posted = await showModalBottomSheet<HomeCareRequest>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.white,
@@ -279,14 +329,8 @@ Future<bool> showAdminHomeCareCreateForm(BuildContext context) async {
       );
     },
   );
-  if (posted == true && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Home care request posted. Nurses and agencies can take it.'),
-      ),
-    );
-  }
-  return posted == true;
+  if (posted != null) HomeCareSentNotice.instance.markSent(posted);
+  return posted;
 }
 
 class _AdminHomeCareCreateForm extends StatefulWidget {
@@ -328,14 +372,14 @@ class _AdminHomeCareCreateFormState extends State<_AdminHomeCareCreateForm> {
       _formError = null;
     });
     try {
-      await HomeCareRepository(context.read<ApiClient>()).create(
+      final created = await HomeCareRepository(context.read<ApiClient>()).create(
         title: title,
         location: location,
         contactPhone: phone,
         note: _note.text,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(created.markedSent());
     } on HomeCareFailure catch (err) {
       if (!mounted) return;
       setState(() => _formError = err.message);
@@ -618,12 +662,11 @@ class HomeCareRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showPrivate = admin || request.isOpen || request.mine;
-    final tone = request.mine
+    final label = request.pillLabel(admin: admin);
+    final tone = label == 'Sent' || request.mine
         ? ClinicalTone.forest
         : request.isOpen
         ? ClinicalTone.gold
-        : request.isClosed
-        ? ClinicalTone.slate
         : ClinicalTone.slate;
     final detail = request.takenDetail(admin: admin);
     final person = request.claimedByName?.trim() ?? '';
@@ -642,7 +685,7 @@ class HomeCareRequestCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   ClinicalStatusPill(
-                    label: request.pillLabel(admin: admin),
+                    label: label,
                     tone: tone,
                   ),
                   if (request.nearYou) ...[

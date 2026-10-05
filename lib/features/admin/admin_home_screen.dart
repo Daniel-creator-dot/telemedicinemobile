@@ -11,6 +11,7 @@ import '../../core/brand.dart';
 import '../../core/session.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import '../homecare/home_care_screen.dart';
+import '../homecare/home_care_sent.dart';
 import '../../models/appointment.dart';
 import '../../models/auth_user.dart';
 import '../consult/open_video_consult.dart';
@@ -66,11 +67,17 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   @override
   void initState() {
     super.initState();
+    HomeCareSentNotice.instance.addListener(_onHomeCareSent);
     _loadData();
+  }
+
+  void _onHomeCareSent() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    HomeCareSentNotice.instance.removeListener(_onHomeCareSent);
     _clinicName.dispose();
     _smsBaseUrl.dispose();
     _smsSenderId.dispose();
@@ -669,6 +676,17 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             label: 'New home care request',
             onPressed: () => showAdminHomeCareCreateForm(context),
           ),
+          if (HomeCareSentNotice.instance.visible) ...[
+            const SizedBox(height: 12),
+            HomeCareRequestSentBanner(onDismiss: HomeCareSentNotice.instance.dismiss),
+            if (HomeCareSentNotice.instance.latest != null) ...[
+              const SizedBox(height: 12),
+              HomeCareRequestCard(
+                request: HomeCareSentNotice.instance.latest!.markedSent(),
+                admin: true,
+              ),
+            ],
+          ],
           const SizedBox(height: 16),
 
           GridView.count(

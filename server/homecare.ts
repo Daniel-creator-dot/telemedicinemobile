@@ -236,12 +236,15 @@ function serialize(row: Record<string, unknown>, viewer: { id: number; role: str
   const doctor = viewer.role === 'doctor';
   const showPrivate = admin || doctor || status === 'open' || mine;
   const town = admin || doctor ? null : viewer.town ?? null;
+  const createdBy = row.created_by == null ? null : Number(row.created_by);
   const body: Record<string, unknown> = {
     id: Number(row.id),
     title: row.title,
     status,
     mine,
     taken: status === 'claimed',
+    // Display hint only. The stored status stays "open" until someone claims it.
+    posted_by_me: createdBy != null && createdBy === viewer.id,
     near_you: homeCareLocationNearTown(row.location, town),
     claimed_by_label: claimedLabel(row),
     created_at: row.created_at,
@@ -265,7 +268,7 @@ function serialize(row: Record<string, unknown>, viewer: { id: number; role: str
     body.claimed_at = row.claimed_at;
   }
   if (admin) {
-    body.created_by = row.created_by == null ? null : Number(row.created_by);
+    body.created_by = createdBy;
     body.created_by_name = row.created_by_name || null;
     body.claimed_by = claimedBy;
   }

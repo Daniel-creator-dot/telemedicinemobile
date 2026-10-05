@@ -8,6 +8,7 @@ import '../../core/api_client.dart';
 import '../../shared/widgets/clinical_ui.dart';
 import '../../shared/widgets/home_care_commission.dart';
 import 'home_care_repository.dart';
+import 'home_care_sent.dart';
 
 const homeCareDoctorEmpty = 'No home care referrals yet.';
 
@@ -36,6 +37,7 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
   bool _loading = true;
   String? _error;
   int? _busyId;
+  int _loadGen = 0;
   Timer? _poll;
 
   HomeCareRepository get _repo => HomeCareRepository(context.read<ApiClient>());
@@ -49,10 +51,38 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
   @override
   void initState() {
     super.initState();
+    HomeCareSentNotice.instance.addListener(_onSentNotice);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted) _load(silent: true);
     });
+  }
+
+  void _onSentNotice() {
+    if (!mounted) return;
+    final latest = HomeCareSentNotice.instance.latest;
+    if (latest != null && HomeCareSentNotice.instance.visible) {
+      final patientId = _patientId;
+      final belongs = patientId == null ||
+          latest.patientId == null ||
+          latest.patientId == patientId;
+      if (belongs) {
+        _loadGen++;
+        setState(() {
+          _requests = placeNewestHomeCareRequest(
+            _requests,
+            latest.markedSent(referred: true),
+          );
+          _loading = false;
+          _error = null;
+        });
+      } else {
+        setState(() {});
+      }
+      _load(silent: true);
+      return;
+    }
+    setState(() {});
   }
 
   @override
@@ -65,11 +95,13 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
 
   @override
   void dispose() {
+    HomeCareSentNotice.instance.removeListener(_onSentNotice);
     _poll?.cancel();
     super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
+    final gen = ++_loadGen;
     if (!silent && mounted) {
       setState(() {
         _loading = true;
@@ -78,23 +110,30 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
     }
     try {
       final list = await _repo.list(patientId: _patientId);
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
-        _requests = list;
+        _requests = pinJustPostedHomeCareRequest(
+          list,
+          HomeCareSentNotice.instance.latest,
+          referred: true,
+          onlyPatientId: _patientId,
+        );
         _loading = false;
         _error = null;
       });
     } on HomeCareFailure catch (err) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _loading = false;
-        _error = err.message;
+        if (!silent || _requests.isEmpty) _error = err.message;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load home care requests.';
+        if (!silent || _requests.isEmpty) {
+          _error = 'Could not load home care requests.';
+        }
       });
     }
   }
@@ -102,7 +141,7 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
   Future<void> _refer() async {
     final id = _patientId;
     final name = widget.patientName?.trim() ?? '';
-    final sent = await showDoctorHomeCareReferSheet(
+    final created = await showDoctorHomeCareReferSheet(
       context,
       patient: id == null
           ? null
@@ -114,7 +153,7 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
       suggestedName: name,
       suggestedPhone: widget.patientPhone,
     );
-    if (sent && mounted) await _load(silent: true);
+    if (created == null || !mounted) return;
   }
 
   Future<void> _addNote(HomeCareRequest request) async {
@@ -217,6 +256,10 @@ class _DoctorHomeCareSectionState extends State<DoctorHomeCareSection> {
           onPressed: _refer,
         ),
         const SizedBox(height: 14),
+        if (HomeCareSentNotice.instance.visible) ...[
+          HomeCareRequestSentBanner(onDismiss: HomeCareSentNotice.instance.dismiss),
+          const SizedBox(height: 12),
+        ],
         if (_loading)
           const ClinicalCardSkeleton()
         else if (_error != null)
@@ -309,6 +352,7 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final takenName = request.claimerName;
     final pill = request.pillLabel(admin: false);
+    final sent = pill == 'Sent';
     return DigiCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,7 +364,9 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
               const SizedBox(width: 8),
               ClinicalStatusPill(
                 label: pill,
-                tone: request.isOpen
+                tone: sent
+                    ? ClinicalTone.forest
+                    : request.isOpen
                     ? ClinicalTone.gold
                     : request.isClosed
                         ? ClinicalTone.slate
@@ -381,13 +427,13 @@ class HomeCareDoctorRequestTile extends StatelessWidget {
   }
 }
 
-Future<bool> showDoctorHomeCareReferSheet(
+Future<HomeCareRequest?> showDoctorHomeCareReferSheet(
   BuildContext context, {
   HomeCarePatientChoice? patient,
   String? suggestedName,
   String? suggestedPhone,
 }) async {
-  final sent = await showModalBottomSheet<bool>(
+  final sent = await showModalBottomSheet<HomeCareRequest>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.white,
@@ -415,12 +461,8 @@ Future<bool> showDoctorHomeCareReferSheet(
       );
     },
   );
-  if (sent == true && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Home care referral sent. Nurses and agencies can take it.')),
-    );
-  }
-  return sent == true;
+  if (sent != null) HomeCareSentNotice.instance.markSent(sent);
+  return sent;
 }
 
 class _DoctorReferForm extends StatefulWidget {
@@ -542,7 +584,7 @@ class _DoctorReferFormState extends State<_DoctorReferForm> {
       _error = null;
     });
     try {
-      await HomeCareRepository(context.read<ApiClient>()).create(
+      final created = await HomeCareRepository(context.read<ApiClient>()).create(
         title: title,
         location: location,
         contactPhone: phone,
@@ -550,7 +592,7 @@ class _DoctorReferFormState extends State<_DoctorReferForm> {
         patientId: patient.id,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(created.markedSent(referred: true));
     } on HomeCareFailure catch (err) {
       if (!mounted) return;
       setState(() => _error = err.message);

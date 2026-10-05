@@ -5,6 +5,7 @@ import 'package:telemedicinemobile/features/homecare/home_care_chat.dart';
 import 'package:telemedicinemobile/features/homecare/home_care_logic.dart';
 import 'package:telemedicinemobile/features/homecare/home_care_repository.dart';
 import 'package:telemedicinemobile/features/homecare/home_care_screen.dart';
+import 'package:telemedicinemobile/features/homecare/home_care_sent.dart';
 import 'package:telemedicinemobile/shared/widgets/home_care_commission.dart';
 
 void main() {
@@ -197,7 +198,69 @@ void main() {
     expect(find.text('Near you'), findsOneWidget);
     expect(find.text('Open'), findsOneWidget);
     expect(find.text('Take this request'), findsOneWidget);
+    expect(find.text('Sent'), findsNothing);
     expect(find.text(healynksHomeCareCommission), findsOneWidget);
+  });
+
+  testWidgets('the person who posted an open request sees Sent', (tester) async {
+    const request = HomeCareRequest(
+      id: 11,
+      title: 'Wound dressing',
+      status: 'open',
+      mine: false,
+      taken: false,
+      postedByMe: true,
+      location: 'Osu, Accra',
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: HomeCareRequestCard(request: request, admin: true),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Sent'), findsOneWidget);
+    expect(find.text('Open'), findsNothing);
+    expect(find.text('Take this request'), findsNothing);
+    expect(find.text(healynksHomeCareCommission), findsNothing);
+    expect(find.textContaining('onrender'), findsNothing);
+  });
+
+  testWidgets('the sent confirmation stays on screen until it is dismissed', (
+    tester,
+  ) async {
+    var visible = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              if (!visible) return const Text('cleared');
+              return HomeCareRequestSentBanner(
+                onDismiss: () => setState(() => visible = false),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text(homeCareRequestSent), findsOneWidget);
+    expect(
+      find.text('Request sent. Nurses and home care agencies can take it.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('onrender'), findsNothing);
+
+    await tester.tap(find.text('Dismiss'));
+    await tester.pump();
+
+    expect(find.text(homeCareRequestSent), findsNothing);
+    expect(find.text('cleared'), findsOneWidget);
   });
 
   testWidgets('admin chat opens as a pop-out and shows the empty state', (
