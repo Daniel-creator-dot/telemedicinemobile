@@ -14,7 +14,8 @@ export type HomeCareNurseCandidate = {
   is_active?: boolean | null;
 };
 
-export type HomeCareSmsSender = (phone: string, message: string) => Promise<void>;
+/** Resolves false when the gateway did not accept the text. A throw is also a failure. */
+export type HomeCareSmsSender = (phone: string, message: string) => Promise<boolean | void>;
 
 export type HomeCareNotificationWriter = (
   userId: number,
@@ -61,14 +62,46 @@ export function homeCareAlertText(title: string, location: string, token: string
 
 /**
  * Approved nurses only.
- * Pending and rejected accounts are out, even when a nurse row was created with is_active true.
+ * Role nurse, and either verification_status approved, or a blank status with nurses.is_active.
+ * Pending and rejected stay out, even when is_active was set true at signup.
  * Agency owners are included when their user role is nurse and they are approved.
  */
+function nurseFlag(value: unknown): boolean {
+  return value === true || value === 't' || value === 'true';
+}
+
+/**
+ * User review wins when it is set. A blank user status uses the nurses row.
+ * That keeps a pending nurse row from looking approved just because is_active is true.
+ */
+export function homeCareCandidateFromRow(row: {
+  id: unknown;
+  role?: unknown;
+  phone?: unknown;
+  user_status?: unknown;
+  nurse_status?: unknown;
+  verification_status?: unknown;
+  is_active?: unknown;
+}): HomeCareNurseCandidate {
+  const userStatus = String(row.user_status ?? row.verification_status ?? '').trim();
+  const nurseStatus = String(row.nurse_status ?? '').trim();
+  const status = userStatus || nurseStatus;
+  const phone = String(row.phone ?? '').trim();
+  return {
+    id: Number(row.id),
+    role: row.role == null ? null : String(row.role),
+    phone: phone || null,
+    verification_status: status || null,
+    is_active: nurseFlag(row.is_active),
+  };
+}
+
 export function isApprovedHomeCareNurse(row: HomeCareNurseCandidate): boolean {
   if (String(row.role || '').trim().toLowerCase() !== 'nurse') return false;
-  const status = String(row.verification_status || '').trim().toLowerCase();
-  if (status === 'pending' || status === 'rejected') return false;
+  const status = String(row.verification_status ?? '').trim().toLowerCase();
   if (status === 'approved') return true;
+  if (status === 'pending' || status === 'rejected') return false;
+  if (status !== '') return false;
   return row.is_active === true;
 }
 
@@ -113,26 +146,29 @@ export async function notifyApprovedNursesOfHomeCare(input: {
       console.error('home care in-app notification failed', userId, err instanceof Error ? err.message : 'error');
     }
 
+    const phone = String(nurse.phone || '').trim();
+    if (!phone) {
+      result.skippedNoPhone += 1;
+      console.log(`[HOME CARE] Skipping SMS, no phone on file for user ${userId}`);
+    } else {
+      try {
+        const delivered = await input.sendSMS(phone, message);
+        if (delivered === false) {
+          console.error('home care sms rejected', userId);
+        } else {
+          result.sms += 1;
+        }
+      } catch (err) {
+        console.error('home care sms failed', userId, err instanceof Error ? err.message : 'error');
+      }
+    }
+
     if (input.sendPush) {
       try {
         await input.sendPush([userId], 'Healynks home care', message, { type: 'homecare', url });
       } catch (err) {
         console.error('home care push failed', userId, err instanceof Error ? err.message : 'error');
       }
-    }
-
-    const phone = String(nurse.phone || '').trim();
-    if (!phone) {
-      result.skippedNoPhone += 1;
-      console.log(`[HOME CARE] Skipping SMS, no phone on file for user ${userId}`);
-      continue;
-    }
-
-    try {
-      await input.sendSMS(phone, message);
-      result.sms += 1;
-    } catch (err) {
-      console.error('home care sms failed', userId, err instanceof Error ? err.message : 'error');
     }
   }
 

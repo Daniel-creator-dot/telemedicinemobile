@@ -1,12 +1,20 @@
 import axios from 'axios';
 import { query } from './db';
+import { canonicalMsisdn, intekDeliveryResult, intekSendPayload, smsSendUrl } from './sms_gateway';
 
-/** Ghana local 024… becomes 23324…. Numbers that already include a country code are left as digits. */
-export function canonicalMsisdn(raw: string): string {
-  let digits = String(raw || '').replace(/[^0-9+]/g, '');
-  if (digits.startsWith('+')) digits = digits.slice(1);
-  if (digits.startsWith('0')) digits = `233${digits.slice(1)}`;
-  return digits;
+export { canonicalMsisdn };
+
+async function writeSmsLog(recipient: string, message: string, status: string): Promise<void> {
+  const logged = String(status || 'failed').slice(0, 20);
+  try {
+    await query('INSERT INTO sms_logs (recipient, message, status) VALUES ($1, $2, $3)', [
+      recipient.slice(0, 20),
+      message,
+      logged,
+    ]);
+  } catch (err) {
+    console.error('Error writing sms_logs:', err);
+  }
 }
 
 async function loadSmsSettings(): Promise<{ sms_base_url: string; sms_sender_id: string; sms_api_key: string }> {
@@ -36,45 +44,42 @@ export async function deliverSMS(recipient: string | null | undefined, message: 
     const { sms_base_url, sms_sender_id, sms_api_key } = await loadSmsSettings();
     if (!sms_base_url.trim()) {
       console.warn('SMS Base URL not configured. Skipping SMS.');
+      await writeSmsLog(raw, message, 'failed');
       return false;
     }
 
     const formattedRecipient = canonicalMsisdn(raw);
-    if (!formattedRecipient) return false;
+    if (!formattedRecipient) {
+      await writeSmsLog(raw, message, 'failed');
+      return false;
+    }
 
-    const base = sms_base_url.trim().replace(/\/+$/, '');
-    const sendUrl = /\/messages\/send$/i.test(base) ? base : `${base}/messages/send`;
+    const sendUrl = smsSendUrl(sms_base_url);
+    const payload = intekSendPayload(sms_sender_id, formattedRecipient, message);
 
     console.log(`[SMS SEND] Attempting to send to ${formattedRecipient} via ${sendUrl}`);
 
     let status = 'failed';
     try {
-      const res = await axios.post(
-        sendUrl,
-        {
-          sender: sms_sender_id,
-          recipients: [formattedRecipient],
-          message,
+      const res = await axios.post(sendUrl, payload, {
+        headers: {
+          Authorization: `Bearer ${sms_api_key}`,
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            Authorization: `Bearer ${sms_api_key}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 20000,
-          validateStatus: () => true,
-        }
-      );
+        timeout: 20000,
+        validateStatus: () => true,
+      });
+      const outcome = intekDeliveryResult(res.status, res.data);
+      sent = outcome.accepted;
+      status = outcome.status;
       const body = res.data && typeof res.data === 'object' ? res.data : {};
-      const accepted = res.status >= 200 && res.status < 300 && body.ok !== false;
-      sent = accepted;
-      status = accepted ? 'sent' : 'failed';
       const summary = {
         http: res.status,
         ok: body.ok ?? null,
-        error: typeof body.error === 'string' ? body.error : null,
+        provider: outcome.status,
+        error: typeof body.error === 'string' ? body.error.slice(0, 180) : null,
       };
-      console.log(accepted ? '[SMS SUCCESS]' : '[SMS ERROR]', summary);
+      console.log(sent ? '[SMS SUCCESS]' : '[SMS ERROR]', summary);
     } catch (err) {
       const detail = err instanceof Error ? err.message : 'request failed';
       console.error('[SMS ERROR]', detail);
@@ -82,18 +87,11 @@ export async function deliverSMS(recipient: string | null | undefined, message: 
       sent = false;
     }
 
-    try {
-      await query('INSERT INTO sms_logs (recipient, message, status) VALUES ($1, $2, $3)', [
-        raw.slice(0, 20),
-        message,
-        status,
-      ]);
-    } catch (err) {
-      console.error('Error writing sms_logs:', err);
-    }
+    await writeSmsLog(raw, message, status);
   } catch (err) {
     console.error('Error in sendSMS utility:', err);
     sent = false;
+    await writeSmsLog(raw, message, 'failed');
   }
   return sent;
 }

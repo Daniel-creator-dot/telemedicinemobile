@@ -3,11 +3,12 @@ import type { Express, Response } from 'express';
 import { pool, query } from './db';
 import { authenticate, authenticateOptional, type AuthedRequest } from './authz';
 import { normalizeAccountPhone, PHONE_INVALID_MESSAGE } from './professional_signup';
-import { sendSMS } from './sms';
+import { deliverSMS } from './sms';
 import {
   homeCareJobUrl,
   isHomeCareShareToken,
   newHomeCareShareToken,
+  homeCareCandidateFromRow,
   notifyApprovedNursesOfHomeCare,
   reshareHomeCareToNurses,
   type HomeCareNurseCandidate,
@@ -572,28 +573,26 @@ async function listForDoctor(userId: number, patientId: number | null) {
   );
 }
 
+/**
+ * Every user whose role is nurse, including agency owners.
+ * Phone is the account number, then the agency number. Never the request contact phone.
+ * A blank user review falls through to the nurses row. Pending on either row stays pending.
+ * isApprovedHomeCareNurse drops pending, rejected, and inactive blank accounts.
+ */
 async function loadApprovedHomeCareNurses(): Promise<HomeCareNurseCandidate[]> {
   const result = await query(
     `SELECT u.id,
             u.role,
-            NULLIF(BTRIM(u.phone_number), '') AS phone,
-            u.verification_status,
-            BOOL_OR(COALESCE(n.is_active, FALSE)) AS is_active
+            COALESCE(NULLIF(BTRIM(u.phone_number), ''), NULLIF(BTRIM(a.phone), '')) AS phone,
+            NULLIF(BTRIM(u.verification_status), '') AS user_status,
+            NULLIF(BTRIM(n.verification_status), '') AS nurse_status,
+            n.is_active AS is_active
      FROM users u
      LEFT JOIN nurses n ON n.user_id = u.id
-     WHERE u.role = 'nurse'
-       AND LOWER(BTRIM(COALESCE(u.verification_status, ''))) NOT IN ('pending', 'rejected')
-     GROUP BY u.id, u.role, u.phone_number, u.verification_status
-     HAVING LOWER(BTRIM(COALESCE(u.verification_status, ''))) = 'approved'
-         OR BOOL_OR(COALESCE(n.is_active, FALSE)) = TRUE`
+     LEFT JOIN nurse_agencies a ON a.owner_user_id = u.id
+     WHERE LOWER(BTRIM(u.role)) = 'nurse'`
   );
-  return result.rows.map((row) => ({
-    id: Number(row.id),
-    role: String(row.role || ''),
-    phone: row.phone ? String(row.phone) : null,
-    verification_status: row.verification_status ? String(row.verification_status) : null,
-    is_active: row.is_active === true || row.is_active === 't' || row.is_active === 'true',
-  }));
+  return result.rows.map((row) => homeCareCandidateFromRow(row));
 }
 
 async function insertOpenHomeCareRequest(input: {
@@ -641,21 +640,7 @@ async function insertOpenHomeCareRequest(input: {
   throw last instanceof Error ? last : new Error('Could not post this home care request');
 }
 
-/** Runs after the request row is stored. One failure does not cancel the post or the other nurses. */
-function queueHomeCareNurseAlerts(
-  job: { title: string; location: string; token: string },
-  sendPush?: HomeCarePushSender
-) {
-  const token = String(job.token || '').trim();
-  if (!isHomeCareShareToken(token)) {
-    console.error('home care alert skipped, share token missing');
-    return;
-  }
-  void deliverHomeCareNurseAlerts({ ...job, token }, sendPush).catch((err) => {
-    console.error('home care nurse alerts failed', err instanceof Error ? err.message : 'error');
-  });
-}
-
+/** Runs after the request row is stored. One nurse failure does not cancel the post or the other nurses. */
 async function deliverHomeCareNurseAlerts(
   job: { title: string; location: string; token: string },
   sendPush?: HomeCarePushSender
@@ -666,7 +651,7 @@ async function deliverHomeCareNurseAlerts(
     title: job.title,
     location: job.location,
     token: job.token,
-    sendSMS,
+    sendSMS: deliverSMS,
     sendPush,
     writeNotification: writeHomeCareInAppNotification,
   });
@@ -704,7 +689,7 @@ async function reshareOpenHomeCareRequest(
     title: job.title,
     location: job.location,
     token: job.token,
-    sendSMS,
+    sendSMS: deliverSMS,
     sendPush,
     writeNotification: writeHomeCareInAppNotification,
   });
@@ -789,14 +774,18 @@ export function registerHomeCareRoutes(
       });
       const row = await loadOne(created.id);
       if (!row) return res.status(500).json({ message: 'Could not post this home care request' });
-      queueHomeCareNurseAlerts(
-        {
-          title: String(row.title || title),
-          location: String(row.location || location),
-          token: String(row.share_token || created.token),
-        },
-        deps.sendPushNotification
-      );
+      try {
+        await deliverHomeCareNurseAlerts(
+          {
+            title: String(row.title || title),
+            location: String(row.location || location),
+            token: String(row.share_token || created.token),
+          },
+          deps.sendPushNotification
+        );
+      } catch (err) {
+        console.error('home care nurse alerts failed', err instanceof Error ? err.message : 'error');
+      }
       return res.status(201).json(serialize(row, { id: req.user!.id, role: viewerRole }));
     } catch (err) {
       console.error('home care create failed', (err as { code?: string })?.code || 'error');
